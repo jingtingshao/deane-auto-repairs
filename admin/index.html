@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en-NZ">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin · Deane Auto Repairs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="admin.css" />
+  </head>
+  <body>
+    <div id="login-view" class="login-view">
+      <form id="login-form" class="login-card">
+        <p class="brand"><span class="script">Deane</span> AUTO REPAIRS</p>
+        <h1>Workshop admin</h1>
+        <p class="muted">Enter PIN to create and send digital service reports.</p>
+        <label for="pin">Admin PIN</label>
+        <input id="pin" type="password" autocomplete="current-password" required />
+        <button type="submit">Sign in</button>
+        <p id="login-error" class="error" hidden></p>
+      </form>
+    </div>
+
+    <div id="app" class="app" hidden>
+      <header class="topbar">
+        <div>
+          <p class="brand small"><span class="script">Deane</span> ADMIN</p>
+          <h1 id="view-title">Reports</h1>
+        </div>
+        <div class="topbar-actions">
+          <a href="/" target="_blank" rel="noopener">Website</a>
+          <button type="button" id="btn-new" class="primary">New report</button>
+          <button type="button" id="btn-logout" class="ghost">Sign out</button>
+        </div>
+      </header>
+
+      <main>
+        <section id="list-view">
+          <div id="report-list" class="report-list"></div>
+        </section>
+
+        <section id="edit-view" hidden>
+          <div class="edit-toolbar">
+            <button type="button" id="btn-back" class="ghost">← All reports</button>
+            <div class="edit-actions">
+              <button type="button" id="btn-save" class="ghost">Save draft</button>
+              <button type="button" id="btn-publish" class="primary">Publish &amp; copy link</button>
+              <button type="button" id="btn-email" class="ghost">Email customer</button>
+              <button type="button" id="btn-delete" class="danger">Delete</button>
+            </div>
+          </div>
+          <p id="save-status" class="status-line" hidden></p>
+
+          <form id="report-form" class="report-form">
+            <fieldset>
+              <legend>Job details</legend>
+              <div class="grid-3">
+                <label>Job number<input name="jobNumber" readonly /></label>
+                <label>Status<input name="status" readonly /></label>
+                <label>Service date<input name="serviceDate" type="date" /></label>
+                <label>Technician<input name="technicianName" /></label>
+                <label
+                  >Job type
+                  <select name="jobType">
+                    <option value="standard_service">Standard Service</option>
+                    <option value="full_service">Full Service</option>
+                    <option value="wof">WOF only</option>
+                    <option value="standard_wof">Standard Service + WOF</option>
+                    <option value="full_wof">Full Service + WOF</option>
+                    <option value="repair">Repair</option>
+                  </select>
+                </label>
+                <label
+                  >Service package
+                  <select name="servicePackage" id="servicePackage">
+                    <option value="standard">Standard</option>
+                    <option value="full">Full</option>
+                  </select>
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Customer &amp; vehicle</legend>
+              <div class="grid-3">
+                <label>Customer name<input name="customerName" required /></label>
+                <label>Email<input name="customerEmail" type="email" /></label>
+                <label>Phone<input name="customerPhone" type="tel" /></label>
+                <label>Registration<input name="registration" required /></label>
+                <label>Vehicle (make/model/year)<input name="vehicle" required /></label>
+                <label>Odometer (km)<input name="odometer" /></label>
+                <label>VIN<input name="vin" /></label>
+              </div>
+              <label>Customer concern / notes<textarea name="customerConcern" rows="2"></textarea></label>
+              <div class="photo-row">
+                <label class="file-label">
+                  Vehicle photo
+                  <input id="photo-input" type="file" accept="image/*" />
+                </label>
+                <img id="vehicle-photo" alt="" hidden />
+              </div>
+            </fieldset>
+
+            <fieldset id="wof-panel">
+              <legend>WOF (official result — not this digital report)</legend>
+              <p class="muted small">
+                Digital report notes are advisory. Only record the official WOF outcome here.
+              </p>
+              <div class="grid-3">
+                <label class="check">
+                  <input name="wofPerformed" type="checkbox" /> WOF performed this visit
+                </label>
+                <label
+                  >Result
+                  <select name="wofResult">
+                    <option value="not_completed">Not completed</option>
+                    <option value="pass">Pass</option>
+                    <option value="fail">Fail</option>
+                  </select>
+                </label>
+                <label>WOF expiry<input name="wofExpiry" type="date" /></label>
+                <label>Cert / label ref<input name="wofReference" /></label>
+                <label class="check">
+                  <input name="wofRecheck" type="checkbox" /> Re-check required
+                </label>
+              </div>
+              <label>Fail items / notes<textarea name="wofFailNotes" rows="2"></textarea></label>
+              <label>Repairs done for pass<textarea name="wofRepairs" rows="2"></textarea></label>
+            </fieldset>
+
+            <fieldset>
+              <legend>Inspection checklist</legend>
+              <div class="bulk-row">
+                <button type="button" data-bulk="ok">Mark all OK</button>
+                <button type="button" data-bulk="na">Mark all N/A</button>
+              </div>
+              <div id="checklist"></div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Actions completed</legend>
+              <div id="actions" class="actions-grid"></div>
+              <label>Other actions<textarea name="actionsOther" rows="2"></textarea></label>
+              <div class="grid-2">
+                <label>Oil spec / brand<input name="oilSpec" placeholder="e.g. 5W-30" /></label>
+                <label>Oil filter part<input name="oilFilter" /></label>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Customer summary</legend>
+              <label>Work completed / summary<textarea name="summary" rows="3"></textarea></label>
+              <label>Next service due<input name="nextServiceDue" placeholder="e.g. 15,000 km or Aug 2027" /></label>
+              <label>Technician comments<textarea name="technicianComments" rows="3"></textarea></label>
+            </fieldset>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script src="admin.js"></script>
+  </body>
+</html>

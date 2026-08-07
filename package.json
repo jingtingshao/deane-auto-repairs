@@ -1,0 +1,14 @@
+{
+  "name": "deane-auto-repairs",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Website + digital service report admin for Deane Auto Repairs",
+  "scripts": {
+    "start": "node server.js",
+    "site": "npx --yes serve -l 5173 ."
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "multer": "^2.2.0"
+  }
+}
