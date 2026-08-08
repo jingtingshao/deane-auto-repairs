@@ -565,6 +565,15 @@ h3 {
   color: var(--ink);
 }
 
+.compare-meta {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
 .compare-price {
   display: block;
   margin-top: 0.25rem;
@@ -573,6 +582,10 @@ h3 {
   font-size: 1.55rem;
   color: var(--blue-deep);
   line-height: 1;
+}
+
+.package-summary {
+  margin-bottom: 0.5rem;
 }
 
 .compare-table tbody th {
