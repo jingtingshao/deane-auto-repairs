@@ -302,7 +302,7 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
 
   const subject =
     req.body?.subject ||
-    `Your service report â€” ${rego || vehicle} â€” Deane Auto Repairs`;
+    `Your service report — ${rego || vehicle} — Deane Auto Repairs`;
 
   const text =
     `Hi ${name},\n\n` +
@@ -444,6 +444,6 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(
     smtpConfigured()
       ? `Email: SMTP ready (from ${MAIL_FROM})`
-      : "Email: not configured â€” copy .env.example to .env and add Gmail App Password"
+      : "Email: not configured — copy .env.example to .env and add Gmail App Password"
   );
 });

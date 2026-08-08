@@ -1,9 +1,9 @@
-﻿(() => {
+(() => {
   const FORM_ENDPOINT = "https://formsubmit.co/ajax/deaneautonz@gmail.com";
   const AUTOREPLY = [
     "Hi,",
     "",
-    "Your email has been sent â€” thank you for contacting Deane Auto Repairs.",
+    "Your email has been sent — thank you for contacting Deane Auto Repairs.",
     "",
     "We've received your booking enquiry and will get back to you soon to confirm a time.",
     "",
@@ -11,7 +11,7 @@
     "Phone: 0800 6259827",
     "Email: deaneautonz@gmail.com",
     "Address: 63 Hayr Road, Three Kings",
-    "Hours: Monâ€“Sat 8:30am â€“ 5:30pm",
+    "Hours: Mon–Sat 8:30am – 5:30pm",
     "",
     "Kind regards,",
     "Deane Auto Repairs",
@@ -77,7 +77,7 @@
   const setLoading = (loading) => {
     if (!submitBtn) return;
     submitBtn.disabled = loading;
-    submitBtn.textContent = loading ? "Sendingâ€¦" : "Send booking enquiry";
+    submitBtn.textContent = loading ? "Sending…" : "Send booking enquiry";
   };
 
   if (form && status) {
@@ -95,19 +95,19 @@
         email: data.get("email") || "",
         phone: data.get("phone") || "",
         vehicle: data.get("vehicle") || "",
-        registration: data.get("rego") || "â€”",
-        preferred_date: data.get("date") || "â€”",
-        preferred_time: data.get("time") || "â€”",
+        registration: data.get("rego") || "—",
+        preferred_date: data.get("date") || "—",
+        preferred_time: data.get("time") || "—",
         help_with: data.get("help") || "",
-        notes: data.get("notes") || "â€”",
-        _subject: `Booking enquiry: ${data.get("help") || "Service"} â€” ${data.get("name") || ""}`,
+        notes: data.get("notes") || "—",
+        _subject: `Booking enquiry: ${data.get("help") || "Service"} — ${data.get("name") || ""}`,
         _template: "table",
         _captcha: "false",
         _autoresponse: AUTOREPLY,
       };
 
       setLoading(true);
-      setStatus("Sending your enquiryâ€¦", null);
+      setStatus("Sending your enquiry…", null);
 
       try {
         const response = await fetch(FORM_ENDPOINT, {
@@ -127,12 +127,12 @@
 
         form.reset();
         setStatus(
-          "Your email has been sent. Weâ€™ll get back to you soon to confirm a time.",
+          "Your email has been sent. We’ll get back to you soon to confirm a time.",
           "is-success"
         );
       } catch (error) {
         setStatus(
-          "Sorry â€” we couldnâ€™t send that just now. Please call 0800 6259827 or email deaneautonz@gmail.com.",
+          "Sorry — we couldn’t send that just now. Please call 0800 6259827 or email deaneautonz@gmail.com.",
           "is-error"
         );
         console.error(error);
