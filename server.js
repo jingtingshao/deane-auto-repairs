@@ -308,7 +308,7 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
     `Hi ${name},\n\n` +
     `Your digital service report for ${vehicle}${rego ? ` (${rego})` : ""} is ready:\n\n` +
     `${url}\n\n` +
-    `Deane Auto Repairs\n63 Hayr Road, Three Kings\n0800 6259827\ndeaneautonz@gmail.com\n`;
+    `Deane Auto Repairs\n63 Hayr Road, Three Kings\n0800 625 9827\ndeaneautonz@gmail.com\n`;
 
   const html = `
     <p>Hi ${escapeHtml(name)},</p>
@@ -319,7 +319,7 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
     <p style="color:#5b6777;font-size:14px;">
       Deane Auto Repairs<br/>
       63 Hayr Road, Three Kings<br/>
-      0800 6259827<br/>
+      0800 625 9827<br/>
       deaneautonz@gmail.com
     </p>
   `;

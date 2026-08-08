@@ -38,7 +38,7 @@ Customer opens: `http://localhost:5173/r/<report-id>`
 
 - **Name:** Deane Auto Repairs
 - **Address:** 63 Hayr Road, Three Kings
-- **Phone:** 0800 6259827
+- **Phone:** 0800 625 9827
 - **Email:** deaneautonz@gmail.com
 - **Hours:** Mon–Fri 8:30am–5:30pm
 - **Services:** Standard / Full service, WOF

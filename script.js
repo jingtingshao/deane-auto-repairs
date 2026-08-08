@@ -8,7 +8,7 @@
     "We've received your booking enquiry and will get back to you soon to confirm a time.",
     "",
     "If you need to speak with us sooner:",
-    "Phone: 0800 6259827",
+    "Phone: 0800 625 9827",
     "Email: deaneautonz@gmail.com",
     "Address: 63 Hayr Road, Three Kings",
     "Hours: Mon–Sat 8:30am – 5:30pm",
@@ -132,7 +132,7 @@
         );
       } catch (error) {
         setStatus(
-          "Sorry — we couldn’t send that just now. Please call 0800 6259827 or email deaneautonz@gmail.com.",
+          "Sorry — we couldn’t send that just now. Please call 0800 625 9827 or email deaneautonz@gmail.com.",
           "is-error"
         );
         console.error(error);
