@@ -226,7 +226,7 @@ a:hover {
   position: relative;
   z-index: 1;
   padding: 4.5rem 0 4rem;
-  max-width: 40rem;
+  max-width: min(52rem, calc(100% - 2.5rem));
   margin-left: max(calc((100% - 1120px) / 2), 1.25rem);
   margin-right: auto;
   animation: rise 0.9s ease both;
@@ -252,7 +252,7 @@ a:hover {
 .hero h1 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(1.85rem, 4.6vw, 3.4rem);
+  font-size: clamp(1.5rem, 5.2vw, 3.4rem);
   font-weight: 700;
   letter-spacing: 0.02em;
   line-height: 1.05;
@@ -261,11 +261,11 @@ a:hover {
 }
 
 .hero-line {
-  display: block;
+  display: block !important;
 }
 
-.hero-line:first-child {
-  white-space: nowrap;
+.hero-line-main {
+  white-space: nowrap !important;
 }
 
 .hero-lead {
