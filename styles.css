@@ -208,7 +208,7 @@ a:hover {
   position: absolute;
   inset: 0;
   background:
-    url("https://images.unsplash.com/photo-1487754180451-c456f719a1fc?auto=format&fit=crop&w=1800&q=80")
+    url("assets/hero-castrol-workshop.png")
       center / cover no-repeat;
   transform: scale(1.04);
   animation: hero-zoom 18s ease-out forwards;
