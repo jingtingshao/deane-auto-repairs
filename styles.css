@@ -593,7 +593,16 @@ h3 {
 }
 
 .package-summary {
-  margin-bottom: 1.25rem;
+  margin: 1rem 0 1.75rem;
+}
+
+.compare-heading {
+  margin: 0 0 0.5rem;
+  font-size: 1.35rem;
+}
+
+.compare-block {
+  margin-top: 0.25rem;
 }
 
 .service-simple-grid {
