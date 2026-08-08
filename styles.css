@@ -588,26 +588,37 @@ h3 {
   margin-bottom: 1.25rem;
 }
 
-.service-simple {
-  margin-top: 0.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--line);
+.service-simple-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  margin: 1.5rem 0 1.25rem;
 }
 
-.service-simple-head h4 {
+.service-simple {
+  padding: 1.25rem 1.2rem 1.35rem;
+  border-top: 4px solid var(--blue);
+  background: var(--paper);
+}
+
+.service-simple.is-featured {
+  border-top-color: var(--red);
+  background: linear-gradient(180deg, #fff7f7 0%, var(--paper) 100%);
+}
+
+.service-simple-head h3 {
   margin: 0 0 0.25rem;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 1.45rem;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--blue-deep);
+  font-size: 1.35rem;
 }
 
 .service-simple-head p {
   margin: 0 0 1rem;
   color: var(--muted);
   font-weight: 600;
+}
+
+.checklist-details {
+  margin-top: 0.5rem;
 }
 
 .service-simple-list {
@@ -1209,6 +1220,7 @@ textarea:focus {
   .split,
   .service-grid,
   .price-featured,
+  .service-simple-grid,
   .digital-layout,
   .book-layout,
   .contact-grid {
