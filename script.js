@@ -66,32 +66,6 @@
     reveals.forEach((el) => el.classList.add("is-visible"));
   }
 
-  const checklist = document.querySelector("#full-checklist");
-  const openChecklist = () => {
-    if (!checklist) return;
-    checklist.open = true;
-    checklist.classList.add("is-visible");
-  };
-
-  document
-    .querySelectorAll('a[href="#full-checklist"], a[href="#service-table"]')
-    .forEach((link) => {
-      link.addEventListener("click", () => {
-        openChecklist();
-      });
-    });
-
-  const maybeOpenChecklistFromHash = () => {
-    if (
-      location.hash === "#full-checklist" ||
-      location.hash === "#service-table"
-    ) {
-      openChecklist();
-    }
-  };
-  maybeOpenChecklistFromHash();
-  window.addEventListener("hashchange", maybeOpenChecklistFromHash);
-
   const setStatus = (message, type) => {
     if (!status) return;
     status.hidden = false;
