@@ -37,7 +37,7 @@ Customer opens: `http://localhost:5173/r/<report-id>`
 ## Business details
 
 - **Name:** Deane Auto Repairs
-- **Address:** 63 Hayr Road, Three Kings
+- **Address:** Deane Auto Repairs (Next to BP Petrol Station), 63 Hayr Road, Three Kings, Auckland
 - **Phone:** 0800 625 9827
 - **Email:** deaneautonz@gmail.com
 - **Hours:** Mon–Fri 8:30am–5:30pm

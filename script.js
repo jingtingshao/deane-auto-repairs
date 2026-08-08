@@ -10,7 +10,7 @@
     "If you need to speak with us sooner:",
     "Phone: 0800 625 9827",
     "Email: deaneautonz@gmail.com",
-    "Address: 63 Hayr Road, Three Kings",
+    "Address: Deane Auto Repairs (Next to BP Petrol Station), 63 Hayr Road, Three Kings, Auckland",
     "Hours: Mon–Sat 8:30am – 5:30pm",
     "",
     "Kind regards,",

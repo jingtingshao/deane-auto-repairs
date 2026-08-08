@@ -308,7 +308,7 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
     `Hi ${name},\n\n` +
     `Your digital service report for ${vehicle}${rego ? ` (${rego})` : ""} is ready:\n\n` +
     `${url}\n\n` +
-    `Deane Auto Repairs\n63 Hayr Road, Three Kings\n0800 625 9827\ndeaneautonz@gmail.com\n`;
+    `Deane Auto Repairs\n(Next to BP Petrol Station)\n63 Hayr Road\nThree Kings, Auckland\n0800 625 9827\ndeaneautonz@gmail.com\n`;
 
   const html = `
     <p>Hi ${escapeHtml(name)},</p>
@@ -318,7 +318,9 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
     <p><a href="${escapeAttr(url)}">View your service report</a></p>
     <p style="color:#5b6777;font-size:14px;">
       Deane Auto Repairs<br/>
-      63 Hayr Road, Three Kings<br/>
+      (Next to BP Petrol Station)<br/>
+      63 Hayr Road<br/>
+      Three Kings, Auckland<br/>
       0800 625 9827<br/>
       deaneautonz@gmail.com
     </p>
