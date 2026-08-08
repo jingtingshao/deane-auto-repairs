@@ -522,6 +522,14 @@ h3 {
   font-size: 0.95rem;
 }
 
+.compare-table-4 {
+  min-width: 880px;
+}
+
+.compare-table-4 .compare-price {
+  font-size: 1.25rem;
+}
+
 .compare-table thead th {
   background: var(--paper);
   vertical-align: bottom;
