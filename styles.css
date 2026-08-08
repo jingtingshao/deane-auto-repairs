@@ -459,6 +459,39 @@ h3 {
   background: var(--white);
 }
 
+.service-checklist-panel {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  margin: 0;
+}
+
+.service-checklist-panel > summary {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  cursor: default;
+}
+
+.service-checklist-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.service-checklist-panel > summary::after {
+  content: none;
+  float: none;
+}
+
+.service-checklist-panel:not([open]) {
+  display: block;
+  min-height: 0;
+}
+
+.service-checklist-panel[open] {
+  margin-bottom: 0.25rem;
+}
+
 .price-featured {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260308c" />
+    <link rel="stylesheet" href="styles.css?v=20260308d" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -167,11 +167,11 @@
       <section class="section prices" id="prices">
         <div class="container">
           <div class="price-groups">
-            <div class="price-group reveal" id="service-table">
-              <p class="eyebrow">Prices</p>
-              <h2>Vehicle servicing</h2>
-
-              <div class="compare-block reveal" id="full-checklist">
+            <details class="service-checklist-panel reveal" id="full-checklist">
+              <summary class="sr-only">Vehicle servicing checklist</summary>
+              <div class="price-group" id="service-table">
+                  <p class="eyebrow">Prices</p>
+                  <h2>Vehicle servicing</h2>
                   <p class="price-group-lead">
                     Tick = included. GST included unless noted. Labour
                     <strong>$125/hr</strong>.
@@ -411,9 +411,10 @@
                     </li>
                   </ul>
               </div>
-            </div>
+            </details>
 
             <div class="price-group reveal">
+              <p class="eyebrow">Prices</p>
               <h3>Pre-Purchase Inspection</h3>
               <table class="price-table">
                 <tbody>
