@@ -1,11 +1,15 @@
+﻿require("dotenv").config();
+
 const path = require("path");
 const fs = require("fs");
 const express = require("express");
 const multer = require("multer");
+const nodemailer = require("nodemailer");
 const { randomUUID } = require("crypto");
 const {
   ACTIONS,
   STATUSES,
+  normalizePackage,
   itemsForPackage,
   emptyChecks,
 } = require("./data/checklist");
@@ -16,6 +20,30 @@ const ROOT = __dirname;
 const DATA_DIR = path.join(ROOT, "data");
 const REPORTS_FILE = path.join(DATA_DIR, "reports.json");
 const UPLOADS_DIR = path.join(ROOT, "uploads");
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "").replace(/\/$/, "");
+const MAIL_FROM =
+  process.env.MAIL_FROM ||
+  process.env.SMTP_USER ||
+  "deaneautonz@gmail.com";
+
+function smtpConfigured() {
+  return Boolean(
+    process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
+  );
+}
+
+function createMailer() {
+  if (!smtpConfigured()) return null;
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 465),
+    secure: String(process.env.SMTP_SECURE || "true") !== "false",
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+}
 
 for (const dir of [DATA_DIR, UPLOADS_DIR]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -80,14 +108,15 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.get("/api/checklist", (req, res) => {
-  const pkg = req.query.package === "full" ? "full" : "standard";
+  const pkg = normalizePackage(req.query.package);
   res.json({
     package: pkg,
     statuses: STATUSES,
     groups: itemsForPackage(pkg),
     actions: {
       standard: ACTIONS.standard,
-      fullExtra: pkg === "full" ? ACTIONS.fullExtra : [],
+      premiumExtra: pkg === "premium" ? ACTIONS.premiumExtra : [],
+      fullExtra: pkg === "premium" ? ACTIONS.premiumExtra : [],
       either: ACTIONS.either,
     },
   });
@@ -132,9 +161,10 @@ app.get("/api/reports/:id", (req, res) => {
 app.post("/api/reports", requireAdmin, (req, res) => {
   const reports = readReports();
   const now = new Date().toISOString();
-  const servicePackage =
-    req.body.servicePackage === "full" ? "full" : "standard";
-  const jobType = req.body.jobType || "standard_service";
+  const servicePackage = normalizePackage(req.body.servicePackage);
+  let jobType = req.body.jobType || "standard_service";
+  if (jobType === "full_service") jobType = "premium_service";
+  if (jobType === "full_wof") jobType = "premium_wof";
 
   const report = {
     id: randomUUID(),
@@ -187,11 +217,9 @@ app.put("/api/reports/:id", requireAdmin, (req, res) => {
   const current = reports[index];
   const body = req.body || {};
   const nextPackage =
-    body.servicePackage === "full"
-      ? "full"
-      : body.servicePackage === "standard"
-        ? "standard"
-        : current.servicePackage;
+    body.servicePackage != null
+      ? normalizePackage(body.servicePackage)
+      : normalizePackage(current.servicePackage);
 
   let checks = body.checks || current.checks;
   if (nextPackage !== current.servicePackage) {
@@ -229,6 +257,116 @@ app.post("/api/reports/:id/publish", requireAdmin, (req, res) => {
   writeReports(reports);
   res.json(reports[index]);
 });
+
+app.get("/api/admin/email-status", requireAdmin, (_req, res) => {
+  res.json({
+    configured: smtpConfigured(),
+    from: MAIL_FROM,
+    publicBaseUrl: PUBLIC_BASE_URL || null,
+  });
+});
+
+app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
+  if (!smtpConfigured()) {
+    return res.status(503).json({
+      error:
+        "Email not configured. Add SMTP settings to .env (see .env.example), then restart npm start.",
+    });
+  }
+
+  const reports = readReports();
+  const index = reports.findIndex((r) => r.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: "Report not found" });
+
+  const report = reports[index];
+  const to = String(req.body?.to || report.customerEmail || "").trim();
+  if (!to) {
+    return res.status(400).json({ error: "Customer email is missing on this report." });
+  }
+
+  if (report.status !== "published") {
+    report.status = "published";
+    report.publishedAt = new Date().toISOString();
+    report.updatedAt = report.publishedAt;
+    writeReports(reports);
+  }
+
+  const origin =
+    PUBLIC_BASE_URL ||
+    String(req.body?.baseUrl || "").replace(/\/$/, "") ||
+    `${req.protocol}://${req.get("host")}`;
+  const url = `${origin}/r/${report.id}`;
+  const name = report.customerName || "there";
+  const vehicle = report.vehicle || "your vehicle";
+  const rego = report.registration || "";
+
+  const subject =
+    req.body?.subject ||
+    `Your service report â€” ${rego || vehicle} â€” Deane Auto Repairs`;
+
+  const text =
+    `Hi ${name},\n\n` +
+    `Your digital service report for ${vehicle}${rego ? ` (${rego})` : ""} is ready:\n\n` +
+    `${url}\n\n` +
+    `Deane Auto Repairs\n63 Hayr Road, Three Kings\n0800 6259827\ndeaneautonz@gmail.com\n`;
+
+  const html = `
+    <p>Hi ${escapeHtml(name)},</p>
+    <p>Your digital service report for <strong>${escapeHtml(vehicle)}${
+      rego ? ` (${escapeHtml(rego)})` : ""
+    }</strong> is ready.</p>
+    <p><a href="${escapeAttr(url)}">View your service report</a></p>
+    <p style="color:#5b6777;font-size:14px;">
+      Deane Auto Repairs<br/>
+      63 Hayr Road, Three Kings<br/>
+      0800 6259827<br/>
+      deaneautonz@gmail.com
+    </p>
+  `;
+
+  try {
+    const mailer = createMailer();
+    const info = await mailer.sendMail({
+      from: MAIL_FROM,
+      to,
+      replyTo: process.env.SMTP_USER || MAIL_FROM,
+      subject,
+      text,
+      html,
+    });
+
+    report.lastEmailedAt = new Date().toISOString();
+    report.lastEmailedTo = to;
+    report.updatedAt = report.lastEmailedAt;
+    writeReports(reports);
+
+    res.json({
+      ok: true,
+      to,
+      messageId: info.messageId,
+      reportUrl: url,
+      report,
+    });
+  } catch (err) {
+    console.error("Email send failed:", err);
+    res.status(502).json({
+      error:
+        err.response || err.message || "Failed to send email. Check SMTP settings.",
+    });
+  }
+});
+
+function escapeHtml(str) {
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function escapeAttr(str) {
+  return escapeHtml(str).replaceAll("'", "&#39;");
+}
 
 app.post("/api/reports/:id/unpublish", requireAdmin, (req, res) => {
   const reports = readReports();
@@ -272,8 +410,40 @@ app.get("/r/:id", (req, res) => {
   res.sendFile(path.join(ROOT, "report", "index.html"));
 });
 
-app.listen(PORT, () => {
+function lanIPv4s() {
+  try {
+    const os = require("os");
+    const nets = os.networkInterfaces();
+    const ips = [];
+    for (const list of Object.values(nets)) {
+      for (const net of list || []) {
+        if (net.family === "IPv4" && !net.internal) ips.push(net.address);
+      }
+    }
+    return ips;
+  } catch {
+    return [];
+  }
+}
+
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Deane Auto Repairs running at http://localhost:${PORT}`);
-  console.log(`Admin: http://localhost:${PORT}/admin/`);
+  console.log(`Admin (this PC): http://localhost:${PORT}/admin/`);
+  const ips = lanIPv4s().filter(
+    (ip) => !ip.startsWith("169.254.") && !ip.startsWith("172.22.")
+  );
+  if (ips.length) {
+    console.log("Admin (phone, same Wi-Fi):");
+    for (const ip of ips) {
+      console.log(`  http://${ip}:${PORT}/admin/`);
+    }
+  } else {
+    console.log("Admin (phone): use this PC's Wi-Fi IPv4 from ipconfig, port " + PORT);
+  }
   console.log(`Admin PIN: ${ADMIN_PIN}`);
+  console.log(
+    smtpConfigured()
+      ? `Email: SMTP ready (from ${MAIL_FROM})`
+      : "Email: not configured â€” copy .env.example to .env and add Gmail App Password"
+  );
 });

@@ -55,6 +55,11 @@ loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   loginError.hidden = true;
   const value = document.getElementById("pin").value.trim();
+  const submitBtn = loginForm.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Signing in…";
+  }
   try {
     const res = await fetch("/api/admin/login", {
       method: "POST",
@@ -77,6 +82,11 @@ loginForm.addEventListener("submit", async (e) => {
     loginError.textContent = /Failed to fetch|NetworkError|Load failed/i.test(msg)
       ? "Cannot reach server. In the project folder run: npm start — then open http://localhost:5173/admin/"
       : msg;
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Sign in";
+    }
   }
 });
 
@@ -134,13 +144,22 @@ async function loadList() {
 function labelJob(jobType, pkg) {
   const map = {
     standard_service: "Standard Service",
-    full_service: "Full Service",
+    premium_service: "Premium Service",
+    full_service: "Premium Service",
     wof: "WOF",
     standard_wof: "Standard + WOF",
-    full_wof: "Full + WOF",
+    premium_wof: "Premium + WOF",
+    full_wof: "Premium + WOF",
     repair: "Repair",
   };
-  return map[jobType] || pkg || "Service";
+  if (map[jobType]) return map[jobType];
+  if (pkg === "premium" || pkg === "full") return "Premium Service";
+  if (pkg === "standard") return "Standard Service";
+  return "Service";
+}
+
+function normalizePkg(pkg) {
+  return pkg === "full" || pkg === "premium" ? "premium" : "standard";
 }
 
 async function openReport(id) {
@@ -165,8 +184,15 @@ function fillForm(r) {
   set("status", r.status);
   set("serviceDate", r.serviceDate);
   set("technicianName", r.technicianName);
-  set("jobType", r.jobType);
-  set("servicePackage", r.servicePackage);
+  set(
+    "jobType",
+    r.jobType === "full_service"
+      ? "premium_service"
+      : r.jobType === "full_wof"
+        ? "premium_wof"
+        : r.jobType
+  );
+  set("servicePackage", normalizePkg(r.servicePackage));
   set("customerName", r.customerName);
   set("customerEmail", r.customerEmail);
   set("customerPhone", r.customerPhone);
@@ -225,21 +251,24 @@ async function renderChecklist(pkg, checks) {
 }
 
 function renderActions(r) {
-  const pkg = r.servicePackage === "full" ? "full" : "standard";
+  const pkg = normalizePkg(r.servicePackage);
   const blocks = [
     ...ACTIONS_FALLBACK.standard.map((a) => ({ ...a, group: "Standard" })),
-    ...(pkg === "full"
-      ? ACTIONS_FALLBACK.fullExtra.map((a) => ({ ...a, group: "Full" }))
+    ...(pkg === "premium"
+      ? ACTIONS_FALLBACK.premiumExtra.map((a) => ({ ...a, group: "Premium" }))
       : []),
     ...ACTIONS_FALLBACK.either.map((a) => ({ ...a, group: "Other" })),
   ];
 
   // Prefer live checklist actions if loaded
   const live = checklistMeta?.actions;
+  const premiumActions = live?.premiumExtra || live?.fullExtra || [];
   const list = live
     ? [
         ...live.standard.map((a) => ({ ...a, group: "Standard" })),
-        ...live.fullExtra.map((a) => ({ ...a, group: "Full" })),
+        ...(pkg === "premium"
+          ? premiumActions.map((a) => ({ ...a, group: "Premium" }))
+          : []),
         ...live.either.map((a) => ({ ...a, group: "Other" })),
       ]
     : blocks;
@@ -254,32 +283,29 @@ function renderActions(r) {
 
 const ACTIONS_FALLBACK = {
   standard: [
-    { id: "oil", label: "Engine oil replaced" },
+    { id: "oil", label: "Engine oil replaced (full synthetic as quoted)" },
     { id: "oil_filter", label: "Oil filter replaced" },
     { id: "fluids", label: "Fluids checked / topped up" },
-    { id: "grease", label: "Grease / lube as required" },
+    { id: "battery", label: "Battery tested" },
+    { id: "air_filter", label: "Air filter checked" },
     { id: "lights", label: "Lights checked" },
     { id: "tyre_pressures", label: "Tyre pressures set" },
-    { id: "air_filter", label: "Air filter checked / replaced if agreed" },
-    { id: "battery", label: "Battery checked" },
-  ],
-  fullExtra: [
-    { id: "wheels_off", label: "Road wheels removed" },
-    { id: "brakes_inspected", label: "Brakes inspected" },
-    { id: "brakes_adjusted", label: "Brakes cleaned / adjusted" },
-    { id: "handbrake", label: "Handbrake reset / adjusted" },
-    { id: "driveline_detail", label: "Driveline & CV boots inspected in detail" },
-    { id: "tyres_rotated", label: "Tyres rotated" },
-    { id: "plugs", label: "Spark plugs checked / replaced if due" },
-    { id: "ht_leads", label: "HT leads checked" },
-    { id: "fuel_filter", label: "Fuel filter checked / replaced if due" },
+    { id: "service_light", label: "Service light reset (where possible)" },
     { id: "road_test", label: "Road test completed" },
+    { id: "digital_report", label: "Digital service report prepared" },
+  ],
+  premiumExtra: [
+    { id: "wheels_off", label: "Road wheels removed — brake inspection" },
+    { id: "brakes_measured", label: "Brake pads / discs inspected (wheels off)" },
+    { id: "cabin_filter", label: "Cabin / pollen filter checked" },
+    { id: "diagnostic", label: "Diagnostic scan completed" },
   ],
   either: [
-    { id: "cabin_filter", label: "Cabin filter replaced" },
+    { id: "cabin_filter_replaced", label: "Cabin filter replaced" },
     { id: "coolant", label: "Coolant replaced" },
     { id: "brake_flush", label: "Brake fluid flushed" },
     { id: "transmission", label: "Transmission service" },
+    { id: "spark_plugs_replaced", label: "Spark plugs replaced" },
   ],
 };
 
@@ -357,11 +383,25 @@ document.getElementById("btn-save").addEventListener("click", async () => {
 
 document.getElementById("servicePackage").addEventListener("change", async () => {
   if (!current) return;
-  const pkg = reportForm.servicePackage.value;
+  const pkg = normalizePkg(reportForm.servicePackage.value);
+  reportForm.servicePackage.value = pkg;
   const checks = collectPayload().checks;
   await renderChecklist(pkg, checks);
   current.servicePackage = pkg;
   renderActions({ ...current, servicePackage: pkg, actionsDone: collectPayload().actionsDone });
+});
+
+reportForm.elements.namedItem("jobType").addEventListener("change", async () => {
+  if (!current) return;
+  const jobType = reportForm.elements.namedItem("jobType").value;
+  if (jobType.startsWith("premium") || jobType.startsWith("full")) {
+    reportForm.servicePackage.value = "premium";
+  } else if (jobType.startsWith("standard")) {
+    reportForm.servicePackage.value = "standard";
+  } else {
+    return;
+  }
+  document.getElementById("servicePackage").dispatchEvent(new Event("change"));
 });
 
 document.querySelectorAll("[data-bulk]").forEach((btn) => {
@@ -389,26 +429,27 @@ document.getElementById("btn-publish").addEventListener("click", async () => {
 });
 
 document.getElementById("btn-email").addEventListener("click", async () => {
+  const btn = document.getElementById("btn-email");
   try {
     await saveReport();
-    if (current.status !== "published") {
-      current = await api(`/api/reports/${current.id}/publish`, { method: "POST", body: "{}" });
-      reportForm.elements.namedItem("status").value = current.status;
+    if (!current.customerEmail) {
+      throw new Error("Add the customer email on this report first.");
     }
-    const url = `${location.origin}/r/${current.id}`;
-    const email = current.customerEmail || "";
-    const subject = encodeURIComponent(
-      `Your service report — ${current.registration} — Deane Auto Repairs`
-    );
-    const body = encodeURIComponent(
-      `Hi ${current.customerName || "there"},\n\n` +
-        `Your digital service report for ${current.vehicle || "your vehicle"} (${current.registration}) is ready:\n\n` +
-        `${url}\n\n` +
-        `Deane Auto Repairs\n63 Hayr Road, Three Kings\n0800 6259827\ndreamautonz@gmail.com`
-    );
-    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+    btn.disabled = true;
+    btn.textContent = "Sending…";
+    const result = await api(`/api/reports/${current.id}/email`, {
+      method: "POST",
+      body: JSON.stringify({ baseUrl: location.origin }),
+    });
+    current = result.report || current;
+    reportForm.elements.namedItem("status").value = current.status;
+    showStatus(`Email sent to ${result.to}`);
+    alert(`Email sent to ${result.to}\n\nReport link:\n${result.reportUrl}`);
   } catch (err) {
     alert(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Email customer";
   }
 });
 

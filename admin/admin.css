@@ -17,6 +17,11 @@
   box-sizing: border-box;
 }
 
+/* Required: .login-view { display:grid } otherwise overrides HTML hidden */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: var(--font);

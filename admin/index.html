@@ -66,19 +66,19 @@
                 <label
                   >Job type
                   <select name="jobType">
-                    <option value="standard_service">Standard Service</option>
-                    <option value="full_service">Full Service</option>
-                    <option value="wof">WOF only</option>
+                    <option value="standard_service">Standard Service ($199)</option>
+                    <option value="premium_service">Premium Service ($279)</option>
+                    <option value="wof">WOF only ($79)</option>
                     <option value="standard_wof">Standard Service + WOF</option>
-                    <option value="full_wof">Full Service + WOF</option>
+                    <option value="premium_wof">Premium Service + WOF</option>
                     <option value="repair">Repair</option>
                   </select>
                 </label>
                 <label
                   >Service package
                   <select name="servicePackage" id="servicePackage">
-                    <option value="standard">Standard</option>
-                    <option value="full">Full</option>
+                    <option value="standard">Standard ($199)</option>
+                    <option value="premium">Premium ($279)</option>
                   </select>
                 </label>
               </div>
@@ -99,7 +99,7 @@
               <div class="photo-row">
                 <label class="file-label">
                   Vehicle photo
-                  <input id="photo-input" type="file" accept="image/*" />
+                  <input id="photo-input" type="file" accept="image/*" capture="environment" />
                 </label>
                 <img id="vehicle-photo" alt="" hidden />
               </div>

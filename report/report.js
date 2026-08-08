@@ -27,13 +27,19 @@ function escapeHtml(str) {
 function jobLabel(report) {
   const map = {
     standard_service: "Standard Service",
-    full_service: "Full Service",
+    premium_service: "Premium Service",
+    full_service: "Premium Service",
     wof: "WOF",
     standard_wof: "Standard Service + WOF",
-    full_wof: "Full Service + WOF",
+    premium_wof: "Premium Service + WOF",
+    full_wof: "Premium Service + WOF",
     repair: "Repair",
   };
-  return map[report.jobType] || "Service";
+  if (map[report.jobType]) return map[report.jobType];
+  if (report.servicePackage === "premium" || report.servicePackage === "full") {
+    return "Premium Service";
+  }
+  return "Service";
 }
 
 async function load() {
@@ -88,7 +94,7 @@ function render(report, meta) {
 
   const actionLabels = [
     ...(meta.actions.standard || []),
-    ...(meta.actions.fullExtra || []),
+    ...(meta.actions.premiumExtra || meta.actions.fullExtra || []),
     ...(meta.actions.either || []),
   ];
   const done = actionLabels.filter((a) => report.actionsDone?.[a.id]);
@@ -187,7 +193,7 @@ function render(report, meta) {
     </section>
 
     <section class="panel">
-      <h2>Full inspection checklist</h2>
+      <h2>Inspection checklist</h2>
       ${meta.groups
         .map((group) => {
           const rows = group.items
