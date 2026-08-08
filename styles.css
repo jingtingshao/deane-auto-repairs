@@ -585,7 +585,100 @@ h3 {
 }
 
 .package-summary {
-  margin-bottom: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.service-simple {
+  margin-top: 0.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+}
+
+.service-simple-head h4 {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.45rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--blue-deep);
+}
+
+.service-simple-head p {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.service-simple-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.service-simple-list li {
+  position: relative;
+  padding-left: 1.35rem;
+  font-weight: 600;
+}
+
+.service-simple-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--red);
+}
+
+.service-simple-extra {
+  margin: 1.15rem 0 1rem;
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+.checklist-details {
+  border: 0;
+  border-top: 0;
+  padding: 0;
+}
+
+.checklist-details > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--blue-deep);
+  border-bottom: 2px solid var(--blue);
+  padding: 0.15rem 0;
+  list-style: none;
+  float: none;
+}
+
+.checklist-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.checklist-details > summary::after {
+  content: none;
+  float: none;
+}
+
+.checklist-details[open] > summary {
+  margin-bottom: 1rem;
+}
+
+.checklist-details .compare-wrap {
+  margin-top: 0.25rem;
 }
 
 .compare-table tbody th {
