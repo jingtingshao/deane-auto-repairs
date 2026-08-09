@@ -636,10 +636,30 @@ h3 {
   font-size: 1.35rem;
 }
 
+.service-simple-price {
+  margin: 0.35rem 0 0.45rem !important;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--blue-deep);
+}
+
+.service-simple-price span {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .service-simple-head p {
   margin: 0 0 1rem;
   color: var(--muted);
   font-weight: 600;
+}
+
+.spark-note {
+  display: inline;
+  color: var(--muted);
 }
 
 .checklist-details {
