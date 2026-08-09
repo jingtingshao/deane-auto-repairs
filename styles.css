@@ -848,7 +848,7 @@ h3 {
 
 .digital {
   background:
-    linear-gradient(135deg, rgba(21, 101, 192, 0.06), rgba(229, 57, 53, 0.05)),
+    linear-gradient(135deg, rgba(21, 101, 192, 0.08), rgba(229, 57, 53, 0.06)),
     var(--white);
 }
 
@@ -857,6 +857,24 @@ h3 {
   grid-template-columns: 1.05fr 0.95fr;
   gap: 2.5rem;
   align-items: center;
+}
+
+.digital-eyebrow {
+  color: var(--red);
+  letter-spacing: 0.14em;
+}
+
+.digital-title {
+  margin-bottom: 0.35rem;
+  font-size: clamp(2.35rem, 5vw, 3.35rem);
+  color: var(--blue-deep);
+  line-height: 0.98;
+}
+
+.digital-lead {
+  margin: 1.1rem 0 0;
+  max-width: 36rem;
+  font-size: 1.08rem;
 }
 
 .digital-points {
