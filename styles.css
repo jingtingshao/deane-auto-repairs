@@ -859,15 +859,10 @@ h3 {
   align-items: center;
 }
 
-.digital-eyebrow {
-  color: var(--red);
-  letter-spacing: 0.14em;
-}
-
 .digital-title {
   margin-bottom: 0.35rem;
   font-size: clamp(2.35rem, 5vw, 3.35rem);
-  color: var(--blue-deep);
+  color: var(--red);
   line-height: 0.98;
 }
 
