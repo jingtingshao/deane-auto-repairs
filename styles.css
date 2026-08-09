@@ -197,7 +197,7 @@ a:hover {
 
 .hero {
   position: relative;
-  min-height: calc(100vh - var(--header-h));
+  min-height: clamp(28rem, 68vh, 36rem);
   display: grid;
   align-items: end;
   color: var(--white);
@@ -225,7 +225,7 @@ a:hover {
 .hero-content {
   position: relative;
   z-index: 1;
-  padding: 4.5rem 0 4rem;
+  padding: 3.25rem 0 2.75rem;
   max-width: min(52rem, calc(100% - 2.5rem));
   margin-left: max(calc((100% - 1120px) / 2), 1.25rem);
   margin-right: auto;
