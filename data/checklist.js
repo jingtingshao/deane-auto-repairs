@@ -28,10 +28,11 @@ const GROUPS = [
     items: [
       { code: "ELC-01", label: "Test battery condition", packages: BOTH },
       { code: "ELC-02", label: "Visual check drive belts", packages: BOTH },
-      { code: "ELC-03", label: "Check / test all lights", packages: BOTH, wofFlag: true },
+      { code: "ELC-03", label: "Exterior lights & indicators", packages: BOTH, wofFlag: true },
+      { code: "ELC-08", label: "Dashboard warning lights", packages: BOTH, wofFlag: true },
       { code: "ELC-04", label: "Check wiper blades", packages: BOTH, wofFlag: true },
       { code: "ELC-05", label: "Service light reset (where possible)", packages: BOTH },
-      { code: "ELC-06", label: "Visual check spark plugs", packages: BOTH },
+      { code: "ELC-06", label: "Visual check spark plugs", packages: PREMIUM },
       { code: "ELC-07", label: "Diagnostic scan", packages: PREMIUM },
     ],
   },
@@ -39,7 +40,7 @@ const GROUPS = [
     id: "brakes",
     title: "Brakes",
     items: [
-      { code: "BRK-01", label: "Brake inspection (wheels on)", packages: BOTH, wofFlag: true },
+      { code: "BRK-01", label: "Brake inspection (wheels on)", packages: PREMIUM, wofFlag: true },
       { code: "BRK-02", label: "Brake warning / ABS lights", packages: BOTH, wofFlag: true },
       { code: "BRK-03", label: "Brake inspection (wheels off)", packages: PREMIUM, wofFlag: true },
       { code: "BRK-04", label: "Front brake pads — inspect / measure", packages: PREMIUM, wofFlag: true },
@@ -55,8 +56,8 @@ const GROUPS = [
     title: "Tyres, steering & suspension",
     items: [
       { code: "TYR-01", label: "Tyre pressure & condition check", packages: BOTH, wofFlag: true },
-      { code: "SUS-01", label: "Visual check steering / CV boots", packages: BOTH, wofFlag: true },
-      { code: "SUS-02", label: "Visual check suspension", packages: BOTH, wofFlag: true },
+      { code: "SUS-01", label: "Visual check steering / CV boots", packages: PREMIUM, wofFlag: true },
+      { code: "SUS-02", label: "Visual check suspension", packages: PREMIUM, wofFlag: true },
     ],
   },
   {
@@ -64,7 +65,7 @@ const GROUPS = [
     title: "Exhaust & road test",
     items: [
       { code: "BOD-01", label: "Visual check exhaust system", packages: BOTH, wofFlag: true },
-      { code: "RD-01", label: "Road test up to 50 km/h", packages: BOTH },
+      { code: "RD-01", label: "Road test up to 50 km/h", packages: PREMIUM },
     ],
   },
 ];
@@ -76,18 +77,22 @@ const ACTIONS = {
     { id: "fluids", label: "Fluids checked / topped up" },
     { id: "battery", label: "Battery tested" },
     { id: "air_filter", label: "Air filter checked" },
-    { id: "lights", label: "Lights checked" },
+    { id: "exterior_lights", label: "Exterior lights & indicators checked" },
+    { id: "dashboard_lights", label: "Dashboard warning lights checked" },
     { id: "tyre_pressures", label: "Tyre pressures set" },
     { id: "service_light", label: "Service light reset (where possible)" },
-    { id: "road_test", label: "Road test completed" },
     { id: "digital_report", label: "Digital service report prepared" },
   ],
   /** Premium-only completed actions (also returned as fullExtra for older clients) */
   premiumExtra: [
+    { id: "wheels_on", label: "Brake inspection completed (wheels on)" },
     { id: "wheels_off", label: "Road wheels removed — brake inspection" },
     { id: "brakes_measured", label: "Brake pads / discs inspected (wheels off)" },
+    { id: "steering_suspension", label: "Steering / CV boots & suspension checked" },
+    { id: "spark_plugs", label: "Spark plugs inspected" },
     { id: "cabin_filter", label: "Cabin / pollen filter checked" },
     { id: "diagnostic", label: "Diagnostic scan completed" },
+    { id: "road_test", label: "Road test completed" },
   ],
   either: [
     { id: "cabin_filter_replaced", label: "Cabin filter replaced" },
