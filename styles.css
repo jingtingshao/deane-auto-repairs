@@ -698,9 +698,11 @@ h3 {
 }
 
 .checklist-details {
-  border: 0;
-  border-top: 0;
-  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  margin-top: 1.5rem;
 }
 
 .checklist-details > summary {
@@ -715,9 +717,10 @@ h3 {
   text-transform: uppercase;
   color: var(--blue-deep);
   border-bottom: 2px solid var(--blue);
-  padding: 0.15rem 0;
+  padding: 0.15rem 0 !important;
   list-style: none;
   float: none;
+  width: auto;
 }
 
 .checklist-details > summary::-webkit-details-marker {
@@ -725,7 +728,7 @@ h3 {
 }
 
 .checklist-details > summary::after {
-  content: none;
+  content: none !important;
   float: none;
 }
 

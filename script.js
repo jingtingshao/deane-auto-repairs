@@ -66,6 +66,25 @@
     reveals.forEach((el) => el.classList.add("is-visible"));
   }
 
+  const checklist = document.querySelector("#full-checklist");
+  const openChecklist = () => {
+    if (!checklist) return;
+    checklist.open = true;
+  };
+
+  document.querySelectorAll("[data-open-checklist], a[href='#full-checklist']").forEach((link) => {
+    link.addEventListener("click", () => {
+      openChecklist();
+    });
+  });
+
+  if (location.hash === "#full-checklist") {
+    openChecklist();
+  }
+  window.addEventListener("hashchange", () => {
+    if (location.hash === "#full-checklist") openChecklist();
+  });
+
   const setStatus = (message, type) => {
     if (!status) return;
     status.hidden = false;

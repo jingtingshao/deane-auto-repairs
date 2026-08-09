@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260309" />
+    <link rel="stylesheet" href="styles.css?v=20260309b" />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -143,7 +143,10 @@
                 <li>Standard Service $199 <em>(petrol)</em></li>
                 <li>Premium Service $279 <em>(petrol)</em></li>
                 <li>Diesel from $249 · European from $279</li>
-                <li>See full <a href="#full-checklist">servicing table</a></li>
+                <li>
+                  See full
+                  <a href="#full-checklist" data-open-checklist>inspection checklist</a>
+                </li>
               </ul>
             </article>
             <article class="service-block reveal" style="--delay: 0.1s">
@@ -249,9 +252,11 @@
                     </article>
                   </div>
 
-                  <div class="compare-block" id="full-checklist">
+                  <details class="checklist-details" id="full-checklist">
+                    <summary>See full inspection checklist</summary>
+                    <div class="compare-block">
                   <p class="price-group-lead">
-                    Full checklist — tick = included. GST included unless noted.
+                    Tick = included. GST included unless noted.
                     <span class="spark-note">*Spark plug check where accessible; not applicable to most diesels.</span>
                   </p>
                   <div class="compare-wrap" tabindex="0" role="region" aria-label="Full vehicle servicing checklist">
@@ -488,7 +493,8 @@
                       to most diesel vehicles.
                     </li>
                   </ul>
-                  </div>
+                    </div>
+                  </details>
             </div>
 
             <div class="price-group reveal">
@@ -850,7 +856,8 @@
                 separately due to different oil specifications, capacities and
                 service requirements. See
                 <a href="#service-table">vehicle servicing</a> or the
-                <a href="#full-checklist">full inspection checklist</a> — we’ll
+                <a href="#full-checklist" data-open-checklist>full inspection checklist</a>
+                — we’ll
                 confirm the final price before work begins.
               </p>
             </details>
