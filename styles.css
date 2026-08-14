@@ -1295,6 +1295,10 @@ textarea:focus {
   }
 }
 
+.checklist-swipe-hint {
+  display: none;
+}
+
 @media (max-width: 900px) {
   .split,
   .service-grid,
@@ -1304,6 +1308,14 @@ textarea:focus {
   .book-layout,
   .contact-grid {
     grid-template-columns: 1fr;
+  }
+
+  .container {
+    width: min(1120px, calc(100% - 1.5rem));
+  }
+
+  .section {
+    padding: 3.25rem 0;
   }
 
   .phone-b {
@@ -1330,7 +1342,9 @@ textarea:focus {
     gap: 0;
     background: var(--white);
     border-bottom: 1px solid var(--line);
-    padding: 0.5rem 1.25rem 1rem;
+    padding: 0.35rem 1rem 1rem;
+    max-height: calc(100vh - var(--header-h));
+    overflow-y: auto;
   }
 
   .site-nav.is-open {
@@ -1338,24 +1352,159 @@ textarea:focus {
   }
 
   .site-nav a {
-    padding: 0.75rem 0;
+    padding: 0.9rem 0.25rem;
     border-bottom: 1px solid var(--line);
+    font-size: 1.02rem;
   }
 
   .nav-phone {
     border-radius: 10px;
     text-align: center;
-    margin-top: 0.5rem;
+    margin-top: 0.65rem;
+    min-height: 48px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .hero {
+    min-height: clamp(24rem, 72vh, 32rem);
   }
 
   .hero-content {
-    margin-left: 1.25rem;
-    margin-right: 1.25rem;
+    margin-left: 0.85rem;
+    margin-right: 0.85rem;
     width: auto;
+    max-width: none;
+    padding: 2.4rem 0 2rem;
+  }
+
+  .hero-line-main {
+    white-space: normal !important;
+  }
+
+  .hero h1 {
+    font-size: clamp(1.55rem, 8.2vw, 2.35rem);
+  }
+
+  .hero-lead {
+    font-size: 1.02rem;
+    margin: 0.85rem 0 1.25rem;
+  }
+
+  .hero-actions {
+    gap: 0.65rem;
+  }
+
+  .hero-actions .btn {
+    flex: 1 1 12rem;
+  }
+
+  .service-simple-grid {
+    gap: 0.9rem;
+    margin: 1rem 0;
+  }
+
+  .service-simple {
+    padding: 1.1rem 1rem 1.15rem;
+  }
+
+  .service-simple-price {
+    font-size: 1.75rem;
+  }
+
+  .service-simple-cta {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .checklist-swipe-hint {
+    display: block;
+    margin: 0 0 0.75rem;
+    padding: 0.65rem 0.8rem;
+    border-radius: 10px;
+    background: var(--blue-soft);
+    color: var(--blue-deep);
+    font-size: 0.92rem;
+    font-weight: 600;
+  }
+
+  .checklist-details .compare-wrap {
+    border-radius: 10px;
+    box-shadow: inset -16px 0 14px -14px rgba(26, 35, 50, 0.2);
+  }
+
+  .compare-table {
+    font-size: 0.9rem;
+  }
+
+  .compare-table tbody th {
+    min-width: 9.5rem;
+    max-width: 11rem;
+    font-size: 0.88rem;
   }
 
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .booking-form {
+    padding: 1.15rem;
+  }
+
+  input,
+  select,
+  textarea,
+  .btn {
+    min-height: 48px;
+  }
+
+  textarea {
+    min-height: 8rem;
+  }
+
+  .digital-title {
+    font-size: clamp(2rem, 9vw, 2.7rem);
+  }
+
+  .phone-stack {
+    min-height: 340px;
+    margin-top: 0.5rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .header-inner {
+    min-height: 64px;
+  }
+
+  :root {
+    --header-h: 64px;
+  }
+
+  .logo .logo-script {
+    font-size: 1.7rem;
+  }
+
+  .logo .logo-sans {
+    font-size: 0.98rem;
+  }
+
+  .section-intro h2,
+  .price-group > h2 {
+    font-size: clamp(1.7rem, 8vw, 2.2rem);
+  }
+
+  .hero-brand .logo-script {
+    font-size: clamp(2.6rem, 12vw, 3.4rem);
+  }
+
+  .hero-brand .logo-sans {
+    font-size: clamp(1.2rem, 5.5vw, 1.55rem);
+  }
+
+  .hero-actions .btn {
+    flex: 1 1 100%;
   }
 }
 
