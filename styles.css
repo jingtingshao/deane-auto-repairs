@@ -48,6 +48,25 @@ a:hover {
   color: var(--red);
 }
 
+a[href^="tel:"] {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  -webkit-tap-highlight-color: rgba(21, 101, 192, 0.25);
+}
+
+@media (max-width: 900px) {
+  a[href^="tel:"] {
+    display: inline-block;
+    padding: 0.2rem 0;
+  }
+
+  .contact a[href^="tel:"],
+  .nav-phone,
+  .hero-actions a[href^="tel:"] {
+    font-weight: 700;
+  }
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

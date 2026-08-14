@@ -114,12 +114,13 @@
     if (location.hash === "#full-checklist") openChecklist();
   });
 
-  const setStatus = (message, type) => {
+  const setStatus = (message, type, allowHtml = false) => {
     if (!status) return;
     status.hidden = false;
     status.classList.remove("is-success", "is-error");
     if (type) status.classList.add(type);
-    status.textContent = message;
+    if (allowHtml) status.innerHTML = message;
+    else status.textContent = message;
   };
 
   const setLoading = (loading) => {
@@ -180,8 +181,9 @@
         );
       } catch (error) {
         setStatus(
-          "Sorry — we couldn’t send that just now. Please call 0800 625 9827 or email deaneautonz@gmail.com.",
-          "is-error"
+          'Sorry — we couldn’t send that just now. Please call <a href="tel:08006259827">0800 625 9827</a> or email <a href="mailto:deaneautonz@gmail.com">deaneautonz@gmail.com</a>.',
+          "is-error",
+          true
         );
         console.error(error);
       } finally {

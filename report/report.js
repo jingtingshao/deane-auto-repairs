@@ -102,7 +102,44 @@ function render(report, meta) {
   const wofResultLabel =
     wof.result === "pass" ? "Pass" : wof.result === "fail" ? "Fail" : "Not completed";
 
+  document.body.classList.add("has-cover");
+
   reportEl.innerHTML = `
+    <section class="report-cover" aria-label="Report cover">
+      <div class="cover-inner">
+        <p class="cover-brand">
+          <span class="script">Deane</span>
+          <span class="sans">AUTO REPAIRS</span>
+        </p>
+        <p class="cover-tag">Digital service report</p>
+        <h1 class="cover-title">${escapeHtml(jobLabel(report))}</h1>
+        ${
+          report.vehiclePhoto
+            ? `<img class="cover-photo" src="${escapeHtml(report.vehiclePhoto)}" alt="Vehicle photo" />`
+            : `<div class="cover-photo cover-photo-empty" aria-hidden="true"></div>`
+        }
+        <div class="cover-vehicle">
+          <p class="cover-rego">${escapeHtml(report.registration || "—")}</p>
+          <p class="cover-model">${escapeHtml(report.vehicle || "")}</p>
+        </div>
+        <dl class="cover-meta">
+          <div><dt>Job</dt><dd>${escapeHtml(report.jobNumber || "—")}</dd></div>
+          <div><dt>Date</dt><dd>${escapeHtml(report.serviceDate || "—")}</dd></div>
+          <div><dt>Customer</dt><dd>${escapeHtml(report.customerName || "—")}</dd></div>
+          <div><dt>Odometer</dt><dd>${escapeHtml(report.odometer ? report.odometer + " km" : "—")}</dd></div>
+          <div><dt>Technician</dt><dd>${escapeHtml(report.technicianName || "—")}</dd></div>
+        </dl>
+        <div class="cover-shop">
+          <strong>Deane Auto Repairs</strong><br />
+          (Next to BP Petrol Station)<br />
+          63 Hayr Road, Three Kings, Auckland<br />
+          <a href="tel:08006259827">0800 625 9827</a> ·
+          <a href="mailto:deaneautonz@gmail.com">deaneautonz@gmail.com</a><br />
+          Mon–Sat 8:30am – 5:30pm
+        </div>
+      </div>
+    </section>
+
     <section class="hero-card">
       <div>
         <h1>${escapeHtml(report.registration)} · ${escapeHtml(report.vehicle)}</h1>
