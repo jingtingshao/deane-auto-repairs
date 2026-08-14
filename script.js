@@ -107,6 +107,7 @@
   if (location.hash === "#prices") {
     location.replace("#services");
   }
+  if (location.hash === "#full-checklist") {
     openChecklist();
   }
   window.addEventListener("hashchange", () => {

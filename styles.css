@@ -326,6 +326,7 @@ a:hover {
 
 .section {
   padding: 5rem 0;
+  scroll-margin-top: calc(var(--header-h) + 0.75rem);
 }
 
 .section-intro,
@@ -1248,6 +1249,18 @@ textarea:focus {
 
 .site-footer p {
   margin: 0;
+}
+
+#services,
+#wof,
+#service-table,
+#full-checklist,
+#reports,
+#faq,
+#book,
+#contact,
+#about {
+  scroll-margin-top: calc(var(--header-h) + 0.75rem);
 }
 
 .reveal {
