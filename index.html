@@ -15,6 +15,70 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css?v=20260810f" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "AutoRepair",
+        "@id": "https://jingtingshao.github.io/deane-auto-repairs/#business",
+        "name": "Deane Auto Repairs",
+        "url": "https://jingtingshao.github.io/deane-auto-repairs/",
+        "telephone": "0800 625 9827",
+        "email": "deaneautonz@gmail.com",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "63 Hayr Road",
+          "addressLocality": "Three Kings",
+          "addressRegion": "Auckland",
+          "addressCountry": "NZ"
+        },
+        "openingHoursSpecification": [
+          {
+            "@type": "OpeningHoursSpecification",
+            "dayOfWeek": [
+              "Monday",
+              "Tuesday",
+              "Wednesday",
+              "Thursday",
+              "Friday",
+              "Saturday"
+            ],
+            "opens": "08:30",
+            "closes": "17:30"
+          }
+        ],
+        "areaServed": [
+          "Three Kings",
+          "Mount Eden",
+          "Epsom",
+          "Onehunga",
+          "Auckland"
+        ],
+        "hasOfferCatalog": {
+          "@type": "OfferCatalog",
+          "name": "Vehicle services",
+          "itemListElement": [
+            {
+              "@type": "Offer",
+              "name": "WOF inspection",
+              "price": "79",
+              "priceCurrency": "NZD"
+            },
+            {
+              "@type": "Offer",
+              "name": "Standard Service",
+              "price": "199",
+              "priceCurrency": "NZD"
+            },
+            {
+              "@type": "Offer",
+              "name": "Premium Service",
+              "price": "279",
+              "priceCurrency": "NZD"
+            }
+          ]
+        }
+      }
+    </script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -502,8 +566,10 @@
               <div class="service-simple-grid">
                 <article class="service-simple">
                   <div class="service-simple-head">
+                    <p class="service-simple-price">$79 <span>incl. GST</span></p>
                     <p>WOF inspection</p>
                     <p>Recheck free when repairs are done here</p>
+                    <a class="btn btn-primary" href="#book" data-booking-type="WOF">Book a WOF</a>
                   </div>
                 </article>
               </div>
@@ -750,7 +816,8 @@
             <div class="form-grid">
               <div class="form-row">
                 <label for="date">Preferred date</label>
-                <input id="date" name="date" type="date" />
+                <input id="date" name="date" type="date" aria-describedby="date-help" />
+                <p class="field-help" id="date-help">Bookings are available Monday–Saturday, 8:30am–5:30pm. Please choose a date from tomorrow onward.</p>
               </div>
               <div class="form-row">
                 <label for="time">Preferred time</label>

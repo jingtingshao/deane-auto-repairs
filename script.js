@@ -24,8 +24,34 @@
   const form = document.querySelector("[data-booking-form]");
   const status = document.querySelector("[data-form-status]");
   const submitBtn = document.querySelector("[data-submit-btn]");
+  const preferredDate = document.querySelector("#date");
+  const helpSelect = document.querySelector("#help");
 
   if (year) year.textContent = String(new Date().getFullYear());
+
+  if (preferredDate) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const localTomorrow = [
+      tomorrow.getFullYear(),
+      String(tomorrow.getMonth() + 1).padStart(2, "0"),
+      String(tomorrow.getDate()).padStart(2, "0"),
+    ].join("-");
+    preferredDate.min = localTomorrow;
+
+    preferredDate.addEventListener("input", () => {
+      const selected = new Date(`${preferredDate.value}T00:00:00`);
+      preferredDate.setCustomValidity(
+        selected.getDay() === 0 ? "Please choose Monday to Saturday; we are closed on Sundays." : ""
+      );
+    });
+  }
+
+  document.querySelectorAll("[data-booking-type]").forEach((link) => {
+    link.addEventListener("click", () => {
+      if (helpSelect) helpSelect.value = link.dataset.bookingType;
+    });
+  });
 
   const onScroll = () => {
     if (!header) return;
