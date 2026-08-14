@@ -14,7 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260810f" />
+    <link rel="stylesheet" href="styles.css?v=20260815a" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -104,8 +104,7 @@
         </button>
         <nav class="site-nav" id="site-nav" data-nav>
           <a href="#about">About</a>
-          <a href="#services">Services</a>
-          <a href="#prices">Prices</a>
+          <a href="#services">Service &amp; pricing</a>
           <a href="#reports">Digital reports</a>
           <a href="#faq">FAQ</a>
           <a href="#book">Book</a>
@@ -185,62 +184,37 @@
         </div>
       </section>
 
-      <section class="section services" id="services">
+      <section class="section prices" id="services">
         <div class="container">
           <div class="section-intro reveal">
-            <p class="eyebrow">What we do</p>
-            <h2>Service and WOF — done properly</h2>
+            <p class="eyebrow">Service &amp; pricing</p>
+            <h2>Clear packages. Clear prices.</h2>
             <p>
-              Honest advice, clear options, and work done right the first time.
-              We confirm the best service path before anything starts.
+              Choose the right option for your vehicle — we’ll confirm before
+              any work starts. Full checklist details are below.
             </p>
           </div>
 
-          <div class="service-grid">
-            <article class="service-block reveal">
-              <h3>Car servicing</h3>
-              <p>
-                Service packages built around your vehicle type, with clear
-                checklists and digital records.
-              </p>
-              <ul>
-                <li>Standard Service <em>(petrol)</em></li>
-                <li>Premium Service <em>(petrol)</em></li>
-                <li>Diesel Service <em>(diesel-spec oil and checks)</em></li>
-                <li>European Service <em>(Euro-spec oil and checks)</em></li>
-                <li>
-                  See full
-                  <a href="#full-checklist" data-open-checklist>inspection checklist</a>
-                </li>
-              </ul>
-            </article>
-            <article class="service-block reveal" style="--delay: 0.1s">
-              <h3>WOF inspections</h3>
-              <p>
-                Keep your vehicle legal and safe with straightforward WOF checks
-                and practical next-step advice.
-              </p>
-              <ul>
-                <li>WOF inspection</li>
-                <li>WOF recheck free (repairs done here)</li>
-                <li>Clear pass / fail report</li>
-                <li>All makes &amp; models</li>
-              </ul>
-            </article>
-          </div>
-
-          <p class="services-note reveal">
-            Need repairs beyond service or WOF? We’ll inspect first and give you
-            a clear quote before any extra work.
-          </p>
-        </div>
-      </section>
-
-      <section class="section prices" id="prices">
-        <div class="container">
           <div class="price-groups">
+            <div class="price-group reveal" id="wof">
+              <h2>WOF Inspections</h2>
+              <div class="service-simple-grid">
+                <article class="service-simple is-featured">
+                  <div class="service-simple-head">
+                    <p class="service-simple-price">$79 <span>incl. GST</span></p>
+                    <p>Keep your vehicle legal and roadworthy</p>
+                  </div>
+                  <ul class="service-simple-list">
+                    <li>WOF inspection</li>
+                    <li>Clear pass / fail report</li>
+                    <li>Recheck free when repairs are done here</li>
+                  </ul>
+                  <a class="btn btn-primary service-simple-cta" href="#book" data-booking-type="WOF">Book a WOF</a>
+                </article>
+              </div>
+            </div>
+
             <div class="price-group reveal" id="service-table">
-                  <p class="eyebrow">Prices</p>
                   <h2>Vehicle servicing</h2>
 
                   <div class="service-simple-grid">
@@ -252,12 +226,8 @@
                         <p>Petrol vehicles</p>
                       </div>
                       <ul class="service-simple-list">
-                        <li>Engine oil &amp; filter</li>
-                        <li>Fluid checks &amp; top-ups</li>
-                        <li>Battery, exterior &amp; dashboard lights, wipers</li>
-                        <li>Tyre pressure &amp; condition</li>
-                        <li>Air filter, belts, hoses &amp; exhaust</li>
-                        <li>Service light reset</li>
+                        <li>Oil &amp; filter + key fluid checks</li>
+                        <li>Battery, lights, tyres, belts &amp; exhaust</li>
                         <li>Digital service report</li>
                       </ul>
                     </article>
@@ -270,13 +240,8 @@
                       </div>
                       <ul class="service-simple-list">
                         <li>Everything in Standard</li>
-                        <li>Steering / CV boots check</li>
-                        <li>Spark plug inspection*</li>
-                        <li>Suspension check</li>
-                        <li>Brake inspection (wheels on &amp; off)</li>
-                        <li>Cabin / pollen filter check</li>
-                        <li>Diagnostic scan</li>
-                        <li>Road test</li>
+                        <li>Brakes, steering, suspension &amp; road test</li>
+                        <li>Cabin filter + diagnostic scan</li>
                       </ul>
                     </article>
 
@@ -284,15 +249,11 @@
                       <div class="service-simple-head">
                         <h3>Diesel Service</h3>
                         <p class="service-simple-price">From $249</p>
-                        <p>Same depth as Standard, diesel-spec oil</p>
+                        <p>Diesel-spec oil</p>
                       </div>
                       <ul class="service-simple-list">
+                        <li>Same depth as Standard</li>
                         <li>Diesel-spec oil &amp; filter</li>
-                        <li>Fluid checks &amp; top-ups</li>
-                        <li>Battery, exterior &amp; dashboard lights, wipers</li>
-                        <li>Tyre pressure &amp; condition</li>
-                        <li>Air filter, belts, hoses &amp; exhaust</li>
-                        <li>Service light reset</li>
                         <li>Digital service report</li>
                       </ul>
                     </article>
@@ -301,17 +262,11 @@
                       <div class="service-simple-head">
                         <h3>European Service</h3>
                         <p class="service-simple-price">From $279</p>
-                        <p>Same depth as Premium, European-spec oil</p>
+                        <p>European-spec oil</p>
                       </div>
                       <ul class="service-simple-list">
+                        <li>Same depth as Premium</li>
                         <li>European-spec oil &amp; filter</li>
-                        <li>Everything in Premium depth</li>
-                        <li>Steering / CV boots &amp; suspension</li>
-                        <li>Brake inspection (wheels on &amp; off)</li>
-                        <li>Cabin / pollen filter check</li>
-                        <li>Diagnostic scan</li>
-                        <li>Spark plug inspection*</li>
-                        <li>Road test</li>
                         <li>Digital service report</li>
                       </ul>
                     </article>
@@ -562,20 +517,6 @@
             </div>
 
             <div class="price-group reveal">
-              <h2>WOF Inspections</h2>
-              <div class="service-simple-grid">
-                <article class="service-simple">
-                  <div class="service-simple-head">
-                    <p class="service-simple-price">$79 <span>incl. GST</span></p>
-                    <p>WOF inspection</p>
-                    <p>Recheck free when repairs are done here</p>
-                    <a class="btn btn-primary" href="#book" data-booking-type="WOF">Book a WOF</a>
-                  </div>
-                </article>
-              </div>
-            </div>
-
-            <div class="price-group reveal">
               <h2>Pre-Purchase Inspection</h2>
               <div class="service-simple-grid">
                 <article class="service-simple is-featured">
@@ -588,6 +529,11 @@
             </div>
 
           </div>
+
+          <p class="services-note reveal">
+            Need repairs beyond service or WOF? We’ll inspect first and give you
+            a clear quote before any extra work.
+          </p>
         </div>
       </section>
 
@@ -741,7 +687,7 @@
                 <strong>$79</strong>. Diesel and European vehicles are priced
                 separately due to different oil specifications, capacities and
                 service requirements. See
-                <a href="#service-table">vehicle servicing</a> or the
+                <a href="#services">service &amp; pricing</a> or the
                 <a href="#full-checklist" data-open-checklist>full inspection checklist</a>
                 — we’ll
                 confirm the final price before work begins.

@@ -104,7 +104,9 @@
     });
   });
 
-  if (location.hash === "#full-checklist") {
+  if (location.hash === "#prices") {
+    location.replace("#services");
+  }
     openChecklist();
   }
   window.addEventListener("hashchange", () => {
