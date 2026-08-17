@@ -73,9 +73,148 @@ main {
   padding: 1.4rem 0 2rem;
 }
 
+body.has-cover .top {
+  display: none;
+}
+
+body.has-cover main.wrap {
+  width: min(900px, 100%);
+  margin: 0 auto;
+  padding: 0 0 2rem;
+}
+
 .error {
   color: var(--attention);
   font-weight: 700;
+}
+
+.report-cover {
+  min-height: calc(100vh - 2rem);
+  margin: 0 0 1.5rem;
+  padding: 1.25rem;
+  display: flex;
+  align-items: stretch;
+  background:
+    linear-gradient(145deg, rgba(13, 71, 161, 0.94) 0%, rgba(21, 101, 192, 0.88) 48%, rgba(26, 35, 50, 0.92) 100%),
+    url("https://images.unsplash.com/photo-1487754180451-c456f719a1fc?auto=format&fit=crop&w=1600&q=70")
+      center / cover;
+  color: #fff;
+}
+
+.cover-inner {
+  width: min(720px, 100%);
+  margin: auto;
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.cover-brand {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 0.55rem 0.85rem;
+}
+
+.cover-brand .script {
+  font-size: clamp(3rem, 8vw, 4.4rem);
+}
+
+.cover-brand .sans {
+  font-size: clamp(1.5rem, 4vw, 2.2rem);
+  color: #fff;
+}
+
+.cover-tag {
+  margin: 0.65rem 0 0;
+  font-family: "Barlow Condensed", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+.cover-title {
+  margin: 0.35rem 0 1.1rem;
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: clamp(1.8rem, 4.5vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cover-photo {
+  width: min(420px, 100%);
+  height: 200px;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  margin: 0 auto 1.1rem;
+  display: block;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cover-photo-empty {
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+}
+
+.cover-vehicle {
+  margin-bottom: 1rem;
+}
+
+.cover-rego {
+  margin: 0;
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: clamp(2rem, 5vw, 2.8rem);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cover-model {
+  margin: 0.2rem 0 0;
+  font-size: 1.1rem;
+  opacity: 0.92;
+}
+
+.cover-meta {
+  margin: 0 auto 1.25rem;
+  padding: 0.85rem 1rem;
+  max-width: 520px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem 1rem;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 12px;
+}
+
+.cover-meta dt {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  font-weight: 700;
+}
+
+.cover-meta dd {
+  margin: 0.1rem 0 0;
+  font-weight: 700;
+}
+
+.cover-shop {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  opacity: 0.95;
+}
+
+#report {
+  width: min(820px, calc(100% - 2rem));
+  margin-inline: auto;
 }
 
 .hero-card,
@@ -240,5 +379,47 @@ main {
 @media (max-width: 700px) {
   .hero-card {
     grid-template-columns: 1fr;
+  }
+
+  .cover-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .report-cover {
+    min-height: auto;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  body.has-cover .top,
+  body.has-cover .footer {
+    display: none !important;
+  }
+
+  body.has-cover main.wrap {
+    width: 100%;
+    padding: 0;
+  }
+
+  .report-cover {
+    min-height: 100vh;
+    margin: 0;
+    page-break-after: always;
+    break-after: page;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  #report {
+    width: 100%;
+  }
+
+  .hero-card,
+  .panel {
+    break-inside: avoid;
   }
 }

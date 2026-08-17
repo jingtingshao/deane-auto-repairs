@@ -17,7 +17,7 @@
       <form id="login-form" class="login-card">
         <p class="brand"><span class="script">Deane</span> AUTO REPAIRS</p>
         <h1>Workshop admin</h1>
-        <p class="muted">Enter PIN to create and send digital service reports.</p>
+        <p class="muted">Enter PIN to create reports, quotes and invoices.</p>
         <label for="pin">Admin PIN</label>
         <input id="pin" type="password" autocomplete="current-password" required />
         <button type="submit">Sign in</button>
@@ -32,6 +32,10 @@
           <h1 id="view-title">Reports</h1>
         </div>
         <div class="topbar-actions">
+          <nav class="admin-nav" aria-label="Admin sections">
+            <button type="button" id="nav-reports" class="nav-tab is-active">Reports</button>
+            <button type="button" id="nav-billing" class="nav-tab">Quotes &amp; invoices</button>
+          </nav>
           <a href="/" target="_blank" rel="noopener">Website</a>
           <button type="button" id="btn-new" class="primary">New report</button>
           <button type="button" id="btn-logout" class="ghost">Sign out</button>
@@ -39,6 +43,7 @@
       </header>
 
       <main>
+        <section id="reports-section">
         <section id="list-view">
           <div id="report-list" class="report-list"></div>
         </section>
@@ -159,9 +164,93 @@
             </fieldset>
           </form>
         </section>
+        </section>
+
+        <section id="billing-section" hidden>
+          <section id="billing-list-view">
+            <div class="preset-panel">
+              <div>
+                <h2>Invoice now</h2>
+                <p class="muted small">Fixed website prices — no customer accept needed.</p>
+                <div id="invoice-presets" class="preset-row"></div>
+              </div>
+              <div>
+                <h2>Quote first</h2>
+                <p class="muted small">Email the customer. We start work after they accept.</p>
+                <div id="quote-presets" class="preset-row"></div>
+              </div>
+            </div>
+            <div id="billing-list" class="report-list"></div>
+          </section>
+
+          <section id="billing-edit-view" hidden>
+            <div class="edit-toolbar">
+              <button type="button" id="btn-billing-back" class="ghost">← All quotes &amp; invoices</button>
+              <div class="edit-actions">
+                <button type="button" id="btn-billing-save" class="ghost">Save</button>
+                <button type="button" id="btn-billing-email" class="primary">Email customer</button>
+                <button type="button" id="btn-billing-copy" class="ghost">Copy link</button>
+                <button type="button" id="btn-billing-convert" class="primary" hidden>Convert to invoice</button>
+                <button type="button" id="btn-billing-open-invoice" class="ghost" hidden>Open invoice</button>
+                <button type="button" id="btn-billing-void" class="ghost">Void</button>
+                <button type="button" id="btn-billing-delete" class="danger">Delete</button>
+              </div>
+            </div>
+            <p id="billing-save-status" class="status-line" hidden></p>
+
+            <form id="billing-form" class="report-form">
+              <fieldset>
+                <legend id="billing-legend">Document</legend>
+                <div class="grid-3">
+                  <label>Number<input name="number" readonly /></label>
+                  <label>Kind<input name="kind" readonly /></label>
+                  <label>Status<input name="status" readonly /></label>
+                  <label>Valid until (7 days)<input name="validUntil" type="date" /></label>
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend>Customer &amp; vehicle</legend>
+                <div class="grid-3">
+                  <label>Customer name<input name="customerName" required /></label>
+                  <label>Email<input name="customerEmail" type="email" /></label>
+                  <label>Phone<input name="customerPhone" type="tel" /></label>
+                  <label>Registration<input name="registration" /></label>
+                  <label>Vehicle<input name="vehicle" /></label>
+                  <label>Odometer (km)<input name="odometer" /></label>
+                </div>
+                <label>Notes for customer<textarea name="notes" rows="2"></textarea></label>
+              </fieldset>
+
+              <fieldset>
+                <legend>Line items (GST inclusive)</legend>
+                <div id="quick-adds" class="preset-row"></div>
+                <div class="line-table-wrap">
+                  <table class="line-table">
+                    <thead>
+                      <tr>
+                        <th>Description</th>
+                        <th>Qty</th>
+                        <th>Price incl. GST</th>
+                        <th>Total</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="billing-lines"></tbody>
+                  </table>
+                </div>
+                <div class="line-actions">
+                  <button type="button" id="btn-add-line" class="ghost">Add line</button>
+                </div>
+                <div id="billing-totals" class="billing-totals"></div>
+              </fieldset>
+            </form>
+          </section>
+        </section>
       </main>
     </div>
 
     <script src="admin.js"></script>
+    <script src="billing.js"></script>
   </body>
 </html>

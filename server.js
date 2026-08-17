@@ -1,11 +1,11 @@
-﻿require("dotenv").config();
+require("dotenv").config();
 
 const path = require("path");
 const fs = require("fs");
 const express = require("express");
 const multer = require("multer");
 const nodemailer = require("nodemailer");
-const { randomUUID } = require("crypto");
+const { randomUUID, randomBytes } = require("crypto");
 const {
   ACTIONS,
   STATUSES,
@@ -13,22 +13,39 @@ const {
   itemsForPackage,
   emptyChecks,
 } = require("./data/checklist");
+const business = require("./data/business");
+const catalog = require("./data/catalog");
 
 const PORT = Number(process.env.PORT) || 5173;
 const ADMIN_PIN = process.env.ADMIN_PIN || "deane123";
 const ROOT = __dirname;
-const DATA_DIR = path.join(ROOT, "data");
+const DATA_DIR = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.join(ROOT, "data");
 const REPORTS_FILE = path.join(DATA_DIR, "reports.json");
-const UPLOADS_DIR = path.join(ROOT, "uploads");
+const BILLING_FILE = path.join(DATA_DIR, "billing.json");
+const UPLOADS_DIR = process.env.UPLOADS_DIR
+  ? path.resolve(process.env.UPLOADS_DIR)
+  : path.join(ROOT, "uploads");
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "").replace(/\/$/, "");
 const MAIL_FROM =
   process.env.MAIL_FROM ||
   process.env.SMTP_USER ||
-  "deaneautonz@gmail.com";
+  business.email;
+
+function smtpPass() {
+  return String(process.env.SMTP_PASS || "")
+    .replace(/\s+/g, "")
+    .replace(/^["']|["']$/g, "");
+}
 
 function smtpConfigured() {
+  const pass = smtpPass();
   return Boolean(
-    process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
+    process.env.SMTP_HOST &&
+      process.env.SMTP_USER &&
+      pass &&
+      !/^(PASTE_APP_PASSWORD_HERE|your-16-char-app-password)$/i.test(pass)
   );
 }
 
@@ -40,7 +57,7 @@ function createMailer() {
     secure: String(process.env.SMTP_SECURE || "true") !== "false",
     auth: {
       user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+      pass: smtpPass(),
     },
   });
 }
@@ -50,6 +67,9 @@ for (const dir of [DATA_DIR, UPLOADS_DIR]) {
 }
 if (!fs.existsSync(REPORTS_FILE)) {
   fs.writeFileSync(REPORTS_FILE, "[]", "utf8");
+}
+if (!fs.existsSync(BILLING_FILE)) {
+  fs.writeFileSync(BILLING_FILE, "[]", "utf8");
 }
 
 function readReports() {
@@ -62,6 +82,131 @@ function readReports() {
 
 function writeReports(reports) {
   fs.writeFileSync(REPORTS_FILE, JSON.stringify(reports, null, 2), "utf8");
+}
+
+function readBilling() {
+  try {
+    return JSON.parse(fs.readFileSync(BILLING_FILE, "utf8"));
+  } catch {
+    return [];
+  }
+}
+
+function writeBilling(docs) {
+  fs.writeFileSync(BILLING_FILE, JSON.stringify(docs, null, 2), "utf8");
+}
+
+function nextBillingNumber(docs, kind) {
+  const year = new Date().getFullYear();
+  const prefix = kind === "invoice" ? `INV-${year}-` : `Q-${year}-`;
+  const nums = docs
+    .filter((d) => d.kind === kind)
+    .map((d) => d.number)
+    .filter((n) => typeof n === "string" && n.startsWith(prefix))
+    .map((n) => Number(n.slice(prefix.length)))
+    .filter((n) => Number.isFinite(n));
+  const next = (nums.length ? Math.max(...nums) : 0) + 1;
+  return `${prefix}${String(next).padStart(4, "0")}`;
+}
+
+function newAcceptToken() {
+  return randomBytes(24).toString("hex");
+}
+
+function plusDays(isoDate, days) {
+  const d = new Date(`${isoDate}T12:00:00`);
+  if (Number.isNaN(d.getTime())) {
+    const now = new Date();
+    now.setDate(now.getDate() + days);
+    return now.toISOString().slice(0, 10);
+  }
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeLines(lines) {
+  if (!Array.isArray(lines)) return [];
+  return lines.map((line) => ({
+    id: line.id || randomUUID(),
+    description: String(line.description || "").trim(),
+    qty: Math.max(0, Number(line.qty) || 0),
+    unitPriceIncl: Math.max(0, Number(line.unitPriceIncl) || 0),
+  }));
+}
+
+function billableLines(lines) {
+  return normalizeLines(lines).filter(
+    (line) => line.description && catalog.lineTotal(line) > 0
+  );
+}
+
+function withBillingTotals(doc, isAdmin) {
+  const payload = {
+    ...doc,
+    totals: catalog.computeTotals(doc.lines),
+    shop: {
+      name: business.name,
+      addressLine2: business.addressLine2,
+      street: business.street,
+      suburb: business.suburb,
+      city: business.city,
+      phoneDisplay: business.phoneDisplay,
+      phoneTel: business.phoneTel,
+      email: business.email,
+      gstNumber: business.gstNumber || "",
+      hoursShort: business.hoursShort,
+    },
+  };
+  if (!isAdmin) delete payload.acceptToken;
+  return payload;
+}
+
+function publicOrigin(req, body) {
+  return (
+    PUBLIC_BASE_URL ||
+    String(body?.baseUrl || "").replace(/\/$/, "") ||
+    `${req.protocol}://${req.get("host")}`
+  );
+}
+
+function billingPublicUrl(req, body, doc) {
+  const origin = publicOrigin(req, body);
+  if (doc.kind === "quote" && doc.acceptToken) {
+    return `${origin}/b/${doc.id}?t=${encodeURIComponent(doc.acceptToken)}`;
+  }
+  return `${origin}/b/${doc.id}`;
+}
+
+function isLockedBilling(doc) {
+  return ["accepted", "invoiced", "void"].includes(doc.status);
+}
+
+function issueBillingDoc(doc, req, body) {
+  if (doc.status === "void") {
+    const err = new Error("This document has been voided.");
+    err.status = 400;
+    throw err;
+  }
+  const lines = billableLines(doc.lines);
+  if (!lines.length) {
+    const err = new Error("Add at least one priced line before sending.");
+    err.status = 400;
+    throw err;
+  }
+  doc.lines = lines;
+  if (doc.kind === "quote" && !doc.acceptToken) {
+    doc.acceptToken = newAcceptToken();
+  }
+  if (doc.status === "draft") {
+    doc.status = "sent";
+    doc.sentAt = new Date().toISOString();
+  }
+  doc.updatedAt = new Date().toISOString();
+  return billingPublicUrl(req, body, doc);
 }
 
 function nextJobNumber(reports) {
@@ -97,14 +242,69 @@ const upload = multer({
 });
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: false }));
 app.use("/uploads", express.static(UPLOADS_DIR));
 app.use("/admin", express.static(path.join(ROOT, "admin")));
 app.use("/report", express.static(path.join(ROOT, "report")));
+app.use("/billing", express.static(path.join(ROOT, "billing")));
 app.use(express.static(ROOT, { index: "index.html" }));
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, shop: "Deane Auto Repairs" });
+});
+
+app.post("/api/booking", async (req, res) => {
+  if (!smtpConfigured()) {
+    return res.status(503).json({
+      error: "Booking email is not configured. Please call 0800 625 9827.",
+    });
+  }
+
+  const name = String(req.body?.name || "").trim();
+  const email = String(req.body?.email || "").trim();
+  const phone = String(req.body?.phone || "").trim();
+  const vehicle = String(req.body?.vehicle || "").trim();
+  const registration = String(req.body?.registration || req.body?.rego || "").trim();
+  const preferredDate = String(req.body?.preferred_date || req.body?.date || "").trim();
+  const preferredTime = String(req.body?.preferred_time || req.body?.time || "").trim();
+  const helpWith = String(req.body?.help_with || req.body?.help || "").trim();
+  const notes = String(req.body?.notes || "").trim();
+
+  if (!name || !email || !phone || !helpWith) {
+    return res.status(400).json({ error: "Name, email, phone and service type are required." });
+  }
+
+  const subject = `Booking enquiry: ${helpWith} — ${name}`;
+  const text =
+    `New booking enquiry from the website\n\n` +
+    `Name: ${name}\n` +
+    `Email: ${email}\n` +
+    `Phone: ${phone}\n` +
+    `Vehicle: ${vehicle || "—"}\n` +
+    `Registration: ${registration || "—"}\n` +
+    `Preferred date: ${preferredDate || "—"}\n` +
+    `Preferred time: ${preferredTime || "—"}\n` +
+    `Help with: ${helpWith}\n` +
+    `Notes: ${notes || "—"}\n`;
+
+  try {
+    const mailer = createMailer();
+    await mailer.sendMail({
+      from: MAIL_FROM,
+      to: business.email,
+      replyTo: email,
+      subject,
+      text,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Booking email failed:", err);
+    res.status(502).json({
+      error: "Could not send the enquiry. Please call 0800 625 9827.",
+    });
+  }
 });
 
 app.get("/api/checklist", (req, res) => {
@@ -302,13 +502,13 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
 
   const subject =
     req.body?.subject ||
-    `Your service report — ${rego || vehicle} — Deane Auto Repairs`;
+    `Your service report — ${rego || vehicle} — ${business.name}`;
 
   const text =
     `Hi ${name},\n\n` +
     `Your digital service report for ${vehicle}${rego ? ` (${rego})` : ""} is ready:\n\n` +
     `${url}\n\n` +
-    `Deane Auto Repairs\n(Next to BP Petrol Station)\n63 Hayr Road\nThree Kings, Auckland\n0800 625 9827\ndeaneautonz@gmail.com\n`;
+    `${business.fullAddress()}\n${business.phoneDisplay}\n${business.email}\n`;
 
   const html = `
     <p>Hi ${escapeHtml(name)},</p>
@@ -317,12 +517,12 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
     }</strong> is ready.</p>
     <p><a href="${escapeAttr(url)}">View your service report</a></p>
     <p style="color:#5b6777;font-size:14px;">
-      Deane Auto Repairs<br/>
-      (Next to BP Petrol Station)<br/>
-      63 Hayr Road<br/>
-      Three Kings, Auckland<br/>
-      0800 625 9827<br/>
-      deaneautonz@gmail.com
+      ${escapeHtml(business.name)}<br/>
+      ${escapeHtml(business.addressLine2)}<br/>
+      ${escapeHtml(business.street)}<br/>
+      ${escapeHtml(business.suburb)}, ${escapeHtml(business.city)}<br/>
+      ${escapeHtml(business.phoneDisplay)}<br/>
+      ${escapeHtml(business.email)}
     </p>
   `;
 
@@ -408,8 +608,488 @@ app.delete("/api/reports/:id", requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/api/billing/catalog", requireAdmin, (_req, res) => {
+  res.json({
+    presets: catalog.PRESETS.map((p) => ({
+      id: p.id,
+      kind: p.kind,
+      label: p.label,
+      title: p.title,
+    })),
+    quickAdds: catalog.QUICK_ADDS,
+    gstNumber: business.gstNumber || "",
+  });
+});
+
+app.get("/api/billing", requireAdmin, (_req, res) => {
+  const docs = readBilling()
+    .map((d) => {
+      const totals = catalog.computeTotals(d.lines);
+      return {
+        id: d.id,
+        kind: d.kind,
+        number: d.number,
+        status: d.status,
+        preset: d.preset,
+        customerName: d.customerName,
+        customerEmail: d.customerEmail,
+        registration: d.registration,
+        vehicle: d.vehicle,
+        totalIncl: totals.totalIncl,
+        updatedAt: d.updatedAt,
+        sentAt: d.sentAt,
+        acceptedAt: d.acceptedAt,
+        invoiceId: d.invoiceId || "",
+        quoteId: d.quoteId || "",
+      };
+    })
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  res.json(docs);
+});
+
+app.post("/api/billing", requireAdmin, (req, res) => {
+  const preset = catalog.presetById(req.body?.preset);
+  if (!preset) {
+    return res.status(400).json({ error: "Choose a package or custom quote." });
+  }
+
+  const docs = readBilling();
+  const now = new Date().toISOString();
+  const today = todayIso();
+  const doc = {
+    id: randomUUID(),
+    kind: preset.kind,
+    number: nextBillingNumber(docs, preset.kind),
+    status: "draft",
+    preset: preset.id,
+    createdAt: now,
+    updatedAt: now,
+    sentAt: "",
+    acceptedAt: "",
+    validUntil: preset.kind === "quote" ? plusDays(today, catalog.QUOTE_VALID_DAYS) : "",
+    customerName: req.body?.customerName || "",
+    customerEmail: req.body?.customerEmail || "",
+    customerPhone: req.body?.customerPhone || "",
+    registration: String(req.body?.registration || "").toUpperCase(),
+    vehicle: req.body?.vehicle || "",
+    odometer: req.body?.odometer || "",
+    notes: req.body?.notes || "",
+    lines: catalog.cloneLines(preset.lines).map((line) => ({
+      id: randomUUID(),
+      ...line,
+    })),
+    acceptToken: preset.kind === "quote" ? newAcceptToken() : "",
+    quoteId: "",
+    invoiceId: "",
+    lastEmailedAt: "",
+    lastEmailedTo: "",
+  };
+
+  docs.push(doc);
+  writeBilling(docs);
+  res.status(201).json(withBillingTotals(doc, true));
+});
+
+app.get("/api/billing/:id", (req, res) => {
+  const doc = readBilling().find((d) => d.id === req.params.id);
+  if (!doc) return res.status(404).json({ error: "Not found" });
+
+  const isAdmin = (req.headers["x-admin-pin"] || req.query.pin) === ADMIN_PIN;
+  const token = String(req.query.t || "");
+  const tokenOk =
+    doc.kind === "quote" && doc.acceptToken && token && token === doc.acceptToken;
+
+  if (!isAdmin) {
+    if (doc.status === "void") return res.status(404).json({ error: "Not found" });
+    if (doc.status === "draft" && !tokenOk) {
+      return res.status(404).json({ error: "Not found" });
+    }
+  }
+  res.json(withBillingTotals(doc, isAdmin));
+});
+
+app.put("/api/billing/:id", requireAdmin, (req, res) => {
+  const docs = readBilling();
+  const index = docs.findIndex((d) => d.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: "Not found" });
+
+  const current = docs[index];
+  if (current.status === "void") {
+    return res.status(400).json({ error: "This document has been voided." });
+  }
+
+  const body = req.body || {};
+  const locked = isLockedBilling(current);
+  const nextLines = locked
+    ? current.lines
+    : normalizeLines(body.lines != null ? body.lines : current.lines);
+
+  docs[index] = {
+    ...current,
+    customerName: body.customerName != null ? String(body.customerName).trim() : current.customerName,
+    customerEmail: body.customerEmail != null ? String(body.customerEmail).trim() : current.customerEmail,
+    customerPhone: body.customerPhone != null ? String(body.customerPhone).trim() : current.customerPhone,
+    registration: String(body.registration != null ? body.registration : current.registration).toUpperCase(),
+    vehicle: body.vehicle != null ? String(body.vehicle).trim() : current.vehicle,
+    odometer: body.odometer != null ? String(body.odometer).trim() : current.odometer,
+    notes: body.notes != null ? String(body.notes) : current.notes,
+    validUntil:
+      current.kind === "quote" && body.validUntil != null
+        ? String(body.validUntil)
+        : current.validUntil,
+    lines: nextLines,
+    updatedAt: new Date().toISOString(),
+  };
+
+  writeBilling(docs);
+  res.json(withBillingTotals(docs[index], true));
+});
+
+app.post("/api/billing/:id/issue", requireAdmin, (req, res) => {
+  const docs = readBilling();
+  const index = docs.findIndex((d) => d.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: "Not found" });
+  try {
+    const url = issueBillingDoc(docs[index], req, req.body);
+    writeBilling(docs);
+    res.json({ ok: true, url, doc: withBillingTotals(docs[index], true) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
+  if (!smtpConfigured()) {
+    return res.status(503).json({
+      error:
+        "Email not configured. Add SMTP settings to .env (see .env.example), then restart npm start.",
+    });
+  }
+
+  const docs = readBilling();
+  const index = docs.findIndex((d) => d.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: "Not found" });
+
+  const doc = docs[index];
+  const to = String(req.body?.to || doc.customerEmail || "").trim();
+  if (!to) {
+    return res.status(400).json({ error: "Customer email is missing." });
+  }
+
+  let url;
+  try {
+    url = issueBillingDoc(doc, req, req.body);
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
+  }
+  writeBilling(docs);
+
+  const name = doc.customerName || "there";
+  const vehicle = doc.vehicle || "your vehicle";
+  const rego = doc.registration || "";
+  const totals = catalog.computeTotals(doc.lines);
+  const money = totals.totalIncl.toFixed(2);
+  const vehicleBit = `${vehicle}${rego ? ` (${rego})` : ""}`;
+
+  let subject;
+  let text;
+  let html;
+  if (doc.kind === "quote") {
+    subject = `Quote ${doc.number} for ${rego || vehicle} — ${business.name}`;
+    text =
+      `Hi ${name},\n\n` +
+      `Here is your quote for ${vehicleBit}: ${doc.number}.\n` +
+      `Total (incl. GST): $${money}\n\n` +
+      `Please review and accept this quote before we start work:\n${url}\n\n` +
+      (doc.validUntil ? `This quote is valid until ${doc.validUntil}.\n\n` : "") +
+      `${business.fullAddress()}\n${business.phoneDisplay}\n${business.email}\n`;
+    html = `
+      <p>Hi ${escapeHtml(name)},</p>
+      <p>Here is your quote for <strong>${escapeHtml(vehicleBit)}</strong> — ${escapeHtml(doc.number)}.</p>
+      <p>Total (incl. GST): <strong>$${escapeHtml(money)}</strong></p>
+      <p>Please review and accept this quote before we start work.</p>
+      <p><a href="${escapeAttr(url)}" style="display:inline-block;background:#1565c0;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:700;">Review &amp; accept quote</a></p>
+      <p>Or open this link:<br/><a href="${escapeAttr(url)}">${escapeHtml(url)}</a></p>
+      ${doc.validUntil ? `<p>This quote is valid until ${escapeHtml(doc.validUntil)}.</p>` : ""}
+      <p style="color:#5b6777;font-size:14px;">
+        ${escapeHtml(business.name)}<br/>
+        ${escapeHtml(business.addressLine2)}<br/>
+        ${escapeHtml(business.street)}<br/>
+        ${escapeHtml(business.suburb)}, ${escapeHtml(business.city)}<br/>
+        ${escapeHtml(business.phoneDisplay)}<br/>
+        ${escapeHtml(business.email)}
+      </p>
+    `;
+  } else {
+    subject = `Tax Invoice ${doc.number} for ${rego || vehicle} — ${business.name}`;
+    text =
+      `Hi ${name},\n\n` +
+      `Here is your tax invoice for ${vehicleBit}: ${doc.number}.\n` +
+      `Total (incl. GST): $${money}\n\n` +
+      `View / print your invoice:\n${url}\n\n` +
+      `${business.fullAddress()}\n${business.phoneDisplay}\n${business.email}\n`;
+    html = `
+      <p>Hi ${escapeHtml(name)},</p>
+      <p>Here is your tax invoice for <strong>${escapeHtml(vehicleBit)}</strong> — ${escapeHtml(doc.number)}.</p>
+      <p>Total (incl. GST): <strong>$${escapeHtml(money)}</strong></p>
+      <p><a href="${escapeAttr(url)}">View / print your invoice</a></p>
+      <p style="color:#5b6777;font-size:14px;">
+        ${escapeHtml(business.name)}<br/>
+        ${escapeHtml(business.addressLine2)}<br/>
+        ${escapeHtml(business.street)}<br/>
+        ${escapeHtml(business.suburb)}, ${escapeHtml(business.city)}<br/>
+        ${escapeHtml(business.phoneDisplay)}<br/>
+        ${escapeHtml(business.email)}
+      </p>
+    `;
+  }
+
+  try {
+    const mailer = createMailer();
+    const info = await mailer.sendMail({
+      from: MAIL_FROM,
+      to,
+      replyTo: process.env.SMTP_USER || MAIL_FROM,
+      subject,
+      text,
+      html,
+    });
+
+    doc.lastEmailedAt = new Date().toISOString();
+    doc.lastEmailedTo = to;
+    doc.updatedAt = doc.lastEmailedAt;
+    writeBilling(docs);
+
+    res.json({
+      ok: true,
+      to,
+      messageId: info.messageId,
+      url,
+      doc: withBillingTotals(doc, true),
+    });
+  } catch (err) {
+    console.error("Billing email failed:", err);
+    res.status(502).json({
+      error:
+        err.response || err.message || "Failed to send email. Check SMTP settings.",
+    });
+  }
+});
+
+function convertQuoteToInvoice(docs, quote) {
+  if (quote.kind !== "quote") {
+    const err = new Error("Only quotes convert to invoices.");
+    err.status = 400;
+    throw err;
+  }
+  if (quote.status === "invoiced" && quote.invoiceId) {
+    return docs.find((d) => d.id === quote.invoiceId) || null;
+  }
+  if (quote.status === "void") {
+    const err = new Error("This quote is no longer valid.");
+    err.status = 400;
+    throw err;
+  }
+
+  const lines = billableLines(quote.lines);
+  if (!lines.length) {
+    const err = new Error("Quote has no billable lines.");
+    err.status = 400;
+    throw err;
+  }
+
+  const now = new Date().toISOString();
+  const invoice = {
+    id: randomUUID(),
+    kind: "invoice",
+    number: nextBillingNumber(docs, "invoice"),
+    status: "draft",
+    preset: quote.preset,
+    createdAt: now,
+    updatedAt: now,
+    sentAt: "",
+    acceptedAt: quote.acceptedAt || now,
+    validUntil: "",
+    customerName: quote.customerName,
+    customerEmail: quote.customerEmail,
+    customerPhone: quote.customerPhone,
+    registration: quote.registration,
+    vehicle: quote.vehicle,
+    odometer: quote.odometer,
+    notes: quote.notes,
+    lines: lines.map((line) => ({ ...line, id: randomUUID() })),
+    acceptToken: "",
+    quoteId: quote.id,
+    invoiceId: "",
+    lastEmailedAt: "",
+    lastEmailedTo: "",
+  };
+
+  quote.status = "invoiced";
+  quote.invoiceId = invoice.id;
+  quote.updatedAt = now;
+  docs.push(invoice);
+  return invoice;
+}
+
+async function notifyWorkshopQuoteAccepted(quote, invoice, req) {
+  if (!smtpConfigured()) {
+    console.warn("Quote accepted but SMTP is not configured — workshop was not emailed.");
+    return;
+  }
+  const totals = catalog.computeTotals(quote.lines);
+  const money = totals.totalIncl.toFixed(2);
+  const vehicle = quote.vehicle || "vehicle";
+  const rego = quote.registration || "";
+  const vehicleBit = `${vehicle}${rego ? ` (${rego})` : ""}`;
+  const origin = publicOrigin(req, {});
+  const quoteUrl = `${origin}/b/${quote.id}`;
+  const invoiceNumber = invoice?.number || "";
+  const subject = `Quote ${quote.number} accepted — ${rego || vehicle} — ${business.name}`;
+  const text =
+    `${quote.customerName || "A customer"} accepted quote ${quote.number}.\n` +
+    (invoiceNumber ? `Invoice created: ${invoiceNumber}\n` : "") +
+    `\nVehicle: ${vehicleBit}\n` +
+    `Total (incl. GST): $${money}\n` +
+    (quote.customerEmail ? `Email: ${quote.customerEmail}\n` : "") +
+    (quote.customerPhone ? `Phone: ${quote.customerPhone}\n` : "") +
+    `\nView quote:\n${quoteUrl}\n` +
+    `\nNext: open Quotes & invoices in admin to email the invoice.\n`;
+  const html = `
+    <p><strong>${escapeHtml(quote.customerName || "A customer")}</strong> accepted quote <strong>${escapeHtml(quote.number)}</strong>.</p>
+    ${invoiceNumber ? `<p>Invoice created: <strong>${escapeHtml(invoiceNumber)}</strong></p>` : ""}
+    <p>
+      Vehicle: ${escapeHtml(vehicleBit)}<br/>
+      Total (incl. GST): <strong>$${escapeHtml(money)}</strong><br/>
+      ${quote.customerEmail ? `Email: ${escapeHtml(quote.customerEmail)}<br/>` : ""}
+      ${quote.customerPhone ? `Phone: ${escapeHtml(quote.customerPhone)}` : ""}
+    </p>
+    <p><a href="${escapeAttr(quoteUrl)}">View accepted quote</a></p>
+    <p>Next: open <strong>Quotes &amp; invoices</strong> in admin to email the invoice.</p>
+  `;
+  const mailer = createMailer();
+  await mailer.sendMail({
+    from: MAIL_FROM,
+    to: business.email,
+    replyTo: quote.customerEmail || business.email,
+    subject,
+    text,
+    html,
+  });
+}
+
+app.post("/api/billing/:id/accept", async (req, res) => {
+  const docs = readBilling();
+  const index = docs.findIndex((d) => d.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: "Quote not found" });
+
+  const doc = docs[index];
+  if (doc.kind !== "quote") {
+    return res.status(400).json({ error: "Only quotes can be accepted." });
+  }
+  if (doc.status === "void") {
+    return res.status(400).json({ error: "This quote is no longer valid." });
+  }
+  if (doc.status === "invoiced" || doc.status === "accepted") {
+    return res.json({
+      ok: true,
+      already: true,
+      doc: withBillingTotals(doc, false),
+    });
+  }
+  if (doc.status !== "sent" && doc.status !== "draft") {
+    return res.status(400).json({ error: "This quote is not ready to accept." });
+  }
+
+  const token = String(req.body?.token || req.query.t || "");
+  if (!doc.acceptToken || token !== doc.acceptToken) {
+    return res.status(403).json({
+      error: "Open the accept link from your email to confirm this quote.",
+    });
+  }
+
+  if (doc.validUntil && todayIso() > doc.validUntil) {
+    return res.status(400).json({
+      error: "This quote has expired. Please contact the workshop for a new quote.",
+    });
+  }
+
+  doc.status = "accepted";
+  doc.acceptedAt = new Date().toISOString();
+  doc.updatedAt = doc.acceptedAt;
+
+  let invoice = null;
+  try {
+    invoice = convertQuoteToInvoice(docs, doc);
+  } catch (err) {
+    writeBilling(docs);
+    return res.status(err.status || 400).json({ error: err.message });
+  }
+  writeBilling(docs);
+
+  try {
+    await notifyWorkshopQuoteAccepted(doc, invoice, req);
+  } catch (err) {
+    console.error("Workshop accept-notify email failed:", err);
+  }
+
+  res.json({ ok: true, already: false, doc: withBillingTotals(doc, false) });
+});
+
+app.post("/api/billing/:id/convert", requireAdmin, (req, res) => {
+  const docs = readBilling();
+  const index = docs.findIndex((d) => d.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: "Not found" });
+
+  const quote = docs[index];
+  if (quote.kind !== "quote") {
+    return res.status(400).json({ error: "Only quotes convert to invoices." });
+  }
+  if (quote.status !== "accepted" && quote.status !== "invoiced") {
+    return res.status(400).json({ error: "Customer must accept the quote first." });
+  }
+
+  try {
+    const invoice = convertQuoteToInvoice(docs, quote);
+    if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+    writeBilling(docs);
+    res.status(quote.status === "invoiced" ? 200 : 201).json(withBillingTotals(invoice, true));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post("/api/billing/:id/void", requireAdmin, (req, res) => {
+  const docs = readBilling();
+  const index = docs.findIndex((d) => d.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: "Not found" });
+  if (docs[index].status === "invoiced") {
+    return res.status(400).json({ error: "This quote already has an invoice." });
+  }
+  docs[index].status = "void";
+  docs[index].voidedAt = new Date().toISOString();
+  docs[index].updatedAt = docs[index].voidedAt;
+  writeBilling(docs);
+  res.json(withBillingTotals(docs[index], true));
+});
+
+app.delete("/api/billing/:id", requireAdmin, (req, res) => {
+  const docs = readBilling();
+  const doc = docs.find((d) => d.id === req.params.id);
+  if (!doc) return res.status(404).json({ error: "Not found" });
+  if (doc.status !== "draft") {
+    return res.status(400).json({ error: "Only drafts can be deleted. Void it instead." });
+  }
+  writeBilling(docs.filter((d) => d.id !== req.params.id));
+  res.json({ ok: true });
+});
+
 app.get("/r/:id", (req, res) => {
   res.sendFile(path.join(ROOT, "report", "index.html"));
+});
+
+app.get("/b/:id", (_req, res) => {
+  res.sendFile(path.join(ROOT, "billing", "index.html"));
 });
 
 function lanIPv4s() {
@@ -430,19 +1110,27 @@ function lanIPv4s() {
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Deane Auto Repairs running at http://localhost:${PORT}`);
-  console.log(`Admin (this PC): http://localhost:${PORT}/admin/`);
-  const ips = lanIPv4s().filter(
-    (ip) => !ip.startsWith("169.254.") && !ip.startsWith("172.22.")
-  );
-  if (ips.length) {
-    console.log("Admin (phone, same Wi-Fi):");
-    for (const ip of ips) {
-      console.log(`  http://${ip}:${PORT}/admin/`);
+  if (process.env.NODE_ENV === "production") {
+    console.log(`Public URL: ${PUBLIC_BASE_URL || "(set PUBLIC_BASE_URL)"}`);
+    console.log(`Data dir: ${DATA_DIR}`);
+    if (!process.env.ADMIN_PIN || process.env.ADMIN_PIN === "deane123") {
+      console.warn("Set a strong ADMIN_PIN in production.");
     }
   } else {
-    console.log("Admin (phone): use this PC's Wi-Fi IPv4 from ipconfig, port " + PORT);
+    console.log(`Admin (this PC): http://localhost:${PORT}/admin/`);
+    const ips = lanIPv4s().filter(
+      (ip) => !ip.startsWith("169.254.") && !ip.startsWith("172.22.")
+    );
+    if (ips.length) {
+      console.log("Admin (phone, same Wi-Fi):");
+      for (const ip of ips) {
+        console.log(`  http://${ip}:${PORT}/admin/`);
+      }
+    } else {
+      console.log("Admin (phone): use this PC's Wi-Fi IPv4 from ipconfig, port " + PORT);
+    }
+    console.log(`Admin PIN: ${ADMIN_PIN}`);
   }
-  console.log(`Admin PIN: ${ADMIN_PIN}`);
   console.log(
     smtpConfigured()
       ? `Email: SMTP ready (from ${MAIL_FROM})`

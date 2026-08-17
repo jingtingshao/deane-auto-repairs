@@ -368,11 +368,147 @@ label.check input {
   color: var(--muted);
 }
 
+.admin-nav {
+  display: flex;
+  gap: 0.25rem;
+  margin-right: 0.35rem;
+}
+
+.nav-tab {
+  background: #f4f7fb;
+  border-color: transparent;
+}
+
+.nav-tab.is-active {
+  background: var(--blue-soft);
+  border-color: #c5d8f0;
+  color: var(--blue);
+}
+
+.preset-panel {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.preset-panel > div {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+}
+
+.preset-panel h2 {
+  margin: 0 0 0.25rem;
+  font-family: var(--display);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 1.15rem;
+}
+
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.line-table-wrap {
+  overflow-x: auto;
+}
+
+.line-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.75rem;
+}
+
+.line-table th,
+.line-table td {
+  text-align: left;
+  padding: 0.4rem 0.3rem;
+  vertical-align: middle;
+}
+
+.line-table th {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.line-table input {
+  min-width: 0;
+}
+
+.line-table .qty,
+.line-table .price {
+  width: 110px;
+}
+
+.line-table .total {
+  white-space: nowrap;
+  font-weight: 700;
+  padding-right: 0.5rem;
+}
+
+.line-actions {
+  margin-top: 0.6rem;
+}
+
+.billing-totals {
+  margin-top: 0.9rem;
+  display: grid;
+  justify-items: end;
+  gap: 0.2rem;
+  font-weight: 700;
+}
+
+.billing-totals p {
+  margin: 0;
+  min-width: 240px;
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.badge.sent {
+  background: #e8f1fb;
+  color: var(--blue);
+}
+
+.badge.accepted {
+  background: #e8f5e9;
+  color: var(--ok);
+}
+
+.badge.invoiced {
+  background: #e8f5e9;
+  color: var(--ok);
+}
+
+.badge.void {
+  background: #ffebee;
+  color: var(--attention);
+}
+
+.badge.quote {
+  background: #fff8e1;
+  color: var(--watch);
+}
+
+.badge.invoice {
+  background: #eee;
+  color: #555;
+}
+
 @media (max-width: 900px) {
   .grid-2,
   .grid-3,
   .check-row,
-  .actions-grid {
+  .actions-grid,
+  .preset-panel {
     grid-template-columns: 1fr;
   }
 

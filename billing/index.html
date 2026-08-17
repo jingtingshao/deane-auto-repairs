@@ -3,27 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Service report · Deane Auto Repairs</title>
+    <title>Quote / Invoice · Deane Auto Repairs</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Kaushan+Script&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/report/report.css" />
+    <link rel="stylesheet" href="/billing/billing.css" />
   </head>
   <body>
     <header class="top">
       <div class="wrap">
         <p class="brand"><span class="script">Deane</span> <span class="sans">AUTO REPAIRS</span></p>
-        <p class="sub">Digital service report</p>
+        <p class="sub" id="doc-kind">Quote / invoice</p>
       </div>
     </header>
 
     <main class="wrap">
-      <p id="loading">Loading report…</p>
+      <p id="loading">Loading…</p>
       <p id="error" class="error" hidden></p>
-      <article id="report" hidden></article>
+      <article id="doc" hidden></article>
     </main>
 
     <footer class="footer wrap">
@@ -31,15 +31,11 @@
         Deane Auto Repairs<br />
         (Next to BP Petrol Station) · 63 Hayr Road, Three Kings<br />
         <a href="tel:08006259827">0800 625 9827</a> ·
-        <a href="mailto:deaneautonz@gmail.com">deaneautonz@gmail.com</a>
-      </p>
-      <p class="disclaimer">
-        This digital report records workshop findings at the time of inspection.
-        It is not an official Warrant of Fitness certificate. Some faults can be
-        intermittent or hidden without further dismantling.
+        <a href="mailto:deaneautonz@gmail.com">deaneautonz@gmail.com</a><br />
+        Mon–Sat 8:30am – 5:30pm · Sunday closed
       </p>
     </footer>
 
-    <script src="/report/report.js"></script>
+    <script src="/billing/billing.js"></script>
   </body>
 </html>

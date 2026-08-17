@@ -44,6 +44,52 @@ function showApp() {
   app.hidden = false;
 }
 
+function setSection(name) {
+  const isReports = name === "reports";
+  const reportsSection = document.getElementById("reports-section");
+  const billingSection = document.getElementById("billing-section");
+  const btnNew = document.getElementById("btn-new");
+  if (reportsSection) reportsSection.hidden = !isReports;
+  if (billingSection) billingSection.hidden = isReports;
+  if (btnNew) btnNew.hidden = !isReports;
+  document.getElementById("nav-reports")?.classList.toggle("is-active", isReports);
+  document.getElementById("nav-billing")?.classList.toggle("is-active", !isReports);
+  if (isReports && listView && !listView.hidden) {
+    viewTitle.textContent = "Reports";
+  }
+}
+
+function confirmPublicCustomerLink(kind) {
+  const origin = location.origin;
+  if (!/localhost|127\.0\.0\.1/i.test(origin)) return true;
+  return confirm(
+    `This ${kind} link is ${origin}, which only works on this computer.\n\n` +
+      "The customer cannot open it on their phone until the workshop app is hosted on a public website.\n\n" +
+      "Send / copy anyway?"
+  );
+}
+
+window.DeaneAdmin = {
+  api,
+  showStatus,
+  escapeHtml,
+  escapeAttr,
+  setSection,
+  confirmPublicCustomerLink,
+  setViewTitle(text) {
+    viewTitle.textContent = text;
+  },
+  showBillingStatus(msg) {
+    const el = document.getElementById("billing-save-status");
+    if (!el) return;
+    el.hidden = false;
+    el.textContent = msg;
+    setTimeout(() => {
+      el.hidden = true;
+    }, 2500);
+  },
+};
+
 function showLogin() {
   loginView.hidden = false;
   app.hidden = true;
@@ -75,6 +121,7 @@ loginForm.addEventListener("submit", async (e) => {
     pin = value;
     sessionStorage.setItem(PIN_KEY, pin);
     showApp();
+    setSection("reports");
     await loadList();
   } catch (err) {
     loginError.hidden = false;
@@ -91,6 +138,21 @@ loginForm.addEventListener("submit", async (e) => {
 });
 
 document.getElementById("btn-logout").addEventListener("click", showLogin);
+
+document.getElementById("nav-reports").addEventListener("click", async () => {
+  setSection("reports");
+  if (editView.hidden) {
+    viewTitle.textContent = "Reports";
+    await loadList();
+  } else {
+    viewTitle.textContent = current?.jobNumber || "Reports";
+  }
+});
+
+document.getElementById("nav-billing").addEventListener("click", () => {
+  setSection("billing");
+  window.DeaneBilling?.showList();
+});
 
 document.getElementById("btn-back").addEventListener("click", async () => {
   current = null;
@@ -439,6 +501,7 @@ document.getElementById("btn-email").addEventListener("click", async () => {
     if (!current.customerEmail) {
       throw new Error("Add the customer email on this report first.");
     }
+    if (!confirmPublicCustomerLink("report")) return;
     btn.disabled = true;
     btn.textContent = "Sending…";
     const result = await api(`/api/reports/${current.id}/email`, {
@@ -518,6 +581,7 @@ function escapeAttr(str) {
   try {
     await api("/api/reports");
     showApp();
+    setSection("reports");
     await loadList();
   } catch {
     showLogin();

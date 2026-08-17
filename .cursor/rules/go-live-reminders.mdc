@@ -1,0 +1,36 @@
+---
+description: Remind about SEO and report go-live tasks when domain/hosting work starts
+alwaysApply: true
+---
+
+# Deane Auto Repairs — go-live reminders
+
+When the user mentions domain pointing, DNS, custom domain, hosting, GitHub Pages custom domain, go-live, or making the website public:
+
+## SEO / domain launch checklist
+Remind them and offer to do this pass together:
+
+1. Update Structured Data / JSON-LD URLs from GitHub Pages to the live domain
+2. Add `canonical` link to the live domain
+3. Add `robots.txt` and `sitemap.xml`
+4. Add Open Graph / social share meta (title, description, image)
+5. Submit the live domain + sitemap in Google Search Console (and Bing if useful)
+6. **Create / claim Google Business Profile (Google Maps)** — the business is not registered yet; remind the user to set this up during domain deploy with:
+   - Business name: Deane Auto Repairs
+   - Address: 63 Hayr Road, Three Kings, Auckland (Next to BP Petrol Station)
+   - Phone: 0800 625 9827
+   - Website: the live domain
+   - Hours: Mon–Sat 8:30am – 5:30pm; Sunday closed
+   - Categories: car repair / auto repair / WOF-related if available
+7. Confirm Google Business Profile website URL matches the live domain once claimed
+
+## Report / admin launch checklist (same pass)
+Also remind:
+
+1. Host admin + customer report links on a stable public URL
+2. Fix mobile login / photo upload from phone
+3. Switch booking/report email to SMTP (not mailto-only)
+4. Do remaining report/admin polish in the same deployment pass
+
+Do not overbuild; confirm requirements first for larger features.
+Do not push private “password wall” as a substitute for proper go-live unless the user asks.

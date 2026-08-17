@@ -1,21 +1,5 @@
 (() => {
-  const FORM_ENDPOINT = "https://formsubmit.co/ajax/deaneautonz@gmail.com";
-  const AUTOREPLY = [
-    "Hi,",
-    "",
-    "Your email has been sent — thank you for contacting Deane Auto Repairs.",
-    "",
-    "We've received your booking enquiry and will get back to you soon to confirm a time.",
-    "",
-    "If you need to speak with us sooner:",
-    "Phone: 0800 625 9827",
-    "Email: deaneautonz@gmail.com",
-    "Address: Deane Auto Repairs (Next to BP Petrol Station), 63 Hayr Road, Three Kings, Auckland",
-    "Hours: Mon–Sat 8:30am – 5:30pm",
-    "",
-    "Kind regards,",
-    "Deane Auto Repairs",
-  ].join("\n");
+  const FORM_ENDPOINT = "/api/booking";
 
   const header = document.querySelector("[data-header]");
   const nav = document.querySelector("[data-nav]");
@@ -150,9 +134,6 @@
         help_with: data.get("help") || "",
         notes: data.get("notes") || "—",
         _subject: `Booking enquiry: ${data.get("help") || "Service"} — ${data.get("name") || ""}`,
-        _template: "table",
-        _captcha: "false",
-        _autoresponse: AUTOREPLY,
       };
 
       setLoading(true);
@@ -171,7 +152,7 @@
         const result = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-          throw new Error(result.message || "Something went wrong sending the form.");
+          throw new Error(result.error || result.message || "Something went wrong sending the form.");
         }
 
         form.reset();

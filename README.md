@@ -25,14 +25,9 @@ $env:ADMIN_PIN="your-pin"; npm start
 ## Workshop flow
 
 1. Sign in at `/admin/`
-2. **New report** → fill customer / vehicle
-3. Choose Standard or Full package (checklist updates)
-4. Mark items OK / Watch / Attention + notes
-5. Tick work completed, add WOF result if needed
-6. **Publish & copy link** → send to customer
-7. Or **Email customer** (opens mailto with the report link)
-
-Customer opens: `http://localhost:5173/r/<report-id>`
+2. **Reports** — digital service reports (checklist + photos)
+3. **Quotes & invoices** — WOF / Standard / Premium can go straight to invoice; repair work is a quote emailed to the customer, who must click Accept before work starts
+4. Customer quote/invoice link: `http://localhost:5173/b/<id>`
 
 ## Business details
 
@@ -40,7 +35,7 @@ Customer opens: `http://localhost:5173/r/<report-id>`
 - **Address:** Deane Auto Repairs (Next to BP Petrol Station), 63 Hayr Road, Three Kings, Auckland
 - **Phone:** 0800 625 9827
 - **Email:** deaneautonz@gmail.com
-- **Hours:** Mon–Fri 8:30am–5:30pm
+- **Hours:** Mon–Sat 8:30am–5:30pm (Sunday closed)
 - **Services:** Standard / Full service, WOF
 - **Courtesy cars:** No
 
@@ -55,5 +50,15 @@ Customer opens: `http://localhost:5173/r/<report-id>`
 | `data/checklist.js` | Standard / Full checklist |
 | `docs/service-checklist-and-wof-notes.md` | Spec |
 | `facebook-page.txt` | Facebook copy kit |
+| `pre-purchase/ppi-form.html` | Pre-purchase report form with photo upload slots |
 
 Reports are stored in `data/reports.json` on this computer (simple local MVP).
+Quotes and invoices are stored in `data/billing.json` (workshop only — no bank data).
+
+### Pre-purchase inspection (with photos)
+
+Open `pre-purchase/ppi-form.html` in a browser (or via `npm start` then go to `/pre-purchase/ppi-form.html`).
+
+- Upload **Interior**, **Front & Side**, **Engine**, **Rear & Back**
+- Add problem blocks with notes + issue photos
+- Use **Print / Save PDF** when finished
