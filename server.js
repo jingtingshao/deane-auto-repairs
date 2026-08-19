@@ -32,33 +32,6 @@ const MAIL_FROM =
   process.env.MAIL_FROM ||
   process.env.SMTP_USER ||
   business.email;
-const MAIL_BCC = String(
-  process.env.MAIL_BCC || process.env.MAIL_CC || "deaneautonz@gmail.com"
-).trim();
-
-function shopCopyAddress(customerTo) {
-  if (!MAIL_BCC) return "";
-  if (MAIL_BCC.toLowerCase() === String(customerTo || "").trim().toLowerCase()) {
-    return "";
-  }
-  return MAIL_BCC;
-}
-
-async function sendShopCopy(mailer, { customerTo, subject, text, html }) {
-  const shop = shopCopyAddress(customerTo);
-  if (!shop || !mailer) return;
-  await mailer.sendMail({
-    from: MAIL_FROM,
-    to: shop,
-    replyTo: customerTo || process.env.SMTP_USER || MAIL_FROM,
-    subject: `Copy: ${subject}`,
-    text: `Shop copy of the email sent to ${customerTo}.\n\n${text}`,
-    html:
-      `<p style="color:#5b6777;font-size:13px;margin:0 0 16px;">` +
-      `Shop copy — originally sent to ${escapeHtml(customerTo)}` +
-      `</p>${html}`,
-  });
-}
 
 function smtpPass() {
   return String(process.env.SMTP_PASS || "")
@@ -121,6 +94,120 @@ function readBilling() {
 
 function writeBilling(docs) {
   fs.writeFileSync(BILLING_FILE, JSON.stringify(docs, null, 2), "utf8");
+}
+
+function plateKey(value) {
+  return String(value || "")
+    .toUpperCase()
+    .replace(/[\s-]/g, "");
+}
+
+function customerRecordKey(item) {
+  const plate = plateKey(item.registration);
+  if (plate) return `rego:${plate}`;
+  const email = String(item.customerEmail || "").trim().toLowerCase();
+  if (email) return `email:${email}`;
+  const name = String(item.customerName || "").trim().toLowerCase();
+  const phone = String(item.customerPhone || "").replace(/\s+/g, "");
+  if (name || phone) return `id:${name}|${phone}`;
+  return "";
+}
+
+function wofMeta(expiry) {
+  if (!expiry) return { wofStatus: "missing", daysUntil: null };
+  const today = todayIso();
+  const days = Math.round(
+    (new Date(`${expiry}T00:00:00`) - new Date(`${today}T00:00:00`)) / 86400000
+  );
+  let wofStatus = "ok";
+  if (days < 0) wofStatus = "overdue";
+  else if (days <= 30) wofStatus = "due_soon";
+  return { wofStatus, daysUntil: days };
+}
+
+function mergeCustomer(map, incoming) {
+  const key = customerRecordKey(incoming);
+  if (!key) return;
+  const cur = map.get(key) || {
+    key,
+    customerName: "",
+    customerEmail: "",
+    customerPhone: "",
+    registration: "",
+    vehicle: "",
+    wofExpiry: "",
+    lastVisit: "",
+    lastJobNumber: "",
+    lastReportId: "",
+  };
+  const incomingVisit = incoming.lastVisit || "";
+  const isNewerVisit = !cur.lastVisit || incomingVisit >= cur.lastVisit;
+  map.set(key, {
+    ...cur,
+    customerName:
+      (isNewerVisit && incoming.customerName) ||
+      cur.customerName ||
+      incoming.customerName ||
+      "",
+    customerEmail: incoming.customerEmail || cur.customerEmail,
+    customerPhone: incoming.customerPhone || cur.customerPhone,
+    registration: incoming.registration || cur.registration,
+    vehicle:
+      (isNewerVisit && incoming.vehicle) || cur.vehicle || incoming.vehicle || "",
+    wofExpiry:
+      incoming.wofExpiry && (isNewerVisit || !cur.wofExpiry)
+        ? incoming.wofExpiry
+        : cur.wofExpiry,
+    lastVisit: incomingVisit >= (cur.lastVisit || "") ? incomingVisit : cur.lastVisit,
+    lastJobNumber:
+      isNewerVisit && incoming.lastJobNumber
+        ? incoming.lastJobNumber
+        : cur.lastJobNumber,
+    lastReportId:
+      isNewerVisit && incoming.lastReportId
+        ? incoming.lastReportId
+        : cur.lastReportId,
+  });
+}
+
+function listCustomers() {
+  const map = new Map();
+  for (const r of readReports()) {
+    mergeCustomer(map, {
+      customerName: r.customerName,
+      customerEmail: r.customerEmail,
+      customerPhone: r.customerPhone,
+      registration: r.registration,
+      vehicle: r.vehicle,
+      wofExpiry: r.wof?.expiry || "",
+      lastVisit: (r.serviceDate || r.updatedAt || "").slice(0, 10),
+      lastJobNumber: r.jobNumber || "",
+      lastReportId: r.id,
+    });
+  }
+  for (const d of readBilling()) {
+    if (d.status === "void") continue;
+    mergeCustomer(map, {
+      customerName: d.customerName,
+      customerEmail: d.customerEmail,
+      customerPhone: d.customerPhone,
+      registration: d.registration,
+      vehicle: d.vehicle,
+      wofExpiry: "",
+      lastVisit: (d.updatedAt || d.createdAt || "").slice(0, 10),
+      lastJobNumber: d.number || "",
+      lastReportId: "",
+    });
+  }
+  const rank = { overdue: 0, due_soon: 1, ok: 2, missing: 3 };
+  return [...map.values()]
+    .map((row) => ({ ...row, ...wofMeta(row.wofExpiry) }))
+    .sort((a, b) => {
+      const rankDiff = rank[a.wofStatus] - rank[b.wofStatus];
+      if (rankDiff) return rankDiff;
+      if (a.wofExpiry && b.wofExpiry) return a.wofExpiry.localeCompare(b.wofExpiry);
+      return String(a.customerName).localeCompare(String(b.customerName));
+    });
 }
 
 function nextBillingNumber(docs, kind) {
@@ -273,7 +360,16 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: false }));
 app.use("/uploads", express.static(UPLOADS_DIR));
-app.use("/admin", express.static(path.join(ROOT, "admin")));
+app.use(
+  "/admin",
+  express.static(path.join(ROOT, "admin"), {
+    etag: false,
+    lastModified: false,
+    setHeaders(res) {
+      res.setHeader("Cache-Control", "no-store");
+    },
+  })
+);
 app.use("/report", express.static(path.join(ROOT, "report")));
 app.use("/billing", express.static(path.join(ROOT, "billing")));
 app.use(express.static(ROOT, { index: "index.html" }));
@@ -372,6 +468,10 @@ app.get("/api/reports", requireAdmin, (_req, res) => {
     }))
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
   res.json(reports);
+});
+
+app.get("/api/customers", requireAdmin, (_req, res) => {
+  res.json(listCustomers());
 });
 
 app.get("/api/reports/:id", (req, res) => {
@@ -491,6 +591,74 @@ app.get("/api/admin/email-status", requireAdmin, (_req, res) => {
     from: MAIL_FROM,
     publicBaseUrl: PUBLIC_BASE_URL || null,
   });
+});
+
+app.post("/api/customers/wof-reminder", requireAdmin, async (req, res) => {
+  if (!smtpConfigured()) {
+    return res.status(503).json({
+      error:
+        "Email not configured. On Render go to Settings → Environment and add SMTP_HOST, SMTP_USER, SMTP_PASS, then save.",
+    });
+  }
+
+  const to = String(req.body?.to || "").trim();
+  const name = String(req.body?.customerName || "there").trim() || "there";
+  const registration = String(req.body?.registration || "").trim().toUpperCase();
+  const vehicle = String(req.body?.vehicle || "").trim();
+  const expiry = String(req.body?.wofExpiry || "").trim();
+  if (!to) {
+    return res.status(400).json({ error: "Customer email is missing." });
+  }
+  if (!expiry) {
+    return res.status(400).json({ error: "Add a WOF expiry date on the service report first." });
+  }
+
+  const vehicleBit = `${vehicle || "your vehicle"}${registration ? ` (${registration})` : ""}`;
+  const site = PUBLIC_BASE_URL || business.website;
+  const subject = `WOF reminder for ${registration || vehicle || "your vehicle"} — ${business.name}`;
+  const text =
+    `Hi ${name},\n\n` +
+    `This is a reminder from ${business.name} that the WOF for ${vehicleBit} expires on ${expiry}.\n\n` +
+    `Book a WOF with us:\n` +
+    `Phone ${business.phoneDisplay}\n` +
+    `${business.email}\n` +
+    `${business.fullAddress()}\n` +
+    `${business.hoursShort}; ${business.hoursSunday}\n` +
+    (site ? `\nWebsite: ${site}\n` : "") +
+    `\nThank you,\n${business.name}\n`;
+  const html = `
+    <p>Hi ${escapeHtml(name)},</p>
+    <p>This is a reminder from <strong>${escapeHtml(business.name)}</strong> that the WOF for <strong>${escapeHtml(vehicleBit)}</strong> expires on <strong>${escapeHtml(expiry)}</strong>.</p>
+    <p>Book a WOF with us:</p>
+    <p>
+      Phone <a href="tel:${escapeAttr(business.phoneTel)}">${escapeHtml(business.phoneDisplay)}</a><br/>
+      <a href="mailto:${escapeAttr(business.email)}">${escapeHtml(business.email)}</a><br/>
+      ${escapeHtml(business.addressLine2)}<br/>
+      ${escapeHtml(business.street)}<br/>
+      ${escapeHtml(business.suburb)}, ${escapeHtml(business.city)}<br/>
+      ${escapeHtml(business.hoursShort)}; ${escapeHtml(business.hoursSunday)}
+    </p>
+    ${site ? `<p><a href="${escapeAttr(site)}">${escapeHtml(site)}</a></p>` : ""}
+    <p>Thank you,<br/>${escapeHtml(business.name)}</p>
+  `;
+
+  try {
+    const mailer = createMailer();
+    const info = await mailer.sendMail({
+      from: MAIL_FROM,
+      to,
+      replyTo: process.env.SMTP_USER || MAIL_FROM,
+      subject,
+      text,
+      html,
+    });
+    res.json({ ok: true, to, messageId: info.messageId });
+  } catch (err) {
+    console.error("WOF reminder email failed:", err);
+    res.status(502).json({
+      error: err.response || err.message || "Failed to send email. Check SMTP settings.",
+    });
+  }
 });
 
 app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
@@ -889,12 +1057,6 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       text,
       html,
     });
-
-    try {
-      await sendShopCopy(mailer, { customerTo: to, subject, text, html });
-    } catch (copyErr) {
-      console.error("Shop copy email failed:", copyErr);
-    }
 
     doc.lastEmailedAt = new Date().toISOString();
     doc.lastEmailedTo = to;

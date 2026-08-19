@@ -47,16 +47,18 @@ function showApp() {
 }
 
 function setSection(name) {
-  const isReports = name === "reports";
   const reportsSection = document.getElementById("reports-section");
   const billingSection = document.getElementById("billing-section");
+  const customersSection = document.getElementById("customers-section");
   const btnNew = document.getElementById("btn-new");
-  if (reportsSection) reportsSection.hidden = !isReports;
-  if (billingSection) billingSection.hidden = isReports;
-  if (btnNew) btnNew.hidden = !isReports;
-  document.getElementById("nav-reports")?.classList.toggle("is-active", isReports);
-  document.getElementById("nav-billing")?.classList.toggle("is-active", !isReports);
-  if (isReports && listView && !listView.hidden) {
+  if (reportsSection) reportsSection.hidden = name !== "reports";
+  if (billingSection) billingSection.hidden = name !== "billing";
+  if (customersSection) customersSection.hidden = name !== "customers";
+  if (btnNew) btnNew.hidden = name !== "reports";
+  document.getElementById("nav-reports")?.classList.toggle("is-active", name === "reports");
+  document.getElementById("nav-billing")?.classList.toggle("is-active", name === "billing");
+  document.getElementById("nav-customers")?.classList.toggle("is-active", name === "customers");
+  if (name === "reports" && listView && !listView.hidden) {
     viewTitle.textContent = "Reports";
   }
 }
@@ -154,6 +156,10 @@ document.getElementById("nav-reports").addEventListener("click", async () => {
 document.getElementById("nav-billing").addEventListener("click", () => {
   setSection("billing");
   window.DeaneBilling?.showList();
+});
+
+document.getElementById("nav-customers").addEventListener("click", () => {
+  window.DeaneCustomers?.showList();
 });
 
 document.getElementById("btn-back").addEventListener("click", async () => {
@@ -267,6 +273,8 @@ async function openReport(id) {
   renderActions(current);
   updatePhoto(current.vehiclePhoto);
 }
+
+window.DeaneAdmin.openReport = openReport;
 
 function fillForm(r) {
   const set = (name, value) => {

@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260819r" />
+    <link rel="stylesheet" href="admin.css?v=20260819c" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -35,6 +35,7 @@
           <nav class="admin-nav" aria-label="Admin sections">
             <button type="button" id="nav-reports" class="nav-tab is-active">Reports</button>
             <button type="button" id="nav-billing" class="nav-tab">Quotes &amp; invoices</button>
+            <button type="button" id="nav-customers" class="nav-tab">Customers</button>
           </nav>
           <a href="/" target="_blank" rel="noopener">Website</a>
           <button type="button" id="btn-new" class="primary">New report</button>
@@ -175,6 +176,26 @@
         </section>
         </section>
 
+        <section id="customers-section" hidden>
+          <p class="muted small">WOF expiry comes from service reports. Fill it in after each WOF so you can remind customers before it runs out.</p>
+          <label class="list-search">
+            Search customers
+            <input
+              id="customers-search"
+              type="search"
+              placeholder="Customer name or plate"
+              autocomplete="off"
+            />
+          </label>
+          <div id="customers-filter" class="filter-row">
+            <button type="button" class="ghost is-active" data-filter="all">All</button>
+            <button type="button" class="ghost" data-filter="overdue">Overdue</button>
+            <button type="button" class="ghost" data-filter="due_soon">Due in 30 days</button>
+            <button type="button" class="ghost" data-filter="missing">No WOF date</button>
+          </div>
+          <div id="customers-list" class="report-list"></div>
+        </section>
+
         <section id="billing-section" hidden>
           <section id="billing-list-view">
             <div class="preset-panel">
@@ -268,7 +289,8 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260819r"></script>
-    <script src="billing.js?v=20260819r"></script>
+    <script src="admin.js?v=20260819c"></script>
+    <script src="billing.js?v=20260819c"></script>
+    <script src="customers.js?v=20260819c"></script>
   </body>
 </html>

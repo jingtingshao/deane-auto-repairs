@@ -396,6 +396,89 @@ label.check input {
   max-width: 420px;
 }
 
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 0 0.9rem;
+}
+
+.filter-row button.is-active {
+  background: var(--blue-soft);
+  border-color: #c5d8f0;
+  color: var(--blue);
+}
+
+.billing-table-wrap {
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.billing-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.billing-table th,
+.billing-table td {
+  text-align: left;
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.billing-table th {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: #f8fafc;
+  font-weight: 800;
+}
+
+.billing-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.billing-table .billing-number {
+  font-family: var(--display);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  font-size: 1.05rem;
+}
+
+.customer-actions {
+  white-space: nowrap;
+}
+
+.customer-actions button {
+  margin: 0.15rem 0.15rem 0.15rem 0;
+}
+
+.badge.overdue {
+  background: #ffebee;
+  color: var(--attention);
+}
+
+.badge.due_soon {
+  background: #fff8e1;
+  color: var(--watch);
+}
+
+.badge.ok {
+  background: #e8f5e9;
+  color: var(--ok);
+}
+
+.badge.missing {
+  background: #eee;
+  color: #555;
+}
+
 .report-card.billing-card {
   display: grid;
   grid-template-columns: minmax(9.2rem, auto) minmax(0, 1fr) auto;
