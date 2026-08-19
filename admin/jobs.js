@@ -1,4 +1,4 @@
-const Admin = window.DeaneAdmin;
+var Admin = window.DeaneAdmin;
 
 const JOB_STATUSES = [
   { id: "booked", label: "Booked" },

@@ -615,6 +615,51 @@ label.check input {
   color: var(--attention);
 }
 
+.badge.booked,
+.badge.in_progress {
+  background: #e8f1fb;
+  color: var(--blue);
+}
+
+.badge.waiting_parts,
+.badge.waiting_customer,
+.badge.parts-wait {
+  background: #fff8e1;
+  color: var(--watch);
+}
+
+.badge.ready,
+.badge.parts-ok {
+  background: #e8f5e9;
+  color: var(--ok);
+}
+
+.badge.completed,
+.badge.parts-none {
+  background: #eee;
+  color: #555;
+}
+
+.job-card-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.parts-table .check-cell {
+  width: 4.5rem;
+  text-align: center;
+}
+
+.parts-table .check-cell input {
+  width: auto;
+}
+
+.parts-table .part-note {
+  min-width: 8rem;
+}
+
 .badge.quote {
   background: #fff8e1;
   color: var(--watch);
@@ -636,6 +681,10 @@ label.check input {
 
   .topbar {
     flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .job-card-meta {
     align-items: flex-start;
   }
 }

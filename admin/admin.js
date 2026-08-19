@@ -50,17 +50,21 @@ function setSection(name) {
   const reportsSection = document.getElementById("reports-section");
   const billingSection = document.getElementById("billing-section");
   const customersSection = document.getElementById("customers-section");
+  const jobsSection = document.getElementById("jobs-section");
   const btnNew = document.getElementById("btn-new");
   if (reportsSection) reportsSection.hidden = name !== "reports";
   if (billingSection) billingSection.hidden = name !== "billing";
   if (customersSection) customersSection.hidden = name !== "customers";
+  if (jobsSection) jobsSection.hidden = name !== "jobs";
   if (btnNew) {
-    btnNew.hidden = name !== "reports" && name !== "customers";
-    btnNew.textContent = name === "customers" ? "New customer" : "New report";
+    btnNew.hidden = name !== "reports" && name !== "customers" && name !== "jobs";
+    btnNew.textContent =
+      name === "customers" ? "New customer" : name === "jobs" ? "New job" : "New report";
   }
   document.getElementById("nav-reports")?.classList.toggle("is-active", name === "reports");
   document.getElementById("nav-billing")?.classList.toggle("is-active", name === "billing");
   document.getElementById("nav-customers")?.classList.toggle("is-active", name === "customers");
+  document.getElementById("nav-jobs")?.classList.toggle("is-active", name === "jobs");
   if (name === "reports" && listView && !listView.hidden) {
     viewTitle.textContent = "Reports";
   }
@@ -156,6 +160,11 @@ document.getElementById("nav-reports").addEventListener("click", async () => {
   }
 });
 
+document.getElementById("nav-jobs")?.addEventListener("click", () => {
+  setSection("jobs");
+  window.DeaneJobs?.showList();
+});
+
 document.getElementById("nav-billing").addEventListener("click", () => {
   setSection("billing");
   window.DeaneBilling?.showList();
@@ -179,6 +188,7 @@ document.getElementById("btn-back").addEventListener("click", async () => {
 
 document.getElementById("btn-new").addEventListener("click", async () => {
   const customersOpen = !document.getElementById("customers-section")?.hidden;
+  const jobsOpen = !document.getElementById("jobs-section")?.hidden;
   if (customersOpen) {
     if (window.DeaneCustomers?.newCustomer) {
       window.DeaneCustomers.newCustomer();
@@ -189,6 +199,14 @@ document.getElementById("btn-new").addEventListener("click", async () => {
         form.removeAttribute("hidden");
         document.getElementById("customer-name")?.focus();
       }
+    }
+    return;
+  }
+  if (jobsOpen) {
+    try {
+      await window.DeaneJobs.createJob();
+    } catch (err) {
+      alert(err.message);
     }
     return;
   }

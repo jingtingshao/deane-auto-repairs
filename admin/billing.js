@@ -1,4 +1,4 @@
-const Admin = window.DeaneAdmin;
+var Admin = window.DeaneAdmin;
 
 const billingListView = document.getElementById("billing-list-view");
 const billingEditView = document.getElementById("billing-edit-view");
@@ -297,6 +297,14 @@ function updateActionButtons() {
 
   convertBtn.hidden = !(doc.kind === "quote" && doc.status === "accepted");
   openInvBtn.hidden = !(doc.kind === "quote" && doc.status === "invoiced" && doc.invoiceId);
+  const jobBtn = document.getElementById("btn-billing-job");
+  const canJob =
+    (doc.kind === "quote" && (doc.status === "accepted" || doc.status === "invoiced")) ||
+    (doc.kind === "invoice" && doc.quoteId);
+  if (jobBtn) {
+    jobBtn.hidden = !canJob;
+    jobBtn.textContent = doc.jobId ? "Open job card" : "Create job card";
+  }
   emailBtn.textContent = doc.kind === "quote" ? "Email quote" : "Email invoice";
   emailBtn.hidden = doc.status === "void" || doc.status === "invoiced";
   document.getElementById("btn-billing-copy").hidden = doc.status === "void";
@@ -393,6 +401,27 @@ document.getElementById("btn-billing-convert").addEventListener("click", async (
 
 document.getElementById("btn-billing-open-invoice").addEventListener("click", async () => {
   if (currentBill?.invoiceId) await openDoc(currentBill.invoiceId);
+});
+
+document.getElementById("btn-billing-job")?.addEventListener("click", async () => {
+  if (!currentBill) return;
+  try {
+    if (currentBill.jobId) {
+      Admin.setSection("jobs");
+      await window.DeaneJobs.openJob(currentBill.jobId);
+      return;
+    }
+    const job = await Admin.api(`/api/jobs/from-quote/${currentBill.id}`, {
+      method: "POST",
+      body: "{}",
+    });
+    currentBill.jobId = job.id;
+    updateActionButtons();
+    Admin.setSection("jobs");
+    await window.DeaneJobs.openJob(job.id);
+  } catch (err) {
+    alert(err.message);
+  }
 });
 
 document.getElementById("btn-billing-void").addEventListener("click", async () => {

@@ -1,4 +1,4 @@
-const Admin = window.DeaneAdmin;
+var Admin = window.DeaneAdmin;
 
 const customersSection = document.getElementById("customers-section");
 const customersList = document.getElementById("customers-list");
