@@ -174,11 +174,13 @@ function showCustomerForm(row = null) {
 }
 
 function hideCustomerForm() {
-  if (!customerForm) return;
-  customerForm.hidden = true;
-  customerForm.reset();
+  const form = document.getElementById("customer-form");
+  if (!form) return;
+  form.reset();
   editingCustomerId = "";
   if (customerDeleteBtn) customerDeleteBtn.hidden = true;
+  const legend = document.getElementById("customer-form-legend");
+  if (legend) legend.textContent = "New customer";
 }
 
 async function saveCustomer(event) {

@@ -54,7 +54,10 @@ function setSection(name) {
   if (reportsSection) reportsSection.hidden = name !== "reports";
   if (billingSection) billingSection.hidden = name !== "billing";
   if (customersSection) customersSection.hidden = name !== "customers";
-  if (btnNew) btnNew.hidden = name !== "reports";
+  if (btnNew) {
+    btnNew.hidden = name !== "reports" && name !== "customers";
+    btnNew.textContent = name === "customers" ? "New customer" : "New report";
+  }
   document.getElementById("nav-reports")?.classList.toggle("is-active", name === "reports");
   document.getElementById("nav-billing")?.classList.toggle("is-active", name === "billing");
   document.getElementById("nav-customers")?.classList.toggle("is-active", name === "customers");
@@ -175,6 +178,20 @@ document.getElementById("btn-back").addEventListener("click", async () => {
 });
 
 document.getElementById("btn-new").addEventListener("click", async () => {
+  const customersOpen = !document.getElementById("customers-section")?.hidden;
+  if (customersOpen) {
+    if (window.DeaneCustomers?.newCustomer) {
+      window.DeaneCustomers.newCustomer();
+    } else {
+      const form = document.getElementById("customer-form");
+      if (form) {
+        form.hidden = false;
+        form.removeAttribute("hidden");
+        document.getElementById("customer-name")?.focus();
+      }
+    }
+    return;
+  }
   try {
     const report = await api("/api/reports", {
       method: "POST",
