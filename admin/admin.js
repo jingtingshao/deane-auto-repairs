@@ -7,6 +7,7 @@ const loginError = document.getElementById("login-error");
 const listView = document.getElementById("list-view");
 const editView = document.getElementById("edit-view");
 const reportList = document.getElementById("report-list");
+const reportSearch = document.getElementById("report-search");
 const reportForm = document.getElementById("report-form");
 const checklistEl = document.getElementById("checklist");
 const actionsEl = document.getElementById("actions");
@@ -18,6 +19,7 @@ const photoInput = document.getElementById("photo-input");
 let pin = sessionStorage.getItem(PIN_KEY) || "";
 let current = null;
 let checklistMeta = null;
+let reportDocs = [];
 
 async function api(path, options = {}) {
   const headers = {
@@ -178,13 +180,36 @@ document.getElementById("btn-new").addEventListener("click", async () => {
   }
 });
 
-async function loadList() {
-  const reports = await api("/api/reports");
-  if (!reports.length) {
+function normalizeSearch(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[\s-]/g, "");
+}
+
+function matchesReportSearch(report, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return true;
+  const name = String(report.customerName || "").toLowerCase();
+  const plate = normalizeSearch(report.registration);
+  const plateQuery = q.replace(/[\s-]/g, "");
+  return name.includes(q) || plate.includes(plateQuery);
+}
+
+function renderReportList() {
+  if (!reportDocs.length) {
     reportList.innerHTML =
       '<div class="empty">No reports yet. Click <strong>New report</strong> to start.</div>';
     return;
   }
+
+  const query = reportSearch?.value || "";
+  const reports = reportDocs.filter((r) => matchesReportSearch(r, query));
+  if (!reports.length) {
+    reportList.innerHTML =
+      '<div class="empty">No matching customer name or plate.</div>';
+    return;
+  }
+
   reportList.innerHTML = reports
     .map(
       (r) => `
@@ -202,6 +227,14 @@ async function loadList() {
     card.addEventListener("click", () => openReport(card.dataset.id));
   });
 }
+
+async function loadList() {
+  reportDocs = await api("/api/reports");
+  renderReportList();
+}
+
+reportSearch?.addEventListener("input", renderReportList);
+reportSearch?.addEventListener("search", renderReportList);
 
 function labelJob(jobType, pkg) {
   const map = {
