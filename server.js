@@ -24,6 +24,7 @@ const DATA_DIR = process.env.DATA_DIR
   : path.join(ROOT, "data");
 const REPORTS_FILE = path.join(DATA_DIR, "reports.json");
 const BILLING_FILE = path.join(DATA_DIR, "billing.json");
+const CUSTOMERS_FILE = path.join(DATA_DIR, "customers.json");
 const UPLOADS_DIR = process.env.UPLOADS_DIR
   ? path.resolve(process.env.UPLOADS_DIR)
   : path.join(ROOT, "uploads");
@@ -71,6 +72,9 @@ if (!fs.existsSync(REPORTS_FILE)) {
 if (!fs.existsSync(BILLING_FILE)) {
   fs.writeFileSync(BILLING_FILE, "[]", "utf8");
 }
+if (!fs.existsSync(CUSTOMERS_FILE)) {
+  fs.writeFileSync(CUSTOMERS_FILE, "[]", "utf8");
+}
 
 function readReports() {
   try {
@@ -94,6 +98,39 @@ function readBilling() {
 
 function writeBilling(docs) {
   fs.writeFileSync(BILLING_FILE, JSON.stringify(docs, null, 2), "utf8");
+}
+
+function readSavedCustomers() {
+  try {
+    const rows = JSON.parse(fs.readFileSync(CUSTOMERS_FILE, "utf8"));
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedCustomers(rows) {
+  fs.writeFileSync(CUSTOMERS_FILE, JSON.stringify(rows, null, 2), "utf8");
+}
+
+function normalizeSavedCustomer(body, current = {}) {
+  const customerName = String(body?.customerName ?? current.customerName ?? "").trim();
+  const customerAddress = String(body?.customerAddress ?? current.customerAddress ?? "").trim();
+  const customerPhone = String(body?.customerPhone ?? current.customerPhone ?? "").trim();
+  const registration = String(body?.registration ?? current.registration ?? "")
+    .trim()
+    .toUpperCase();
+  if (!customerName) {
+    const err = new Error("Customer name is required.");
+    err.status = 400;
+    throw err;
+  }
+  if (!registration) {
+    const err = new Error("Registration / plate is required.");
+    err.status = 400;
+    throw err;
+  }
+  return { customerName, customerAddress, customerPhone, registration };
 }
 
 function plateKey(value) {
@@ -140,16 +177,18 @@ function mergeCustomer(map, incoming) {
     lastJobNumber: "",
     lastReportId: "",
     lastBillingId: "",
+    customerAddress: "",
+    customerId: "",
   };
   const incomingVisit = incoming.lastVisit || "";
   const isNewerVisit = !cur.lastVisit || incomingVisit >= cur.lastVisit;
   map.set(key, {
     ...cur,
     customerName:
-      (isNewerVisit && incoming.customerName) ||
-      cur.customerName ||
       incoming.customerName ||
+      cur.customerName ||
       "",
+    customerAddress: incoming.customerAddress || cur.customerAddress,
     customerEmail: incoming.customerEmail || cur.customerEmail,
     customerPhone: incoming.customerPhone || cur.customerPhone,
     registration: incoming.registration || cur.registration,
@@ -166,6 +205,7 @@ function mergeCustomer(map, incoming) {
         : cur.lastJobNumber,
     lastReportId: incoming.lastReportId || cur.lastReportId,
     lastBillingId: incoming.lastBillingId || cur.lastBillingId,
+    customerId: incoming.customerId || cur.customerId,
   });
 }
 
@@ -198,6 +238,22 @@ function listCustomers() {
       lastJobNumber: d.number || "",
       lastReportId: "",
       lastBillingId: d.id,
+    });
+  }
+  for (const c of readSavedCustomers()) {
+    mergeCustomer(map, {
+      customerName: c.customerName,
+      customerAddress: c.customerAddress,
+      customerPhone: c.customerPhone,
+      customerEmail: "",
+      registration: c.registration,
+      vehicle: "",
+      wofExpiry: "",
+      lastVisit: "",
+      lastJobNumber: "",
+      lastReportId: "",
+      lastBillingId: "",
+      customerId: c.id,
     });
   }
   const rank = { overdue: 0, due_soon: 1, ok: 2, missing: 3 };
@@ -478,6 +534,62 @@ app.get("/api/customers", requireAdmin, (_req, res) => {
     console.error("Customers list failed:", err);
     res.status(500).json({ error: "Could not load customers." });
   }
+});
+
+app.post("/api/customers", requireAdmin, (req, res) => {
+  try {
+    const fields = normalizeSavedCustomer(req.body);
+    const rows = readSavedCustomers();
+    const plate = plateKey(fields.registration);
+    const existing = rows.find((c) => plateKey(c.registration) === plate);
+    const now = new Date().toISOString();
+    if (existing) {
+      Object.assign(existing, fields, { updatedAt: now });
+      writeSavedCustomers(rows);
+      return res.json(existing);
+    }
+    const row = {
+      id: randomUUID(),
+      ...fields,
+      createdAt: now,
+      updatedAt: now,
+    };
+    rows.push(row);
+    writeSavedCustomers(rows);
+    res.status(201).json(row);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.put("/api/customers/:id", requireAdmin, (req, res) => {
+  try {
+    const rows = readSavedCustomers();
+    const index = rows.findIndex((c) => c.id === req.params.id);
+    if (index < 0) return res.status(404).json({ error: "Customer not found" });
+    const fields = normalizeSavedCustomer(req.body, rows[index]);
+    rows[index] = {
+      ...rows[index],
+      ...fields,
+      id: rows[index].id,
+      createdAt: rows[index].createdAt,
+      updatedAt: new Date().toISOString(),
+    };
+    writeSavedCustomers(rows);
+    res.json(rows[index]);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.delete("/api/customers/:id", requireAdmin, (req, res) => {
+  const rows = readSavedCustomers();
+  const next = rows.filter((c) => c.id !== req.params.id);
+  if (next.length === rows.length) {
+    return res.status(404).json({ error: "Customer not found" });
+  }
+  writeSavedCustomers(next);
+  res.json({ ok: true });
 });
 
 app.get("/api/reports/:id", (req, res) => {

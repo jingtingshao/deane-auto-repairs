@@ -1,6 +1,7 @@
 node_modules/
 data/reports.json
 data/billing.json
+data/customers.json
 uploads/*
 !uploads/.gitkeep
 .DS_Store

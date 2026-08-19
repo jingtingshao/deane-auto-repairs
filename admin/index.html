@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260819e" />
+    <link rel="stylesheet" href="admin.css?v=20260819f" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -177,13 +177,32 @@
         </section>
 
         <section id="customers-section" hidden>
-          <p class="muted small">WOF expiry comes from service reports. Fill it in after each WOF so you can remind customers before it runs out.</p>
+          <div class="edit-toolbar">
+            <p class="muted small" style="margin:0;flex:1;">Save name, address, phone and plate here. WOF expiry still comes from the service report.</p>
+            <button type="button" id="btn-new-customer" class="primary">New customer</button>
+          </div>
+          <form id="customer-form" class="report-form" hidden>
+            <fieldset>
+              <legend id="customer-form-legend">New customer</legend>
+              <div class="grid-3">
+                <label>Name<input name="customerName" required /></label>
+                <label>Phone<input name="customerPhone" type="tel" /></label>
+                <label>Registration<input name="registration" required /></label>
+              </div>
+              <label>Address<textarea name="customerAddress" rows="2"></textarea></label>
+              <div class="line-actions">
+                <button type="submit" class="primary">Save customer</button>
+                <button type="button" id="btn-customer-cancel" class="ghost">Cancel</button>
+                <button type="button" id="btn-customer-delete" class="danger" hidden>Delete</button>
+              </div>
+            </fieldset>
+          </form>
           <label class="list-search">
             Search customers
             <input
               id="customers-search"
               type="search"
-              placeholder="Customer name or plate"
+              placeholder="Name, plate, phone or address"
               autocomplete="off"
             />
           </label>
@@ -289,8 +308,8 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260819e"></script>
-    <script src="billing.js?v=20260819e"></script>
-    <script src="customers.js?v=20260819e"></script>
+    <script src="admin.js?v=20260819f"></script>
+    <script src="billing.js?v=20260819f"></script>
+    <script src="customers.js?v=20260819f"></script>
   </body>
 </html>

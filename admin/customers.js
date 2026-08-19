@@ -4,9 +4,12 @@ const customersSection = document.getElementById("customers-section");
 const customersList = document.getElementById("customers-list");
 const customersSearch = document.getElementById("customers-search");
 const customersFilter = document.getElementById("customers-filter");
+const customerForm = document.getElementById("customer-form");
+const customerDeleteBtn = document.getElementById("btn-customer-delete");
 
 let customerRows = [];
 let customerFilter = "all";
+let editingCustomerId = "";
 
 function wofLabel(row) {
   if (row.wofStatus === "overdue") {
@@ -23,18 +26,26 @@ function matchesCustomerSearch(row, query) {
   const q = String(query || "").trim().toLowerCase();
   if (!q) return true;
   const name = String(row.customerName || "").toLowerCase();
+  const address = String(row.customerAddress || "").toLowerCase();
+  const phone = String(row.customerPhone || "").toLowerCase().replace(/\s+/g, "");
   const plate = String(row.registration || "")
     .toLowerCase()
     .replace(/[\s-]/g, "");
   const plateQuery = q.replace(/[\s-]/g, "");
-  return name.includes(q) || plate.includes(plateQuery);
+  const phoneQuery = q.replace(/\s+/g, "");
+  return (
+    name.includes(q) ||
+    address.includes(q) ||
+    phone.includes(phoneQuery) ||
+    plate.includes(plateQuery)
+  );
 }
 
 function renderCustomers() {
   if (!customersList) return;
   if (!customerRows.length) {
     customersList.innerHTML =
-      '<div class="empty">No customers yet. They appear here after you save a report or invoice with a name or plate.</div>';
+      '<div class="empty">No customers yet. Click <strong>New customer</strong> to add a name, address, phone and plate.</div>';
     return;
   }
 
@@ -55,10 +66,10 @@ function renderCustomers() {
         <thead>
           <tr>
             <th>Plate</th>
-            <th>Customer</th>
+            <th>Name</th>
+            <th>Address</th>
+            <th>Phone</th>
             <th>WOF expiry</th>
-            <th>Last visit</th>
-            <th>Contact</th>
             <th></th>
           </tr>
         </thead>
@@ -66,30 +77,23 @@ function renderCustomers() {
           ${rows
             .map(
               (row) => `
-            <tr class="customer-row" data-report-id="${Admin.escapeAttr(row.lastReportId || "")}" data-billing-id="${Admin.escapeAttr(row.lastBillingId || "")}">
+            <tr class="customer-row" data-key="${Admin.escapeAttr(row.key)}">
               <td class="billing-number">${Admin.escapeHtml(row.registration || "—")}</td>
-              <td>
-                ${Admin.escapeHtml(row.customerName || "—")}
-                ${row.vehicle ? `<div class="muted small">${Admin.escapeHtml(row.vehicle)}</div>` : ""}
-              </td>
-              <td>
-                <span class="badge ${Admin.escapeAttr(row.wofStatus)}">${Admin.escapeHtml(wofLabel(row))}</span>
-                <div class="muted small">${Admin.escapeHtml(row.wofExpiry || "Add on the report")}</div>
-              </td>
-              <td>${Admin.escapeHtml(row.lastVisit || "—")}</td>
+              <td>${Admin.escapeHtml(row.customerName || "—")}</td>
+              <td>${Admin.escapeHtml(row.customerAddress || "—")}</td>
               <td>
                 ${
                   row.customerPhone
-                    ? `<a href="tel:${Admin.escapeAttr(row.customerPhone)}">${Admin.escapeHtml(row.customerPhone)}</a><br/>`
-                    : ""
-                }
-                ${
-                  row.customerEmail
-                    ? `<a href="mailto:${Admin.escapeAttr(row.customerEmail)}">${Admin.escapeHtml(row.customerEmail)}</a>`
-                    : '<span class="muted">No email</span>'
+                    ? `<a href="tel:${Admin.escapeAttr(row.customerPhone)}">${Admin.escapeHtml(row.customerPhone)}</a>`
+                    : "—"
                 }
               </td>
+              <td>
+                <span class="badge ${Admin.escapeAttr(row.wofStatus)}">${Admin.escapeHtml(wofLabel(row))}</span>
+                <div class="muted small">${Admin.escapeHtml(row.wofExpiry || "—")}</div>
+              </td>
               <td class="customer-actions">
+                <button type="button" class="ghost" data-edit-key="${Admin.escapeAttr(row.key)}">Edit</button>
                 ${
                   row.lastReportId
                     ? `<button type="button" class="ghost" data-open-report="${Admin.escapeAttr(row.lastReportId)}">Report</button>`
@@ -107,7 +111,18 @@ function renderCustomers() {
     </div>`;
 
   customersList.querySelectorAll("tr.customer-row").forEach((row) => {
-    row.addEventListener("click", () => openCustomer(row));
+    row.addEventListener("click", () => {
+      const found = customerRows.find((r) => r.key === row.dataset.key);
+      if (found) showCustomerForm(found);
+    });
+  });
+
+  customersList.querySelectorAll("[data-edit-key]").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const found = customerRows.find((r) => r.key === btn.dataset.editKey);
+      if (found) showCustomerForm(found);
+    });
   });
 
   customersList.querySelectorAll("[data-open-report]").forEach((btn) => {
@@ -130,18 +145,55 @@ function renderCustomers() {
 }
 
 async function openCustomer(rowEl) {
-  const reportId = rowEl.dataset.reportId;
-  const billingId = rowEl.dataset.billingId;
+  const found = customerRows.find((r) => r.key === rowEl.dataset.key);
+  if (found) showCustomerForm(found);
+}
+
+function showCustomerForm(row = null) {
+  if (!customerForm) return;
+  editingCustomerId = row?.customerId || "";
+  customerForm.hidden = false;
+  document.getElementById("customer-form-legend").textContent = editingCustomerId
+    ? "Edit customer"
+    : "New customer";
+  customerForm.elements.namedItem("customerName").value = row?.customerName || "";
+  customerForm.elements.namedItem("customerAddress").value = row?.customerAddress || "";
+  customerForm.elements.namedItem("customerPhone").value = row?.customerPhone || "";
+  customerForm.elements.namedItem("registration").value = row?.registration || "";
+  if (customerDeleteBtn) customerDeleteBtn.hidden = !editingCustomerId;
+  customerForm.scrollIntoView({ block: "start" });
+}
+
+function hideCustomerForm() {
+  if (!customerForm) return;
+  customerForm.hidden = true;
+  customerForm.reset();
+  editingCustomerId = "";
+  if (customerDeleteBtn) customerDeleteBtn.hidden = true;
+}
+
+async function saveCustomer(event) {
+  event.preventDefault();
+  const body = {
+    customerName: customerForm.elements.namedItem("customerName").value.trim(),
+    customerAddress: customerForm.elements.namedItem("customerAddress").value.trim(),
+    customerPhone: customerForm.elements.namedItem("customerPhone").value.trim(),
+    registration: customerForm.elements.namedItem("registration").value.trim(),
+  };
   try {
-    if (reportId) {
-      Admin.setSection("reports");
-      await Admin.openReport(reportId);
-      return;
+    if (editingCustomerId) {
+      await Admin.api(`/api/customers/${editingCustomerId}`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+    } else {
+      await Admin.api("/api/customers", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
     }
-    if (billingId && window.DeaneBilling?.openDoc) {
-      Admin.setSection("billing");
-      await window.DeaneBilling.openDoc(billingId);
-    }
+    hideCustomerForm();
+    await loadCustomers();
   } catch (err) {
     alert(err.message);
   }
@@ -207,6 +259,25 @@ customersFilter?.querySelectorAll("[data-filter]").forEach((btn) => {
     });
     renderCustomers();
   });
+});
+
+document.getElementById("btn-new-customer")?.addEventListener("click", () => {
+  showCustomerForm(null);
+});
+
+document.getElementById("btn-customer-cancel")?.addEventListener("click", hideCustomerForm);
+
+customerForm?.addEventListener("submit", saveCustomer);
+
+customerDeleteBtn?.addEventListener("click", async () => {
+  if (!editingCustomerId || !confirm("Delete this saved customer?")) return;
+  try {
+    await Admin.api(`/api/customers/${editingCustomerId}`, { method: "DELETE" });
+    hideCustomerForm();
+    await loadCustomers();
+  } catch (err) {
+    alert(err.message);
+  }
 });
 
 window.DeaneCustomers = { showList: showCustomers };
