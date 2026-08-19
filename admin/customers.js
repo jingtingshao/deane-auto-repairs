@@ -197,6 +197,8 @@ function hideCustomerForm() {
 
 async function saveCustomer(event) {
   event?.preventDefault?.();
+  const btn = document.getElementById("btn-customer-save");
+  const status = document.getElementById("customer-save-status");
   const body = {
     customerName: (document.getElementById("customer-name")?.value || "").trim(),
     customerAddress: (document.getElementById("customer-address")?.value || "").trim(),
@@ -204,7 +206,24 @@ async function saveCustomer(event) {
     customerEmail: (document.getElementById("customer-email")?.value || "").trim(),
     registration: (document.getElementById("customer-rego")?.value || "").trim(),
   };
-  const status = document.getElementById("customer-save-status");
+  if (!body.customerName) {
+    alert("Enter the customer name.");
+    document.getElementById("customer-name")?.focus();
+    return;
+  }
+  if (!body.registration) {
+    alert("Enter the registration / plate.");
+    document.getElementById("customer-rego")?.focus();
+    return;
+  }
+  if (status) {
+    status.hidden = false;
+    status.textContent = "Saving…";
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+  }
   try {
     const saved = editingCustomerId
       ? await Admin.api(`/api/customers/${editingCustomerId}`, {
@@ -220,15 +239,26 @@ async function saveCustomer(event) {
     const legend = document.getElementById("customer-form-legend");
     if (legend && editingCustomerId) legend.textContent = "Edit customer";
     await loadCustomers();
+    const info = await Admin.api("/api/admin/email-status").catch(() => null);
+    const hint = document.getElementById("customer-storage-hint");
+    if (hint && info?.dataDir) {
+      hint.textContent = `Saving to ${info.dataDir} (${info.customersSaved || 0} saved).`;
+    }
+    const msg = `Saved ${saved.customerName || body.customerName} · ${saved.registration || body.registration}`;
+    if (status) status.textContent = msg;
+    alert(msg);
+  } catch (err) {
+    const msg = err?.name === "AbortError" ? "Save timed out. Check the Render disk at /data." : err.message;
     if (status) {
       status.hidden = false;
-      status.textContent = "Saved";
-      setTimeout(() => {
-        status.hidden = true;
-      }, 2500);
+      status.textContent = msg;
     }
-  } catch (err) {
-    alert(err.message);
+    alert(msg);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Save customer";
+    }
   }
 }
 
@@ -317,6 +347,7 @@ customerDeleteBtn?.addEventListener("click", async () => {
 
 window.DeaneCustomers = {
   showList: showCustomers,
+  save: saveCustomer,
   newCustomer() {
     showCustomerForm(null);
   },

@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260820k" />
+    <link rel="stylesheet" href="admin.css?v=20260820n" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -268,7 +268,7 @@
 
         <section id="customers-section" hidden>
           <p class="muted small">Fill in the customer below, then click Save customer. WOF expiry still comes from the service report. <span id="customer-storage-hint"></span></p>
-          <form id="customer-form" class="report-form customer-editor">
+          <form id="customer-form" class="report-form customer-editor" novalidate>
             <fieldset>
               <legend id="customer-form-legend">Customer details</legend>
               <div class="grid-3">
@@ -278,12 +278,12 @@
                 <label>Email<input id="customer-email" name="customerEmail" type="email" /></label>
               </div>
               <label>Address<textarea id="customer-address" name="customerAddress" rows="2"></textarea></label>
+              <p id="customer-save-status" class="status-line" hidden></p>
               <div class="line-actions">
-                <button type="button" id="btn-customer-save" class="primary">Save customer</button>
+                <button type="submit" id="btn-customer-save" class="primary">Save customer</button>
                 <button type="button" id="btn-customer-cancel" class="ghost">Clear</button>
                 <button type="button" id="btn-customer-delete" class="danger" hidden>Delete</button>
               </div>
-              <p id="customer-save-status" class="status-line" hidden></p>
             </fieldset>
           </form>
           <label class="list-search">
@@ -398,9 +398,9 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260820k"></script>
-    <script src="billing.js?v=20260820k"></script>
-    <script src="customers.js?v=20260820k"></script>
-    <script src="jobs.js?v=20260820k"></script>
+    <script src="admin.js?v=20260820n"></script>
+    <script src="customers.js?v=20260820n"></script>
+    <script src="billing.js?v=20260820n"></script>
+    <script src="jobs.js?v=20260820n"></script>
   </body>
 </html>
