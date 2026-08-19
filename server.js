@@ -32,6 +32,33 @@ const MAIL_FROM =
   process.env.MAIL_FROM ||
   process.env.SMTP_USER ||
   business.email;
+const MAIL_BCC = String(
+  process.env.MAIL_BCC || process.env.MAIL_CC || "deaneautonz@gmail.com"
+).trim();
+
+function shopCopyAddress(customerTo) {
+  if (!MAIL_BCC) return "";
+  if (MAIL_BCC.toLowerCase() === String(customerTo || "").trim().toLowerCase()) {
+    return "";
+  }
+  return MAIL_BCC;
+}
+
+async function sendShopCopy(mailer, { customerTo, subject, text, html }) {
+  const shop = shopCopyAddress(customerTo);
+  if (!shop || !mailer) return;
+  await mailer.sendMail({
+    from: MAIL_FROM,
+    to: shop,
+    replyTo: customerTo || process.env.SMTP_USER || MAIL_FROM,
+    subject: `Copy: ${subject}`,
+    text: `Shop copy of the email sent to ${customerTo}.\n\n${text}`,
+    html:
+      `<p style="color:#5b6777;font-size:13px;margin:0 0 16px;">` +
+      `Shop copy — originally sent to ${escapeHtml(customerTo)}` +
+      `</p>${html}`,
+  });
+}
 
 function smtpPass() {
   return String(process.env.SMTP_PASS || "")
@@ -708,10 +735,18 @@ app.get("/api/billing/:id", (req, res) => {
   res.json(withBillingTotals(doc, isAdmin));
 });
 
+function billingMissingError() {
+  const freeHint =
+    process.env.NODE_ENV === "production"
+      ? " On Render Free, quotes and invoices are erased when the service sleeps. Open the list and create it again, or upgrade to Starter with a disk before emailing customers."
+      : "";
+  return `Invoice/quote not found.${freeHint}`;
+}
+
 app.put("/api/billing/:id", requireAdmin, (req, res) => {
   const docs = readBilling();
   const index = docs.findIndex((d) => d.id === req.params.id);
-  if (index < 0) return res.status(404).json({ error: "Not found" });
+  if (index < 0) return res.status(404).json({ error: billingMissingError() });
 
   const current = docs[index];
   if (current.status === "void") {
@@ -748,7 +783,7 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
 app.post("/api/billing/:id/issue", requireAdmin, (req, res) => {
   const docs = readBilling();
   const index = docs.findIndex((d) => d.id === req.params.id);
-  if (index < 0) return res.status(404).json({ error: "Not found" });
+  if (index < 0) return res.status(404).json({ error: billingMissingError() });
   try {
     const url = issueBillingDoc(docs[index], req, req.body);
     writeBilling(docs);
@@ -762,13 +797,13 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
   if (!smtpConfigured()) {
     return res.status(503).json({
       error:
-        "Email not configured. Add SMTP settings to .env (see .env.example), then restart npm start.",
+        "Email not configured. On Render go to Settings → Environment and add SMTP_HOST, SMTP_USER, SMTP_PASS, then save.",
     });
   }
 
   const docs = readBilling();
   const index = docs.findIndex((d) => d.id === req.params.id);
-  if (index < 0) return res.status(404).json({ error: "Not found" });
+  if (index < 0) return res.status(404).json({ error: billingMissingError() });
 
   const doc = docs[index];
   const to = String(req.body?.to || doc.customerEmail || "").trim();
@@ -854,6 +889,12 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       text,
       html,
     });
+
+    try {
+      await sendShopCopy(mailer, { customerTo: to, subject, text, html });
+    } catch (copyErr) {
+      console.error("Shop copy email failed:", copyErr);
+    }
 
     doc.lastEmailedAt = new Date().toISOString();
     doc.lastEmailedTo = to;
