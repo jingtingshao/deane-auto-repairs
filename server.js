@@ -15,19 +15,66 @@ const {
 } = require("./data/checklist");
 const business = require("./data/business");
 const catalog = require("./data/catalog");
+const jobsLib = require("./data/jobs");
 
 const PORT = Number(process.env.PORT) || 5173;
 const ADMIN_PIN = process.env.ADMIN_PIN || "deane123";
 const ROOT = __dirname;
-const DATA_DIR = process.env.DATA_DIR
-  ? path.resolve(process.env.DATA_DIR)
-  : path.join(ROOT, "data");
+
+function isWritableDir(dir) {
+  try {
+    if (!fs.existsSync(dir)) return false;
+    const probe = path.join(dir, `.write-test-${process.pid}`);
+    fs.writeFileSync(probe, "ok");
+    fs.unlinkSync(probe);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolvePersistentDataDir() {
+  const raw = String(process.env.DATA_DIR || "").trim();
+  const candidates = [];
+  const add = (dir) => {
+    if (!dir) return;
+    const resolved = path.resolve(dir);
+    if (!candidates.includes(resolved)) candidates.push(resolved);
+  };
+
+  if (raw) {
+    add(raw);
+    add(path.join(ROOT, raw));
+    if (!path.isAbsolute(raw)) add(path.join("/", raw.replace(/^[/\\]+/, "")));
+  }
+  if (process.platform !== "win32") {
+    add("/DATA");
+    add("/data");
+  }
+  add(path.join(ROOT, "DATA"));
+  add(path.join(ROOT, "data"));
+
+  const writableExisting = candidates.filter((dir) => isWritableDir(dir));
+  const mounted = writableExisting.find((dir) => dir === "/DATA" || dir === "/data");
+  if (mounted) return mounted;
+  if (writableExisting[0]) return writableExisting[0];
+  const fallback = path.join(ROOT, "data");
+  fs.mkdirSync(fallback, { recursive: true });
+  return fallback;
+}
+
+const DATA_DIR = resolvePersistentDataDir();
 const REPORTS_FILE = path.join(DATA_DIR, "reports.json");
 const BILLING_FILE = path.join(DATA_DIR, "billing.json");
 const CUSTOMERS_FILE = path.join(DATA_DIR, "customers.json");
-const UPLOADS_DIR = process.env.UPLOADS_DIR
-  ? path.resolve(process.env.UPLOADS_DIR)
-  : path.join(ROOT, "uploads");
+const JOBS_FILE = path.join(DATA_DIR, "jobs.json");
+const UPLOADS_DIR = (() => {
+  const raw = String(process.env.UPLOADS_DIR || "").trim();
+  if (raw && isWritableDir(path.resolve(raw))) return path.resolve(raw);
+  const nested = path.join(DATA_DIR, "uploads");
+  fs.mkdirSync(nested, { recursive: true });
+  return nested;
+})();
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "").replace(/\/$/, "");
 const MAIL_FROM =
   process.env.MAIL_FROM ||
@@ -75,6 +122,9 @@ if (!fs.existsSync(BILLING_FILE)) {
 if (!fs.existsSync(CUSTOMERS_FILE)) {
   fs.writeFileSync(CUSTOMERS_FILE, "[]", "utf8");
 }
+if (!fs.existsSync(JOBS_FILE)) {
+  fs.writeFileSync(JOBS_FILE, "[]", "utf8");
+}
 
 function readReports() {
   try {
@@ -107,6 +157,177 @@ function readSavedCustomers() {
   } catch {
     return [];
   }
+}
+
+function readJobs() {
+  try {
+    const rows = JSON.parse(fs.readFileSync(JOBS_FILE, "utf8"));
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeJobs(jobs) {
+  try {
+    fs.mkdirSync(path.dirname(JOBS_FILE), { recursive: true });
+    fs.writeFileSync(JOBS_FILE, JSON.stringify(jobs, null, 2), "utf8");
+  } catch (err) {
+    console.error("Could not write jobs file:", err);
+    const error = new Error(
+      "Could not save job. On Render attach a disk at /data, then set DATA_DIR=/data."
+    );
+    error.status = 500;
+    throw error;
+  }
+}
+
+function nextJobCardNumber(jobs) {
+  const year = new Date().getFullYear();
+  const prefix = `JC-${year}-`;
+  const nums = jobs
+    .map((j) => j.number)
+    .filter((n) => typeof n === "string" && n.startsWith(prefix))
+    .map((n) => Number(n.slice(prefix.length)))
+    .filter((n) => Number.isFinite(n));
+  const next = (nums.length ? Math.max(...nums) : 0) + 1;
+  return `${prefix}${String(next).padStart(4, "0")}`;
+}
+
+function summarizeJob(job) {
+  const parts = jobsLib.partsSummary(job.parts);
+  return {
+    id: job.id,
+    number: job.number,
+    status: job.status,
+    customerName: job.customerName,
+    customerPhone: job.customerPhone,
+    registration: job.registration,
+    vehicle: job.vehicle,
+    quoteId: job.quoteId || "",
+    quoteNumber: job.quoteNumber || "",
+    invoiceId: job.invoiceId || "",
+    partsTotal: parts.total,
+    partsReceived: parts.received,
+    updatedAt: job.updatedAt,
+    createdAt: job.createdAt,
+  };
+}
+
+function billingSourceForJob(docs, id) {
+  const doc = docs.find((d) => d.id === id);
+  if (!doc) return { error: "Quote not found", status: 404 };
+  if (doc.kind === "invoice") {
+    if (!doc.quoteId) {
+      return {
+        error: "This invoice was not created from an accepted quote.",
+        status: 400,
+      };
+    }
+    const quote = docs.find((d) => d.id === doc.quoteId) || null;
+    return { quote, invoice: doc, source: quote || doc };
+  }
+  if (doc.kind !== "quote") {
+    return { error: "Only quotes can become job cards.", status: 400 };
+  }
+  if (doc.status !== "accepted" && doc.status !== "invoiced") {
+    return {
+      error: "Customer must accept the quote before a job card can be created.",
+      status: 400,
+    };
+  }
+  const invoice = doc.invoiceId ? docs.find((d) => d.id === doc.invoiceId) : null;
+  return { quote: doc, invoice: invoice || null, source: doc };
+}
+
+function linkJobToBilling(docs, job, quote, invoice) {
+  if (quote) {
+    quote.jobId = job.id;
+    quote.updatedAt = job.updatedAt;
+    job.quoteId = quote.id;
+    job.quoteNumber = quote.number;
+  }
+  if (invoice) {
+    invoice.jobId = job.id;
+    invoice.updatedAt = job.updatedAt;
+    job.invoiceId = invoice.id;
+    job.invoiceNumber = invoice.number;
+  }
+}
+
+function unlinkJobFromBilling(jobId) {
+  const docs = readBilling();
+  let changed = false;
+  for (const doc of docs) {
+    if (doc.jobId === jobId) {
+      doc.jobId = "";
+      doc.updatedAt = new Date().toISOString();
+      changed = true;
+    }
+  }
+  if (changed) writeBilling(docs);
+}
+
+function emptyJob(now) {
+  return {
+    id: randomUUID(),
+    number: "",
+    status: "booked",
+    createdAt: now,
+    updatedAt: now,
+    customerName: "",
+    customerEmail: "",
+    customerPhone: "",
+    registration: "",
+    vehicle: "",
+    odometer: "",
+    workRequested: "",
+    technicianName: "",
+    notes: "",
+    parts: [],
+    quoteId: "",
+    quoteNumber: "",
+    invoiceId: "",
+    invoiceNumber: "",
+  };
+}
+
+function applyJobFields(job, body = {}) {
+  const status = body.status != null ? String(body.status) : job.status;
+  if (body.status != null && !jobsLib.isJobStatus(status)) {
+    const err = new Error("Choose a valid job status.");
+    err.status = 400;
+    throw err;
+  }
+  return {
+    ...job,
+    status,
+    customerName:
+      body.customerName != null ? String(body.customerName).trim() : job.customerName,
+    customerEmail:
+      body.customerEmail != null ? String(body.customerEmail).trim() : job.customerEmail,
+    customerPhone:
+      body.customerPhone != null ? String(body.customerPhone).trim() : job.customerPhone,
+    registration: String(
+      body.registration != null ? body.registration : job.registration
+    )
+      .trim()
+      .toUpperCase(),
+    vehicle: body.vehicle != null ? String(body.vehicle).trim() : job.vehicle,
+    odometer: body.odometer != null ? String(body.odometer).trim() : job.odometer,
+    workRequested:
+      body.workRequested != null ? String(body.workRequested) : job.workRequested,
+    technicianName:
+      body.technicianName != null
+        ? String(body.technicianName).trim()
+        : job.technicianName,
+    notes: body.notes != null ? String(body.notes) : job.notes,
+    parts:
+      body.parts != null
+        ? jobsLib.normalizeParts(body.parts, () => randomUUID())
+        : job.parts,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function writeSavedCustomers(rows) {
@@ -448,7 +669,11 @@ app.use("/billing", express.static(path.join(ROOT, "billing")));
 app.use(express.static(ROOT, { index: "index.html" }));
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, shop: "Deane Auto Repairs" });
+  res.json({
+    ok: true,
+    shop: business.name,
+    dataDir: DATA_DIR,
+  });
 });
 
 app.post("/api/booking", async (req, res) => {
@@ -720,10 +945,18 @@ app.post("/api/reports/:id/publish", requireAdmin, (req, res) => {
 });
 
 app.get("/api/admin/email-status", requireAdmin, (_req, res) => {
+  let customersSaved = 0;
+  try {
+    customersSaved = readSavedCustomers().length;
+  } catch {
+    customersSaved = 0;
+  }
   res.json({
     configured: smtpConfigured(),
     from: MAIL_FROM,
     publicBaseUrl: PUBLIC_BASE_URL || null,
+    dataDir: DATA_DIR,
+    customersSaved,
   });
 });
 
@@ -970,6 +1203,7 @@ app.get("/api/billing", requireAdmin, (_req, res) => {
         acceptedAt: d.acceptedAt,
         invoiceId: d.invoiceId || "",
         quoteId: d.quoteId || "",
+        jobId: d.jobId || "",
       };
     })
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
@@ -1010,6 +1244,7 @@ app.post("/api/billing", requireAdmin, (req, res) => {
     acceptToken: preset.kind === "quote" ? newAcceptToken() : "",
     quoteId: "",
     invoiceId: "",
+    jobId: "",
     lastEmailedAt: "",
     lastEmailedTo: "",
   };
@@ -1258,6 +1493,7 @@ function convertQuoteToInvoice(docs, quote) {
     acceptToken: "",
     quoteId: quote.id,
     invoiceId: "",
+    jobId: quote.jobId || "",
     lastEmailedAt: "",
     lastEmailedTo: "",
   };
@@ -1419,6 +1655,120 @@ app.delete("/api/billing/:id", requireAdmin, (req, res) => {
   }
   writeBilling(docs.filter((d) => d.id !== req.params.id));
   res.json({ ok: true });
+});
+
+app.get("/api/jobs/meta", requireAdmin, (_req, res) => {
+  res.json({ statuses: jobsLib.JOB_STATUSES });
+});
+
+app.get("/api/jobs", requireAdmin, (_req, res) => {
+  const jobs = readJobs()
+    .map(summarizeJob)
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  res.json(jobs);
+});
+
+app.post("/api/jobs", requireAdmin, (req, res) => {
+  try {
+    const jobs = readJobs();
+    const now = new Date().toISOString();
+    const job = applyJobFields(
+      {
+        ...emptyJob(now),
+        number: nextJobCardNumber(jobs),
+      },
+      req.body || {}
+    );
+    jobs.push(job);
+    writeJobs(jobs);
+    res.status(201).json(job);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post("/api/jobs/from-quote/:id", requireAdmin, (req, res) => {
+  try {
+    const docs = readBilling();
+    const found = billingSourceForJob(docs, req.params.id);
+    if (found.error) {
+      return res.status(found.status || 400).json({ error: found.error });
+    }
+
+    const { quote, invoice, source } = found;
+    const existingId = quote?.jobId || invoice?.jobId || "";
+    if (existingId) {
+      const existing = readJobs().find((j) => j.id === existingId);
+      if (existing) return res.json(existing);
+    }
+
+    const jobs = readJobs();
+    const now = new Date().toISOString();
+    const parts = jobsLib.partsFromQuoteLines(source.lines || quote?.lines || [], () =>
+      randomUUID()
+    );
+    const job = {
+      ...emptyJob(now),
+      number: nextJobCardNumber(jobs),
+      customerName: source.customerName || "",
+      customerEmail: source.customerEmail || "",
+      customerPhone: source.customerPhone || "",
+      registration: String(source.registration || "").toUpperCase(),
+      vehicle: source.vehicle || "",
+      odometer: source.odometer || "",
+      workRequested: jobsLib.workRequestedFromQuote(quote || source),
+      parts,
+    };
+    linkJobToBilling(docs, job, quote, invoice);
+    jobs.push(job);
+    writeJobs(jobs);
+    writeBilling(docs);
+    res.status(201).json(job);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.get("/api/jobs/:id", requireAdmin, (req, res) => {
+  const job = readJobs().find((j) => j.id === req.params.id);
+  if (!job) return res.status(404).json({ error: "Job not found" });
+  res.json(job);
+});
+
+app.put("/api/jobs/:id", requireAdmin, (req, res) => {
+  try {
+    const jobs = readJobs();
+    const index = jobs.findIndex((j) => j.id === req.params.id);
+    if (index < 0) return res.status(404).json({ error: "Job not found" });
+    const current = jobs[index];
+    jobs[index] = applyJobFields(current, req.body || {});
+    jobs[index].id = current.id;
+    jobs[index].number = current.number;
+    jobs[index].createdAt = current.createdAt;
+    jobs[index].quoteId = current.quoteId;
+    jobs[index].quoteNumber = current.quoteNumber;
+    jobs[index].invoiceId = current.invoiceId;
+    jobs[index].invoiceNumber = current.invoiceNumber;
+    writeJobs(jobs);
+    res.json(jobs[index]);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.delete("/api/jobs/:id", requireAdmin, (req, res) => {
+  const jobs = readJobs();
+  const next = jobs.filter((j) => j.id !== req.params.id);
+  if (next.length === jobs.length) {
+    return res.status(404).json({ error: "Job not found" });
+  }
+  try {
+    writeJobs(next);
+    unlinkJobFromBilling(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
 });
 
 app.get("/r/:id", (req, res) => {

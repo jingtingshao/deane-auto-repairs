@@ -276,6 +276,11 @@ async function showCustomers() {
   Admin.setViewTitle("Customers");
   try {
     await loadCustomers();
+    const info = await Admin.api("/api/admin/email-status");
+    const hint = document.getElementById("customer-storage-hint");
+    if (hint && info?.dataDir) {
+      hint.textContent = `Saving to ${info.dataDir} (${info.customersSaved || 0} saved).`;
+    }
   } catch (err) {
     alert(err.message);
   }

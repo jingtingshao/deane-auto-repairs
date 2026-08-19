@@ -10,14 +10,14 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260820a" />
+    <link rel="stylesheet" href="admin.css?v=20260820k" />
   </head>
   <body>
     <div id="login-view" class="login-view">
       <form id="login-form" class="login-card">
         <p class="brand"><span class="script">Deane</span> AUTO REPAIRS</p>
         <h1>Workshop admin</h1>
-        <p class="muted">Enter PIN to create reports, quotes and invoices.</p>
+        <p class="muted">Enter PIN to create reports, job cards, quotes and invoices.</p>
         <label for="pin">Admin PIN</label>
         <input id="pin" type="password" autocomplete="current-password" required />
         <button type="submit">Sign in</button>
@@ -34,6 +34,7 @@
         <div class="topbar-actions">
           <nav class="admin-nav" aria-label="Admin sections">
             <button type="button" id="nav-reports" class="nav-tab is-active">Reports</button>
+            <button type="button" id="nav-jobs" class="nav-tab">Jobs</button>
             <button type="button" id="nav-billing" class="nav-tab">Quotes &amp; invoices</button>
             <button type="button" id="nav-customers" class="nav-tab">Customers</button>
           </nav>
@@ -176,8 +177,97 @@
         </section>
         </section>
 
+        <section id="jobs-section" hidden>
+          <section id="jobs-list-view">
+            <p class="muted small">Workshop job cards. Tick parts when they arrive, or put an ETA in the note.</p>
+            <label class="list-search">
+              Search jobs
+              <input
+                id="jobs-search"
+                type="search"
+                placeholder="Customer name or plate"
+                autocomplete="off"
+              />
+            </label>
+            <div id="jobs-filter" class="filter-row"></div>
+            <div id="jobs-list" class="report-list"></div>
+          </section>
+
+          <section id="jobs-edit-view" hidden>
+            <div class="edit-toolbar">
+              <button type="button" id="btn-jobs-back" class="ghost">← All jobs</button>
+              <div class="edit-actions">
+                <button type="button" id="btn-jobs-save" class="ghost">Save</button>
+                <button type="button" id="btn-jobs-open-quote" class="ghost" hidden>Open quote</button>
+                <button type="button" id="btn-jobs-delete" class="danger">Delete</button>
+              </div>
+            </div>
+            <p id="jobs-save-status" class="status-line" hidden></p>
+
+            <form id="jobs-form" class="report-form">
+              <fieldset>
+                <legend>Job card</legend>
+                <div class="grid-3">
+                  <label>Job number<input name="number" readonly /></label>
+                  <label
+                    >Status
+                    <select name="status" id="job-status"></select>
+                  </label>
+                  <label>Technician<input name="technicianName" /></label>
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend>Customer &amp; vehicle</legend>
+                <div class="grid-3">
+                  <label>Customer name<input name="customerName" required /></label>
+                  <label>Email<input name="customerEmail" type="email" /></label>
+                  <label>Phone<input name="customerPhone" type="tel" /></label>
+                  <label>Registration<input name="registration" /></label>
+                  <label>Vehicle<input name="vehicle" /></label>
+                  <label>Odometer (km)<input name="odometer" /></label>
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend>Work requested</legend>
+                <label>What to do<textarea name="workRequested" rows="4" placeholder="Customer concern, quoted work, extra notes"></textarea></label>
+                <p id="jobs-quote-link" class="muted small" hidden></p>
+              </fieldset>
+
+              <fieldset>
+                <legend>Parts</legend>
+                <p class="muted small">Tick Ordered when you order. Tick Received when the part is in, or write an ETA in the note.</p>
+                <div class="line-table-wrap">
+                  <table class="line-table parts-table">
+                    <thead>
+                      <tr>
+                        <th>Part</th>
+                        <th>Qty</th>
+                        <th>Ordered</th>
+                        <th>Received</th>
+                        <th>Note / ETA</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="jobs-parts"></tbody>
+                  </table>
+                </div>
+                <div class="line-actions">
+                  <button type="button" id="btn-add-part" class="ghost">Add part</button>
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend>Workshop notes</legend>
+                <label>Internal notes<textarea name="notes" rows="2" placeholder="Not shown to the customer"></textarea></label>
+              </fieldset>
+            </form>
+          </section>
+        </section>
+
         <section id="customers-section" hidden>
-          <p class="muted small">Fill in the customer below, then click Save customer. WOF expiry still comes from the service report.</p>
+          <p class="muted small">Fill in the customer below, then click Save customer. WOF expiry still comes from the service report. <span id="customer-storage-hint"></span></p>
           <form id="customer-form" class="report-form customer-editor">
             <fieldset>
               <legend id="customer-form-legend">Customer details</legend>
@@ -249,6 +339,7 @@
                 <button type="button" id="btn-billing-copy" class="ghost">Copy link</button>
                 <button type="button" id="btn-billing-convert" class="primary" hidden>Convert to invoice</button>
                 <button type="button" id="btn-billing-open-invoice" class="ghost" hidden>Open invoice</button>
+                <button type="button" id="btn-billing-job" class="primary" hidden>Create job card</button>
                 <button type="button" id="btn-billing-void" class="ghost">Void</button>
                 <button type="button" id="btn-billing-delete" class="danger">Delete</button>
               </div>
@@ -307,8 +398,9 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260820a"></script>
-    <script src="billing.js?v=20260820a"></script>
-    <script src="customers.js?v=20260820a"></script>
+    <script src="admin.js?v=20260820k"></script>
+    <script src="billing.js?v=20260820k"></script>
+    <script src="customers.js?v=20260820k"></script>
+    <script src="jobs.js?v=20260820k"></script>
   </body>
 </html>
