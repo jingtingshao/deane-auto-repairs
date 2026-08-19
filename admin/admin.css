@@ -236,6 +236,10 @@ main {
   gap: 1rem;
 }
 
+#customer-form.customer-editor:not([hidden]) {
+  display: grid !important;
+}
+
 fieldset {
   margin: 0;
   border: 1px solid var(--line);

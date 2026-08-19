@@ -150,18 +150,27 @@ async function openCustomer(rowEl) {
 }
 
 function showCustomerForm(row = null) {
-  if (!customerForm) return;
+  const form = document.getElementById("customer-form");
+  if (!form) {
+    alert("Customer form did not load. Press Ctrl+F5 to refresh.");
+    return;
+  }
   editingCustomerId = row?.customerId || "";
-  customerForm.hidden = false;
-  document.getElementById("customer-form-legend").textContent = editingCustomerId
-    ? "Edit customer"
-    : "New customer";
-  customerForm.elements.namedItem("customerName").value = row?.customerName || "";
-  customerForm.elements.namedItem("customerAddress").value = row?.customerAddress || "";
-  customerForm.elements.namedItem("customerPhone").value = row?.customerPhone || "";
-  customerForm.elements.namedItem("registration").value = row?.registration || "";
+  form.removeAttribute("hidden");
+  form.hidden = false;
+  const legend = document.getElementById("customer-form-legend");
+  if (legend) legend.textContent = editingCustomerId ? "Edit customer" : "New customer";
+  const name = document.getElementById("customer-name");
+  const address = document.getElementById("customer-address");
+  const phone = document.getElementById("customer-phone");
+  const rego = document.getElementById("customer-rego");
+  if (name) name.value = row?.customerName || "";
+  if (address) address.value = row?.customerAddress || "";
+  if (phone) phone.value = row?.customerPhone || "";
+  if (rego) rego.value = row?.registration || "";
   if (customerDeleteBtn) customerDeleteBtn.hidden = !editingCustomerId;
-  customerForm.scrollIntoView({ block: "start" });
+  form.scrollIntoView({ block: "start", behavior: "smooth" });
+  if (name) name.focus();
 }
 
 function hideCustomerForm() {
@@ -175,10 +184,10 @@ function hideCustomerForm() {
 async function saveCustomer(event) {
   event.preventDefault();
   const body = {
-    customerName: customerForm.elements.namedItem("customerName").value.trim(),
-    customerAddress: customerForm.elements.namedItem("customerAddress").value.trim(),
-    customerPhone: customerForm.elements.namedItem("customerPhone").value.trim(),
-    registration: customerForm.elements.namedItem("registration").value.trim(),
+    customerName: (document.getElementById("customer-name")?.value || "").trim(),
+    customerAddress: (document.getElementById("customer-address")?.value || "").trim(),
+    customerPhone: (document.getElementById("customer-phone")?.value || "").trim(),
+    registration: (document.getElementById("customer-rego")?.value || "").trim(),
   };
   try {
     if (editingCustomerId) {
@@ -261,8 +270,12 @@ customersFilter?.querySelectorAll("[data-filter]").forEach((btn) => {
   });
 });
 
-document.getElementById("btn-new-customer")?.addEventListener("click", () => {
-  showCustomerForm(null);
+document.getElementById("customers-section")?.addEventListener("click", (event) => {
+  const newBtn = event.target.closest("#btn-new-customer");
+  if (newBtn) {
+    event.preventDefault();
+    showCustomerForm(null);
+  }
 });
 
 document.getElementById("btn-customer-cancel")?.addEventListener("click", hideCustomerForm);
@@ -280,4 +293,9 @@ customerDeleteBtn?.addEventListener("click", async () => {
   }
 });
 
-window.DeaneCustomers = { showList: showCustomers };
+window.DeaneCustomers = {
+  showList: showCustomers,
+  newCustomer() {
+    showCustomerForm(null);
+  },
+};
