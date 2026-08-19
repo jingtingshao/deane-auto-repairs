@@ -13,6 +13,8 @@ const quickAddsEl = document.getElementById("quick-adds");
 let catalogMeta = null;
 let currentBill = null;
 let lineRows = [];
+let billingDocs = [];
+const billingSearch = document.getElementById("billing-search");
 
 function money(n) {
   return new Intl.NumberFormat("en-NZ", {
@@ -86,21 +88,44 @@ async function createDoc(preset) {
   }
 }
 
-async function loadBillingList() {
-  await loadCatalog();
-  const docs = await Admin.api("/api/billing");
-  if (!docs.length) {
+function normalizeSearch(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[\s-]/g, "");
+}
+
+function matchesBillingSearch(doc, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return true;
+  const name = String(doc.customerName || "").toLowerCase();
+  const plate = normalizeSearch(doc.registration);
+  const plateQuery = q.replace(/[\s-]/g, "");
+  return name.includes(q) || plate.includes(plateQuery);
+}
+
+function renderBillingList() {
+  if (!billingDocs.length) {
     billingList.innerHTML =
       '<div class="empty">No quotes or invoices yet. Use the buttons above to start.</div>';
     return;
   }
+
+  const query = billingSearch?.value || "";
+  const docs = billingDocs.filter((d) => matchesBillingSearch(d, query));
+  if (!docs.length) {
+    billingList.innerHTML =
+      '<div class="empty">No matching customer name or plate.</div>';
+    return;
+  }
+
   billingList.innerHTML = docs
     .map(
       (d) => `
-      <article class="report-card" data-id="${d.id}">
+      <article class="report-card billing-card" data-id="${d.id}">
+        <div class="billing-number">${Admin.escapeHtml(d.number)}</div>
         <div>
-          <h2>${Admin.escapeHtml(d.registration || "No plate")} · ${Admin.escapeHtml(d.customerName || "Customer")}</h2>
-          <p class="muted">${Admin.escapeHtml(d.number)} · ${Admin.escapeHtml(kindLabel(d.kind))} · ${Admin.escapeHtml(d.vehicle || "")} · ${money(d.totalIncl)}</p>
+          <h2>${Admin.escapeHtml(d.customerName || "Customer")}</h2>
+          <p class="muted">${Admin.escapeHtml(d.registration || "No plate")} · ${Admin.escapeHtml(kindLabel(d.kind))} · ${Admin.escapeHtml(d.vehicle || "")} · ${money(d.totalIncl)}</p>
         </div>
         <span class="badge ${d.status}">${Admin.escapeHtml(d.status)}</span>
       </article>`
@@ -109,6 +134,12 @@ async function loadBillingList() {
   billingList.querySelectorAll(".report-card").forEach((card) => {
     card.addEventListener("click", () => openDoc(card.dataset.id));
   });
+}
+
+async function loadBillingList() {
+  await loadCatalog();
+  billingDocs = await Admin.api("/api/billing");
+  renderBillingList();
 }
 
 async function openDoc(id) {
@@ -285,6 +316,9 @@ async function showList() {
     alert(err.message);
   }
 }
+
+billingSearch?.addEventListener("input", renderBillingList);
+billingSearch?.addEventListener("search", renderBillingList);
 
 document.getElementById("btn-billing-back").addEventListener("click", showList);
 

@@ -385,6 +385,37 @@ label.check input {
   color: var(--blue);
 }
 
+.list-search {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 0.9rem;
+  font-weight: 700;
+}
+
+.list-search input {
+  max-width: 420px;
+}
+
+.report-card.billing-card {
+  display: grid;
+  grid-template-columns: minmax(9.2rem, auto) minmax(0, 1fr) auto;
+  justify-content: stretch;
+  align-items: center;
+  gap: 0.9rem 1rem;
+}
+
+.billing-card .billing-number {
+  font-family: var(--display);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  font-size: 1.15rem;
+  color: var(--blue);
+  border-right: 1px solid var(--line);
+  padding-right: 1rem;
+  margin-right: 0.15rem;
+}
+
 .preset-panel {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
