@@ -219,10 +219,11 @@ function renderReportList() {
   reportList.innerHTML = reports
     .map(
       (r) => `
-      <article class="report-card" data-id="${r.id}">
+      <article class="report-card billing-card" data-id="${r.id}">
+        <div class="billing-number">${escapeHtml(r.jobNumber)}</div>
         <div>
-          <h2>${escapeHtml(r.registration || "No plate")} · ${escapeHtml(r.customerName || "Customer")}</h2>
-          <p class="muted">${escapeHtml(r.jobNumber)} · ${escapeHtml(r.serviceDate || "")} · ${escapeHtml(labelJob(r.jobType, r.servicePackage))} · ${escapeHtml(r.vehicle || "")}</p>
+          <h2>${escapeHtml(r.customerName || "Customer")}</h2>
+          <p class="muted">${escapeHtml(r.registration || "No plate")} · ${escapeHtml(r.serviceDate || "")} · ${escapeHtml(labelJob(r.jobType, r.servicePackage))} · ${escapeHtml(r.vehicle || "")}</p>
         </div>
         <span class="badge ${r.status}">${r.status}</span>
       </article>`
