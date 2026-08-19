@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260819h" />
+    <link rel="stylesheet" href="admin.css?v=20260820a" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -177,24 +177,23 @@
         </section>
 
         <section id="customers-section" hidden>
-          <div class="edit-toolbar">
-            <p class="muted small" style="margin:0;flex:1;">Save name, address, phone and plate here. WOF expiry still comes from the service report.</p>
-            <button type="button" id="btn-new-customer" class="primary">New customer</button>
-          </div>
+          <p class="muted small">Fill in the customer below, then click Save customer. WOF expiry still comes from the service report.</p>
           <form id="customer-form" class="report-form customer-editor">
             <fieldset>
-              <legend id="customer-form-legend">New customer</legend>
+              <legend id="customer-form-legend">Customer details</legend>
               <div class="grid-3">
                 <label>Name<input id="customer-name" name="customerName" required /></label>
                 <label>Phone<input id="customer-phone" name="customerPhone" type="tel" /></label>
                 <label>Registration<input id="customer-rego" name="registration" required /></label>
+                <label>Email<input id="customer-email" name="customerEmail" type="email" /></label>
               </div>
               <label>Address<textarea id="customer-address" name="customerAddress" rows="2"></textarea></label>
               <div class="line-actions">
-                <button type="submit" class="primary">Save customer</button>
-                <button type="button" id="btn-customer-cancel" class="ghost">Cancel</button>
+                <button type="button" id="btn-customer-save" class="primary">Save customer</button>
+                <button type="button" id="btn-customer-cancel" class="ghost">Clear</button>
                 <button type="button" id="btn-customer-delete" class="danger" hidden>Delete</button>
               </div>
+              <p id="customer-save-status" class="status-line" hidden></p>
             </fieldset>
           </form>
           <label class="list-search">
@@ -308,8 +307,8 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260819h"></script>
-    <script src="billing.js?v=20260819h"></script>
-    <script src="customers.js?v=20260819h"></script>
+    <script src="admin.js?v=20260820a"></script>
+    <script src="billing.js?v=20260820a"></script>
+    <script src="customers.js?v=20260820a"></script>
   </body>
 </html>

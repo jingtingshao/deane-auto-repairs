@@ -110,7 +110,17 @@ function readSavedCustomers() {
 }
 
 function writeSavedCustomers(rows) {
-  fs.writeFileSync(CUSTOMERS_FILE, JSON.stringify(rows, null, 2), "utf8");
+  try {
+    fs.mkdirSync(path.dirname(CUSTOMERS_FILE), { recursive: true });
+    fs.writeFileSync(CUSTOMERS_FILE, JSON.stringify(rows, null, 2), "utf8");
+  } catch (err) {
+    console.error("Could not write customers file:", err);
+    const error = new Error(
+      "Could not save customer. On Render attach a disk at /data, then set DATA_DIR=/data."
+    );
+    error.status = 500;
+    throw error;
+  }
 }
 
 function normalizeSavedCustomer(body, current = {}) {
@@ -130,7 +140,13 @@ function normalizeSavedCustomer(body, current = {}) {
     err.status = 400;
     throw err;
   }
-  return { customerName, customerAddress, customerPhone, registration };
+  return {
+    customerName,
+    customerAddress,
+    customerPhone,
+    customerEmail: String(body?.customerEmail ?? current.customerEmail ?? "").trim(),
+    registration,
+  };
 }
 
 function plateKey(value) {
@@ -245,7 +261,7 @@ function listCustomers() {
       customerName: c.customerName,
       customerAddress: c.customerAddress,
       customerPhone: c.customerPhone,
-      customerEmail: "",
+      customerEmail: c.customerEmail || "",
       registration: c.registration,
       vehicle: "",
       wofExpiry: "",

@@ -27,6 +27,7 @@ function matchesCustomerSearch(row, query) {
   if (!q) return true;
   const name = String(row.customerName || "").toLowerCase();
   const address = String(row.customerAddress || "").toLowerCase();
+  const email = String(row.customerEmail || "").toLowerCase();
   const phone = String(row.customerPhone || "").toLowerCase().replace(/\s+/g, "");
   const plate = String(row.registration || "")
     .toLowerCase()
@@ -36,6 +37,7 @@ function matchesCustomerSearch(row, query) {
   return (
     name.includes(q) ||
     address.includes(q) ||
+    email.includes(q) ||
     phone.includes(phoneQuery) ||
     plate.includes(plateQuery)
   );
@@ -45,7 +47,7 @@ function renderCustomers() {
   if (!customersList) return;
   if (!customerRows.length) {
     customersList.innerHTML =
-      '<div class="empty">No customers yet. Click <strong>New customer</strong> to add a name, address, phone and plate.</div>';
+      '<div class="empty">No customers yet. Fill in the form above and click Save customer.</div>';
     return;
   }
 
@@ -69,6 +71,7 @@ function renderCustomers() {
             <th>Name</th>
             <th>Address</th>
             <th>Phone</th>
+            <th>Email</th>
             <th>WOF expiry</th>
             <th></th>
           </tr>
@@ -85,6 +88,13 @@ function renderCustomers() {
                 ${
                   row.customerPhone
                     ? `<a href="tel:${Admin.escapeAttr(row.customerPhone)}">${Admin.escapeHtml(row.customerPhone)}</a>`
+                    : "—"
+                }
+              </td>
+              <td>
+                ${
+                  row.customerEmail
+                    ? `<a href="mailto:${Admin.escapeAttr(row.customerEmail)}">${Admin.escapeHtml(row.customerEmail)}</a>`
                     : "—"
                 }
               </td>
@@ -163,10 +173,12 @@ function showCustomerForm(row = null) {
   const name = document.getElementById("customer-name");
   const address = document.getElementById("customer-address");
   const phone = document.getElementById("customer-phone");
+  const email = document.getElementById("customer-email");
   const rego = document.getElementById("customer-rego");
   if (name) name.value = row?.customerName || "";
   if (address) address.value = row?.customerAddress || "";
   if (phone) phone.value = row?.customerPhone || "";
+  if (email) email.value = row?.customerEmail || "";
   if (rego) rego.value = row?.registration || "";
   if (customerDeleteBtn) customerDeleteBtn.hidden = !editingCustomerId;
   form.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -184,27 +196,37 @@ function hideCustomerForm() {
 }
 
 async function saveCustomer(event) {
-  event.preventDefault();
+  event?.preventDefault?.();
   const body = {
     customerName: (document.getElementById("customer-name")?.value || "").trim(),
     customerAddress: (document.getElementById("customer-address")?.value || "").trim(),
     customerPhone: (document.getElementById("customer-phone")?.value || "").trim(),
+    customerEmail: (document.getElementById("customer-email")?.value || "").trim(),
     registration: (document.getElementById("customer-rego")?.value || "").trim(),
   };
+  const status = document.getElementById("customer-save-status");
   try {
-    if (editingCustomerId) {
-      await Admin.api(`/api/customers/${editingCustomerId}`, {
-        method: "PUT",
-        body: JSON.stringify(body),
-      });
-    } else {
-      await Admin.api("/api/customers", {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-    }
-    hideCustomerForm();
+    const saved = editingCustomerId
+      ? await Admin.api(`/api/customers/${editingCustomerId}`, {
+          method: "PUT",
+          body: JSON.stringify(body),
+        })
+      : await Admin.api("/api/customers", {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+    editingCustomerId = saved.id || editingCustomerId;
+    if (customerDeleteBtn) customerDeleteBtn.hidden = !editingCustomerId;
+    const legend = document.getElementById("customer-form-legend");
+    if (legend && editingCustomerId) legend.textContent = "Edit customer";
     await loadCustomers();
+    if (status) {
+      status.hidden = false;
+      status.textContent = "Saved";
+      setTimeout(() => {
+        status.hidden = true;
+      }, 2500);
+    }
   } catch (err) {
     alert(err.message);
   }
@@ -214,7 +236,7 @@ async function sendReminder(key, btn) {
   const row = customerRows.find((r) => r.key === key);
   if (!row) return;
   if (!row.customerEmail) {
-    alert("Add the customer email on the service report first.");
+    alert("Add the customer email first.");
     return;
   }
   if (!row.wofExpiry) {
@@ -272,17 +294,10 @@ customersFilter?.querySelectorAll("[data-filter]").forEach((btn) => {
   });
 });
 
-document.getElementById("customers-section")?.addEventListener("click", (event) => {
-  const newBtn = event.target.closest("#btn-new-customer");
-  if (newBtn) {
-    event.preventDefault();
-    showCustomerForm(null);
-  }
-});
-
 document.getElementById("btn-customer-cancel")?.addEventListener("click", hideCustomerForm);
 
 customerForm?.addEventListener("submit", saveCustomer);
+document.getElementById("btn-customer-save")?.addEventListener("click", saveCustomer);
 
 customerDeleteBtn?.addEventListener("click", async () => {
   if (!editingCustomerId || !confirm("Delete this saved customer?")) return;
