@@ -139,6 +139,7 @@ function mergeCustomer(map, incoming) {
     lastVisit: "",
     lastJobNumber: "",
     lastReportId: "",
+    lastBillingId: "",
   };
   const incomingVisit = incoming.lastVisit || "";
   const isNewerVisit = !cur.lastVisit || incomingVisit >= cur.lastVisit;
@@ -163,10 +164,8 @@ function mergeCustomer(map, incoming) {
       isNewerVisit && incoming.lastJobNumber
         ? incoming.lastJobNumber
         : cur.lastJobNumber,
-    lastReportId:
-      isNewerVisit && incoming.lastReportId
-        ? incoming.lastReportId
-        : cur.lastReportId,
+    lastReportId: incoming.lastReportId || cur.lastReportId,
+    lastBillingId: incoming.lastBillingId || cur.lastBillingId,
   });
 }
 
@@ -183,6 +182,7 @@ function listCustomers() {
       lastVisit: (r.serviceDate || r.updatedAt || "").slice(0, 10),
       lastJobNumber: r.jobNumber || "",
       lastReportId: r.id,
+      lastBillingId: "",
     });
   }
   for (const d of readBilling()) {
@@ -197,6 +197,7 @@ function listCustomers() {
       lastVisit: (d.updatedAt || d.createdAt || "").slice(0, 10),
       lastJobNumber: d.number || "",
       lastReportId: "",
+      lastBillingId: d.id,
     });
   }
   const rank = { overdue: 0, due_soon: 1, ok: 2, missing: 3 };
@@ -471,7 +472,12 @@ app.get("/api/reports", requireAdmin, (_req, res) => {
 });
 
 app.get("/api/customers", requireAdmin, (_req, res) => {
-  res.json(listCustomers());
+  try {
+    res.json(listCustomers());
+  } catch (err) {
+    console.error("Customers list failed:", err);
+    res.status(500).json({ error: "Could not load customers." });
+  }
 });
 
 app.get("/api/reports/:id", (req, res) => {

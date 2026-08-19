@@ -421,4 +421,4 @@ document.getElementById("btn-billing-delete").addEventListener("click", async ()
   }
 });
 
-window.DeaneBilling = { showList };
+window.DeaneBilling = { showList, openDoc };

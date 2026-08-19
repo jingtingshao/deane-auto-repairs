@@ -31,6 +31,7 @@ function matchesCustomerSearch(row, query) {
 }
 
 function renderCustomers() {
+  if (!customersList) return;
   if (!customerRows.length) {
     customersList.innerHTML =
       '<div class="empty">No customers yet. They appear here after you save a report or invoice with a name or plate.</div>';
@@ -65,7 +66,7 @@ function renderCustomers() {
           ${rows
             .map(
               (row) => `
-            <tr>
+            <tr class="customer-row" data-report-id="${Admin.escapeAttr(row.lastReportId || "")}" data-billing-id="${Admin.escapeAttr(row.lastBillingId || "")}">
               <td class="billing-number">${Admin.escapeHtml(row.registration || "—")}</td>
               <td>
                 ${Admin.escapeHtml(row.customerName || "—")}
@@ -105,16 +106,45 @@ function renderCustomers() {
       </table>
     </div>`;
 
+  customersList.querySelectorAll("tr.customer-row").forEach((row) => {
+    row.addEventListener("click", () => openCustomer(row));
+  });
+
   customersList.querySelectorAll("[data-open-report]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", async (event) => {
+      event.stopPropagation();
       Admin.setSection("reports");
       await Admin.openReport(btn.dataset.openReport);
     });
   });
 
   customersList.querySelectorAll("[data-remind-key]").forEach((btn) => {
-    btn.addEventListener("click", () => sendReminder(btn.dataset.remindKey, btn));
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      sendReminder(btn.dataset.remindKey, btn);
+    });
   });
+  customersList.querySelectorAll("a").forEach((link) => {
+    link.addEventListener("click", (event) => event.stopPropagation());
+  });
+}
+
+async function openCustomer(rowEl) {
+  const reportId = rowEl.dataset.reportId;
+  const billingId = rowEl.dataset.billingId;
+  try {
+    if (reportId) {
+      Admin.setSection("reports");
+      await Admin.openReport(reportId);
+      return;
+    }
+    if (billingId && window.DeaneBilling?.openDoc) {
+      Admin.setSection("billing");
+      await window.DeaneBilling.openDoc(billingId);
+    }
+  } catch (err) {
+    alert(err.message);
+  }
 }
 
 async function sendReminder(key, btn) {

@@ -439,8 +439,12 @@ label.check input {
   font-weight: 800;
 }
 
-.billing-table tbody tr:last-child td {
-  border-bottom: 0;
+.billing-table tbody tr.customer-row {
+  cursor: pointer;
+}
+
+.billing-table tbody tr.customer-row:hover {
+  background: var(--blue-soft);
 }
 
 .billing-table .billing-number {

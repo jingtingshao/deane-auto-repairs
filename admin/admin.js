@@ -158,8 +158,12 @@ document.getElementById("nav-billing").addEventListener("click", () => {
   window.DeaneBilling?.showList();
 });
 
-document.getElementById("nav-customers").addEventListener("click", () => {
-  window.DeaneCustomers?.showList();
+document.getElementById("nav-customers")?.addEventListener("click", () => {
+  setSection("customers");
+  viewTitle.textContent = "Customers";
+  if (window.DeaneCustomers?.showList) {
+    window.DeaneCustomers.showList();
+  }
 });
 
 document.getElementById("btn-back").addEventListener("click", async () => {
