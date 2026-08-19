@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260820p" />
+    <link rel="stylesheet" href="admin.css?v=20260820u" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -208,7 +208,7 @@
               <fieldset>
                 <legend>Job card</legend>
                 <div class="grid-3">
-                  <label>Job number<input name="number" readonly /></label>
+                  <label>Job number<input name="jobNumber" readonly /></label>
                   <label
                     >Status
                     <select name="status" id="job-status"></select>
@@ -348,22 +348,24 @@
 
             <form id="billing-form" class="report-form">
               <fieldset>
-                <legend id="billing-legend">Document</legend>
-                <div class="grid-3">
-                  <label>Number<input name="number" readonly /></label>
-                  <label>Kind<input name="kind" readonly /></label>
-                  <label>Status<input name="status" readonly /></label>
-                  <label>Valid until (7 days)<input name="validUntil" type="date" /></label>
+                <legend id="billing-legend">Quote</legend>
+                <div class="grid-2">
+                  <label>Number (auto)<input id="billing-field-number" name="number" readonly /></label>
+                  <label>Valid until (7 days)<input id="billing-field-validUntil" name="validUntil" type="date" /></label>
                 </div>
               </fieldset>
 
               <fieldset>
                 <legend>Customer &amp; vehicle</legend>
                 <div class="grid-3">
-                  <label>Customer name<input name="customerName" required /></label>
+                  <label class="suggest-wrap">
+                    Customer name
+                    <input name="customerName" id="billing-customer-name" autocomplete="off" required />
+                    <div id="billing-customer-suggest" class="suggest-list" hidden></div>
+                  </label>
                   <label>Email<input name="customerEmail" type="email" /></label>
                   <label>Phone<input name="customerPhone" type="tel" /></label>
-                  <label>Registration<input name="registration" /></label>
+                  <label>Registration<input name="registration" id="billing-registration" autocomplete="off" /></label>
                   <label>Vehicle<input name="vehicle" /></label>
                   <label>Odometer (km)<input name="odometer" /></label>
                 </div>
@@ -398,9 +400,9 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260820p"></script>
-    <script src="billing.js?v=20260820p"></script>
-    <script src="customers.js?v=20260820p"></script>
-    <script src="jobs.js?v=20260820p"></script>
+    <script src="admin.js?v=20260820u"></script>
+    <script src="billing.js?v=20260820u"></script>
+    <script src="customers.js?v=20260820u"></script>
+    <script src="jobs.js?v=20260820u"></script>
   </body>
 </html>

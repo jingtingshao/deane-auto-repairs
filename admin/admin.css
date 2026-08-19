@@ -413,6 +413,47 @@ label.check input {
   color: var(--blue);
 }
 
+.suggest-wrap {
+  position: relative;
+}
+
+.suggest-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  margin: 0.15rem 0 0;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(26, 35, 50, 0.12);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.suggest-list button {
+  display: grid;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: #fff;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.suggest-list button:last-child {
+  border-bottom: 0;
+}
+
+.suggest-list button:hover,
+.suggest-list button:focus {
+  background: var(--blue-soft);
+}
+
 .billing-table-wrap {
   overflow-x: auto;
   background: #fff;
@@ -457,6 +498,14 @@ label.check input {
   letter-spacing: 0.03em;
   white-space: nowrap;
   font-size: 1.05rem;
+}
+
+.billing-table th.customer-index,
+.billing-table td.customer-index {
+  width: 2.5rem;
+  text-align: right;
+  padding-right: 0.4rem;
+  color: var(--muted);
 }
 
 .customer-actions {

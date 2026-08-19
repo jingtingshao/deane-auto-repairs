@@ -1,3 +1,4 @@
+(function () {
 var Admin = window.DeaneAdmin;
 
 const JOB_STATUSES = [
@@ -187,7 +188,7 @@ function fillForm(job) {
     el.value = value ?? "";
   };
   fillStatusSelect(job.status || "booked");
-  set("number", job.number);
+  set("jobNumber", job.number);
   set("status", job.status || "booked");
   set("technicianName", job.technicianName);
   set("customerName", job.customerName);
@@ -325,3 +326,4 @@ document.getElementById("btn-jobs-delete")?.addEventListener("click", async () =
 });
 
 window.DeaneJobs = { showList, openJob, createJob };
+})();

@@ -1,3 +1,4 @@
+(function () {
 var Admin = window.DeaneAdmin;
 
 const billingListView = document.getElementById("billing-list-view");
@@ -14,7 +15,9 @@ let catalogMeta = null;
 let currentBill = null;
 let lineRows = [];
 let billingDocs = [];
+let customerDirectory = [];
 const billingSearch = document.getElementById("billing-search");
+const customerSuggestEl = document.getElementById("billing-customer-suggest");
 
 function money(n) {
   return new Intl.NumberFormat("en-NZ", {
@@ -83,6 +86,7 @@ async function createDoc(preset) {
       body: JSON.stringify({ preset }),
     });
     await openDoc(doc.id);
+    Admin.showBillingStatus(`${doc.number} created`);
   } catch (err) {
     alert(err.message);
   }
@@ -138,11 +142,80 @@ function renderBillingList() {
 
 async function loadBillingList() {
   await loadCatalog();
+  await loadCustomerDirectory();
   billingDocs = await Admin.api("/api/billing");
   renderBillingList();
 }
 
+async function loadCustomerDirectory() {
+  try {
+    customerDirectory = await Admin.api("/api/customers");
+  } catch {
+    customerDirectory = [];
+  }
+}
+
+function hideCustomerSuggest() {
+  if (!customerSuggestEl) return;
+  customerSuggestEl.hidden = true;
+  customerSuggestEl.innerHTML = "";
+}
+
+function applyCustomerToForm(row) {
+  if (!row || isLocked(currentBill)) return;
+  const setIf = (name, value) => {
+    const el = billingInput(name);
+    if (!el) return;
+    const next = String(value || "").trim();
+    if (next) el.value = next;
+  };
+  setIf("customerName", row.customerName);
+  setIf("customerEmail", row.customerEmail);
+  setIf("customerPhone", row.customerPhone);
+  setIf("registration", row.registration);
+  setIf("vehicle", row.vehicle);
+  hideCustomerSuggest();
+  Admin.showBillingStatus("Customer details filled");
+}
+
+function matchCustomers(query, field) {
+  const q = String(query || "").trim().toLowerCase();
+  if (q.length < 2) return [];
+  const plateQuery = q.replace(/[\s-]/g, "");
+  return customerDirectory
+    .filter((row) => {
+      if (field === "registration") {
+        return normalizeSearch(row.registration).includes(plateQuery);
+      }
+      const name = String(row.customerName || "").toLowerCase();
+      return name.includes(q);
+    })
+    .slice(0, 8);
+}
+
+function renderCustomerSuggest(matches) {
+  if (!customerSuggestEl) return;
+  if (!matches.length) {
+    hideCustomerSuggest();
+    return;
+  }
+  customerSuggestEl.hidden = false;
+  customerSuggestEl.innerHTML = matches
+    .map((row, index) => {
+      const line = [row.customerName, row.registration, row.customerPhone].filter(Boolean).join(" · ");
+      return `<button type="button" data-match="${index}">${Admin.escapeHtml(line || "Customer")}</button>`;
+    })
+    .join("");
+  customerSuggestEl.querySelectorAll("[data-match]").forEach((btn) => {
+    btn.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      applyCustomerToForm(matches[Number(btn.dataset.match)]);
+    });
+  });
+}
+
 async function openDoc(id) {
+  if (!customerDirectory.length) await loadCustomerDirectory();
   currentBill = await Admin.api(`/api/billing/${id}`);
   billingListView.hidden = true;
   billingEditView.hidden = false;
@@ -150,15 +223,21 @@ async function openDoc(id) {
   fillForm(currentBill);
 }
 
+function billingInput(name) {
+  return (
+    document.getElementById(`billing-field-${name}`) ||
+    document.querySelector(`#billing-form [name="${name}"]`) ||
+    document.querySelector(`#billing-edit-view [name="${name}"]`)
+  );
+}
+
 function fillForm(doc) {
   const set = (name, value) => {
-    const el = billingForm.elements.namedItem(name);
+    const el = billingInput(name);
     if (!el) return;
     el.value = value ?? "";
   };
   set("number", doc.number);
-  set("kind", kindLabel(doc.kind));
-  set("status", doc.status);
   set("validUntil", doc.validUntil || "");
   set("customerName", doc.customerName);
   set("customerEmail", doc.customerEmail);
@@ -167,11 +246,12 @@ function fillForm(doc) {
   set("vehicle", doc.vehicle);
   set("odometer", doc.odometer);
   set("notes", doc.notes);
+  hideCustomerSuggest();
 
   document.getElementById("billing-legend").textContent =
     doc.kind === "invoice" ? "Tax invoice" : "Quote";
 
-  const validLabel = billingForm.elements.namedItem("validUntil")?.closest("label");
+  const validLabel = billingInput("validUntil")?.closest("label");
   if (validLabel) validLabel.hidden = doc.kind !== "quote";
 
   lineRows = (doc.lines || []).map((line) => newLine(line));
@@ -260,16 +340,16 @@ function renderTotals() {
 }
 
 function collectBill() {
-  const f = billingForm;
+  const value = (name) => String(billingInput(name)?.value || "").trim();
   return {
-    customerName: f.customerName.value.trim(),
-    customerEmail: f.customerEmail.value.trim(),
-    customerPhone: f.customerPhone.value.trim(),
-    registration: f.registration.value.trim(),
-    vehicle: f.vehicle.value.trim(),
-    odometer: f.odometer.value.trim(),
-    notes: f.notes.value.trim(),
-    validUntil: f.validUntil.value,
+    customerName: value("customerName"),
+    customerEmail: value("customerEmail"),
+    customerPhone: value("customerPhone"),
+    registration: value("registration"),
+    vehicle: value("vehicle"),
+    odometer: value("odometer"),
+    notes: String(billingInput("notes")?.value || "").trim(),
+    validUntil: billingInput("validUntil")?.value || "",
     lines: lineRows.map((line) => ({ ...line })),
   };
 }
@@ -280,7 +360,6 @@ async function saveBill() {
     method: "PUT",
     body: JSON.stringify(collectBill()),
   });
-  billingForm.elements.namedItem("status").value = currentBill.status;
   Admin.showBillingStatus("Saved");
   updateActionButtons();
   return currentBill;
@@ -327,6 +406,35 @@ async function showList() {
 
 billingSearch?.addEventListener("input", renderBillingList);
 billingSearch?.addEventListener("search", renderBillingList);
+
+document.getElementById("billing-customer-name")?.addEventListener("input", () => {
+  if (isLocked(currentBill)) return;
+  renderCustomerSuggest(matchCustomers(billingInput("customerName")?.value, "name"));
+});
+
+document.getElementById("billing-customer-name")?.addEventListener("blur", () => {
+  const name = String(billingInput("customerName")?.value || "").trim().toLowerCase();
+  const exact = customerDirectory.filter(
+    (row) => String(row.customerName || "").trim().toLowerCase() === name
+  );
+  if (exact.length === 1 && !isLocked(currentBill)) {
+    applyCustomerToForm(exact[0]);
+    return;
+  }
+  setTimeout(() => {
+    if (customerSuggestEl && !customerSuggestEl.contains(document.activeElement)) {
+      hideCustomerSuggest();
+    }
+  }, 150);
+});
+
+document.getElementById("billing-registration")?.addEventListener("blur", () => {
+  if (isLocked(currentBill)) return;
+  const matches = matchCustomers(billingInput("registration")?.value, "registration");
+  const plate = normalizeSearch(billingInput("registration")?.value);
+  const exact = matches.filter((row) => normalizeSearch(row.registration) === plate);
+  if (exact.length === 1) applyCustomerToForm(exact[0]);
+});
 
 document.getElementById("btn-billing-back").addEventListener("click", showList);
 
@@ -451,3 +559,4 @@ document.getElementById("btn-billing-delete").addEventListener("click", async ()
 });
 
 window.DeaneBilling = { showList, openDoc };
+})();

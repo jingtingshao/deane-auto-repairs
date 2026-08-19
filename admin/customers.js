@@ -1,3 +1,4 @@
+(function () {
 var Admin = window.DeaneAdmin;
 
 const customersSection = document.getElementById("customers-section");
@@ -63,10 +64,12 @@ function renderCustomers() {
   }
 
   customersList.innerHTML = `
+    <p class="muted small">${rows.length} customer${rows.length === 1 ? "" : "s"} · overdue first, then due soon</p>
     <div class="billing-table-wrap">
       <table class="billing-table">
         <thead>
           <tr>
+            <th class="customer-index">#</th>
             <th>Plate</th>
             <th>Name</th>
             <th>Address</th>
@@ -79,9 +82,10 @@ function renderCustomers() {
         <tbody>
           ${rows
             .map(
-              (row) => `
+              (row, index) => `
             <tr class="customer-row" data-key="${Admin.escapeAttr(row.key)}">
-              <td class="billing-number">${Admin.escapeHtml(row.registration || "—")}</td>
+              <td class="billing-number customer-index">${index + 1}</td>
+              <td>${Admin.escapeHtml(row.registration || "—")}</td>
               <td>${Admin.escapeHtml(row.customerName || "—")}</td>
               <td>${Admin.escapeHtml(row.customerAddress || "—")}</td>
               <td>
@@ -352,3 +356,4 @@ window.DeaneCustomers = {
     showCustomerForm(null);
   },
 };
+})();
