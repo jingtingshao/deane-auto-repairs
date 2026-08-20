@@ -382,9 +382,8 @@ function updateActionButtons() {
     jobBtn.hidden = !canJob;
     jobBtn.textContent = doc.jobId ? "Open job card" : "Create job card";
   }
-  emailBtn.textContent = doc.kind === "quote" ? "Email quote" : "Email invoice";
+  emailBtn.textContent = "Send email";
   emailBtn.hidden = doc.status === "void" || doc.status === "invoiced";
-  document.getElementById("btn-billing-copy").hidden = doc.status === "void";
   voidBtn.hidden = doc.status === "void" || doc.status === "invoiced" || doc.status === "draft";
   deleteBtn.hidden = doc.status !== "draft";
   addLineBtn.hidden = isLocked(doc);
@@ -467,28 +466,12 @@ document.getElementById("btn-billing-email").addEventListener("click", async () 
     currentBill = result.doc || currentBill;
     fillForm(currentBill);
     Admin.showBillingStatus(`Email sent to ${result.to}`);
-    alert(`Email sent to ${result.to}\n\nCustomer link:\n${result.url}`);
+    alert(`Email sent to ${result.to}`);
   } catch (err) {
     alert(err.message);
   } finally {
     btn.disabled = false;
     updateActionButtons();
-  }
-});
-
-document.getElementById("btn-billing-copy").addEventListener("click", async () => {
-  try {
-    await saveBill();
-    const result = await Admin.api(`/api/billing/${currentBill.id}/issue`, {
-      method: "POST",
-      body: JSON.stringify({ baseUrl: location.origin }),
-    });
-    currentBill = result.doc || currentBill;
-    fillForm(currentBill);
-    await navigator.clipboard.writeText(result.url);
-    Admin.showBillingStatus("Link copied");
-  } catch (err) {
-    alert(err.message);
   }
 });
 
