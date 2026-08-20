@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en-NZ">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pre-Purchase Inspection Report · Deane Auto Repairs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --blue: #1565c0;
+        --blue-deep: #0d47a1;
+        --red: #c62828;
+        --ink: #1a2332;
+        --muted: #5b6777;
+        --line: #cfd8e3;
+        --ok: #2e7d32;
+        --watch: #b8860b;
+        --attention: #c62828;
+        --investigate: #e65100;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font: 11pt/1.45 "Source Sans 3", "Segoe UI", sans-serif;
+        background: #fff;
+      }
+
+      .page {
+        width: min(900px, 100%);
+        margin: 0 auto;
+        padding: 18mm 16mm 16mm;
+      }
+
+      .brand-bar {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        border-bottom: 3px solid var(--blue);
+        padding-bottom: 0.75rem;
+        margin-bottom: 1rem;
+      }
+
+      .brand-name {
+        margin: 0;
+        font-family: "Barlow Condensed", sans-serif;
+        font-size: 1.9rem;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: var(--blue-deep);
+      }
+
+      .brand-name span {
+        color: var(--red);
+      }
+
+      .brand-meta,
+      .muted {
+        color: var(--muted);
+      }
+
+      .brand-meta {
+        margin: 0.2rem 0 0;
+        font-size: 0.92rem;
+      }
+
+      .doc-title {
+        margin: 0;
+        text-align: right;
+        font-family: "Barlow Condensed", sans-serif;
+        font-size: 1.35rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      h2 {
+        margin: 1.2rem 0 0.45rem;
+        font-family: "Barlow Condensed", sans-serif;
+        font-size: 1.1rem;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--blue-deep);
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 0.2rem;
+      }
+
+      h3 {
+        margin: 0.8rem 0 0.35rem;
+        font-size: 0.95rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .meta td,
+      .meta th {
+        padding: 0.28rem 0.4rem;
+        vertical-align: top;
+        border: 1px solid var(--line);
+        font-size: 0.92rem;
+      }
+
+      .meta th {
+        width: 28%;
+        text-align: left;
+        background: #f3f7fc;
+        font-weight: 700;
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+      }
+
+      .legend {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 0.4rem;
+        margin: 0.6rem 0 1rem;
+      }
+
+      .legend div {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 0.4rem 0.45rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-align: center;
+      }
+
+      .l-ok {
+        background: #e8f5e9;
+        color: var(--ok);
+      }
+      .l-na {
+        background: #f5f5f5;
+        color: #666;
+      }
+      .l-wof {
+        background: #ffebee;
+        color: var(--attention);
+      }
+      .l-fix {
+        background: #fff3e0;
+        color: var(--investigate);
+      }
+      .l-obs {
+        background: #fff8e1;
+        color: var(--watch);
+      }
+
+      .cover-list {
+        columns: 2;
+        column-gap: 1.25rem;
+        font-size: 0.86rem;
+      }
+
+      .cover-list .cat {
+        break-inside: avoid;
+        margin-bottom: 0.55rem;
+      }
+
+      .cover-list strong {
+        display: block;
+        color: var(--blue-deep);
+        margin-bottom: 0.15rem;
+      }
+
+      .cover-list ol {
+        margin: 0;
+        padding-left: 1.1rem;
+      }
+
+      .finding {
+        border-left: 4px solid var(--line);
+        padding: 0.45rem 0.65rem;
+        margin: 0.35rem 0;
+        background: #fafafa;
+      }
+
+      .finding.fix {
+        border-left-color: var(--investigate);
+        background: #fff7f0;
+      }
+
+      .finding.obs {
+        border-left-color: var(--watch);
+        background: #fffaf0;
+      }
+
+      .finding.wof {
+        border-left-color: var(--attention);
+        background: #fff5f5;
+      }
+
+      .finding strong {
+        display: block;
+        margin-bottom: 0.1rem;
+      }
+
+      .tyres {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        max-width: 320px;
+        margin: 0.5rem 0;
+      }
+
+      .tyre {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.55rem;
+        text-align: center;
+      }
+
+      .tyre b {
+        display: block;
+        font-size: 1.15rem;
+      }
+
+      .box {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.7rem 0.8rem;
+        background: #f8fbff;
+      }
+
+      .disclaimer {
+        font-size: 0.82rem;
+        color: var(--muted);
+      }
+
+      .disclaimer li {
+        margin-bottom: 0.25rem;
+      }
+
+      .footer {
+        margin-top: 1.2rem;
+        padding-top: 0.6rem;
+        border-top: 1px solid var(--line);
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+
+      .fill-line {
+        border-bottom: 1px dotted #999;
+        min-height: 1.2em;
+        display: inline-block;
+        min-width: 12rem;
+      }
+
+      .diagram-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.55rem;
+        margin: 0.7rem 0 0.3rem;
+      }
+
+      .diagram-card {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #f8fbff;
+        padding: 0.45rem 0.4rem 0.55rem;
+        text-align: center;
+      }
+
+      .diagram-card svg {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      .diagram-card figcaption {
+        margin-top: 0.25rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--blue-deep);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .diagram-panel {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: linear-gradient(180deg, #f9fbfe, #fff);
+        padding: 0.75rem;
+        margin: 0.55rem 0 0.75rem;
+      }
+
+      .diagram-panel svg {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      .diagram-split {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 0.85rem;
+        align-items: start;
+      }
+
+      .pin {
+        fill: var(--red);
+        stroke: #fff;
+        stroke-width: 1.5;
+      }
+
+      .pin-text {
+        fill: #fff;
+        font-family: "Barlow Condensed", sans-serif;
+        font-size: 11px;
+        font-weight: 800;
+        text-anchor: middle;
+        dominant-baseline: central;
+      }
+
+      .schematic-note {
+        margin: 0.2rem 0 0;
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+
+      @media print {
+        .page {
+          width: auto;
+          padding: 10mm 12mm;
+        }
+        a {
+          color: inherit;
+          text-decoration: none;
+        }
+        .diagram-panel,
+        .diagram-card {
+          break-inside: avoid;
+        }
+        .print-page-break {
+          page-break-before: always;
+          break-before: page;
+          padding-top: 8mm;
+        }
+      }
+
+      @media (max-width: 700px) {
+        .diagram-grid,
+        .diagram-split {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="brand-bar">
+        <div>
+          <p class="brand-name"><span>Deane</span> Auto Repairs</p>
+          <p class="brand-meta">
+            (Next to BP Petrol Station)<br />
+            63 Hayr Road, Three Kings<br />
+            0800 625 9827 · deaneautonz@gmail.com<br />
+            Mon–Sat 8:30am – 5:30pm
+          </p>
+        </div>
+        <div>
+          <p class="doc-title">Pre-Purchase<br />Inspection Report</p>
+          <p class="brand-meta" style="text-align: right; margin-top: 0.4rem">
+            Report No.: <strong>PPI-2021-18670545</strong><br />
+            Inspection date: <strong>24 Feb 2021</strong>
+          </p>
+        </div>
+      </header>
+
+      <p class="muted" style="margin-top: 0">
+        Independent workshop inspection of vehicle condition at the time of
+        examination. This is <strong>not</strong> a Warrant of Fitness certificate.
+      </p>
+
+      <div class="grid-2">
+        <div>
+          <h2>Report owner</h2>
+          <table class="meta">
+            <tr>
+              <th>Name</th>
+              <td>MUHAMMAD BHATTI</td>
+            </tr>
+            <tr>
+              <th>Phone</th>
+              <td>021 480 786</td>
+            </tr>
+            <tr>
+              <th>Email</th>
+              <td>deaneautonz@gmail.com</td>
+            </tr>
+            <tr>
+              <th>Address</th>
+              <td>—</td>
+            </tr>
+          </table>
+        </div>
+        <div>
+          <h2>Inspection details</h2>
+          <table class="meta">
+            <tr>
+              <th>Workshop</th>
+              <td>Deane Auto Repairs, Three Kings</td>
+            </tr>
+            <tr>
+              <th>Mobile inspection</th>
+              <td>No</td>
+            </tr>
+            <tr>
+              <th>Technician</th>
+              <td><!-- fill -->—</td>
+            </tr>
+            <tr>
+              <th>Road test</th>
+              <td>40–50 km/h · Hot conditions</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+
+      <h2>Vehicle description</h2>
+      <table class="meta">
+        <tr>
+          <th>Make / model</th>
+          <td>2008 VOLKSWAGEN Golf</td>
+          <th>Registration</th>
+          <td>X9485</td>
+        </tr>
+        <tr>
+          <th>VIN</th>
+          <td>WVWZZZ1KZ8U034604</td>
+          <th>Chassis</th>
+          <td>—</td>
+        </tr>
+        <tr>
+          <th>Odometer</th>
+          <td>27,534 km</td>
+          <th>Colour</th>
+          <td>Black</td>
+        </tr>
+        <tr>
+          <th>Body / seats</th>
+          <td>Hatchback, five door · 5 seats</td>
+          <th>Origin</th>
+          <td>Import</td>
+        </tr>
+        <tr>
+          <th>Engine</th>
+          <td>1.4L · 4 cyl · Petrol · Fuel injected</td>
+          <th>Transmission</th>
+          <td>Auto / Tiptronic · FWD</td>
+        </tr>
+        <tr>
+          <th>First reg NZ</th>
+          <td>2021</td>
+          <th>ESC / ESP</th>
+          <td>Yes</td>
+        </tr>
+        <tr>
+          <th>WOF expiry*</th>
+          <td>19 Nov 2021</td>
+          <th>Reg / RUC expiry</th>
+          <td>— / —</td>
+        </tr>
+      </table>
+      <p class="muted" style="font-size: 0.85rem; margin: 0.35rem 0 0">
+        * A Warrant of Fitness must be less than one month old when a vehicle is
+        sold (legal requirement). Confirm current WOF status separately.
+      </p>
+
+      <h2>Report summary</h2>
+      <div class="box">
+        <p style="margin: 0 0 0.4rem">
+          <strong>Vehicle condition summary</strong><br />
+          For a used vehicle, fair condition for age and mileage; may require
+          unplanned maintenance or repair.
+        </p>
+        <p style="margin: 0">
+          <strong>Inspector comments</strong><br />
+          Next service due 15.03.21. Buyer recommended to check transmission
+          service history. Unable to turn off radio while road testing.
+        </p>
+      </div>
+
+      <h3>Inspection view reference</h3>
+      <p class="schematic-note">
+        Areas reviewed visually / with photos. Diagrams are Deane Auto originals
+        for location reference only.
+      </p>
+      <div class="diagram-grid" aria-hidden="true">
+        <figure class="diagram-card">
+          <svg viewBox="0 0 120 78" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="1" width="118" height="76" rx="8" fill="#eef4fb" stroke="#c5d5e8"/>
+            <path d="M28 52h64c4 0 8-3 9-7l4-14c1-4-1-7-5-8L78 18H42L24 23c-4 1-6 4-5 8l4 14c1 4 5 7 9 7z" fill="#d7e6f7" stroke="#1565c0" stroke-width="2"/>
+            <rect x="40" y="28" width="40" height="14" rx="2" fill="#fff" stroke="#0d47a1" stroke-width="1.5"/>
+            <circle cx="40" cy="52" r="7" fill="#1a2332"/><circle cx="80" cy="52" r="7" fill="#1a2332"/>
+            <path d="M34 40h12M74 40h12" stroke="#c62828" stroke-width="2"/>
+          </svg>
+          <figcaption>Front</figcaption>
+        </figure>
+        <figure class="diagram-card">
+          <svg viewBox="0 0 120 78" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="1" width="118" height="76" rx="8" fill="#eef4fb" stroke="#c5d5e8"/>
+            <path d="M18 50h84c3 0 6-2 6-5V34c0-3-2-5-5-6l-18-5H45L22 28c-3 1-5 3-5 6v11c0 3 3 5 6 5z" fill="#d7e6f7" stroke="#1565c0" stroke-width="2"/>
+            <path d="M40 28v22M68 27v23" stroke="#0d47a1" stroke-width="1.5"/>
+            <rect x="44" y="31" width="18" height="12" fill="#fff" stroke="#0d47a1"/>
+            <rect x="72" y="31" width="16" height="12" fill="#fff" stroke="#0d47a1"/>
+            <circle cx="34" cy="50" r="6" fill="#1a2332"/><circle cx="86" cy="50" r="6" fill="#1a2332"/>
+          </svg>
+          <figcaption>Side</figcaption>
+        </figure>
+        <figure class="diagram-card">
+          <svg viewBox="0 0 120 78" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="1" width="118" height="76" rx="8" fill="#eef4fb" stroke="#c5d5e8"/>
+            <path d="M30 50h60c5 0 9-3 10-8l2-10c1-4-2-8-6-9H34c-4 1-7 5-6 9l2 10c1 5 5 8 10 8z" fill="#d7e6f7" stroke="#1565c0" stroke-width="2"/>
+            <rect x="44" y="30" width="32" height="12" rx="2" fill="#fff" stroke="#0d47a1"/>
+            <rect x="52" y="44" width="16" height="4" rx="1" fill="#c62828"/>
+            <circle cx="40" cy="50" r="6" fill="#1a2332"/><circle cx="80" cy="50" r="6" fill="#1a2332"/>
+          </svg>
+          <figcaption>Rear</figcaption>
+        </figure>
+        <figure class="diagram-card">
+          <svg viewBox="0 0 120 78" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="1" width="118" height="76" rx="8" fill="#eef4fb" stroke="#c5d5e8"/>
+            <rect x="22" y="18" width="76" height="44" rx="6" fill="#d7e6f7" stroke="#1565c0" stroke-width="2"/>
+            <circle cx="60" cy="40" r="12" fill="#fff" stroke="#0d47a1" stroke-width="2"/>
+            <path d="M60 28v24M48 40h24" stroke="#0d47a1" stroke-width="2"/>
+            <rect x="28" y="24" width="14" height="8" rx="1" fill="#fff" stroke="#1565c0"/>
+            <rect x="78" y="24" width="14" height="8" rx="1" fill="#fff" stroke="#1565c0"/>
+            <path d="M30 56h20" stroke="#c62828" stroke-width="2"/>
+          </svg>
+          <figcaption>Engine bay</figcaption>
+        </figure>
+      </div>
+
+      <h2>Status key</h2>
+      <div class="legend">
+        <div class="l-ok">OK</div>
+        <div class="l-na">Not applicable</div>
+        <div class="l-wof">Potential WOF defect — urgent</div>
+        <div class="l-fix">Needs investigation / repair</div>
+        <div class="l-obs">Keep under observation</div>
+      </div>
+
+      <h2>Defects requiring further investigation or repair</h2>
+      <div class="finding fix">
+        <strong>Electrical — Accessories</strong>
+        Radio: not working
+      </div>
+      <div class="finding fix">
+        <strong>Engine — Air filter</strong>
+        Assembly: not checked
+      </div>
+      <div class="finding fix">
+        <strong>Engine — Noise</strong>
+        Top of engine: slight rattle
+      </div>
+      <div class="finding fix">
+        <strong>Engine — Assembly (front)</strong>
+        Oil leak; wet — should be investigated
+      </div>
+      <div class="finding fix">
+        <strong>Engine — Assembly (bottom)</strong>
+        Oil leak; drips forming — should be investigated
+      </div>
+      <div class="finding fix">
+        <strong>Transmission — Assembly</strong>
+        Oil: unable to establish level (sealed unit)
+      </div>
+
+      <h2>Other items — keep under observation</h2>
+      <div class="finding obs">
+        <strong>Interior — Dashboard</strong>
+        Upholstery / trim: general wear and tear, minor marks
+      </div>
+      <div class="finding obs">
+        <strong>Interior — Roof</strong>
+        Headlining: general wear and tear
+      </div>
+
+      <h2>Body condition and comments</h2>
+      <div class="diagram-split">
+        <div class="diagram-panel" aria-hidden="true">
+          <svg viewBox="0 0 360 220" xmlns="http://www.w3.org/2000/svg">
+            <text x="180" y="18" text-anchor="middle" fill="#0d47a1" font-family="Barlow Condensed, sans-serif" font-size="14" font-weight="800" letter-spacing="1">BODY MAP · TOP VIEW</text>
+            <!-- hatchback outline -->
+            <path d="M110 40h140c18 0 34 10 40 26l10 28v52c0 10-8 18-18 18H88c-10 0-18-8-18-18v-52l10-28c6-16 22-26 40-26z" fill="#e8f1fb" stroke="#1565c0" stroke-width="3"/>
+            <!-- windscreen / roof -->
+            <path d="M130 70h100c8 0 14 6 14 14v20H116V84c0-8 6-14 14-14z" fill="#fff" stroke="#0d47a1" stroke-width="1.8"/>
+            <path d="M120 118h120v36H120z" fill="#d7e6f7" stroke="#0d47a1" stroke-width="1.5"/>
+            <!-- wheels -->
+            <rect x="78" y="78" width="16" height="34" rx="4" fill="#1a2332"/>
+            <rect x="266" y="78" width="16" height="34" rx="4" fill="#1a2332"/>
+            <rect x="78" y="148" width="16" height="34" rx="4" fill="#1a2332"/>
+            <rect x="266" y="148" width="16" height="34" rx="4" fill="#1a2332"/>
+            <text x="180" y="58" text-anchor="middle" fill="#5b6777" font-size="10">FRONT</text>
+            <text x="180" y="205" text-anchor="middle" fill="#5b6777" font-size="10">REAR</text>
+            <!-- markers -->
+            <g>
+              <circle class="pin" cx="96" cy="62" r="10"/><text class="pin-text" x="96" y="62">1</text>
+              <circle class="pin" cx="96" cy="105" r="10"/><text class="pin-text" x="96" y="105">2</text>
+              <circle class="pin" cx="264" cy="62" r="10"/><text class="pin-text" x="264" y="62">3</text>
+              <circle class="pin" cx="264" cy="100" r="10"/><text class="pin-text" x="264" y="100">4</text>
+              <circle class="pin" cx="264" cy="130" r="10"/><text class="pin-text" x="264" y="130">5</text>
+              <circle class="pin" cx="250" cy="175" r="10"/><text class="pin-text" x="250" y="175">6</text>
+              <circle class="pin" cx="180" cy="175" r="10"/><text class="pin-text" x="180" y="175">7</text>
+              <circle class="pin" cx="180" cy="40" r="10"/><text class="pin-text" x="180" y="40">8</text>
+            </g>
+          </svg>
+          <p class="schematic-note">Red pins mark noted body areas (locations indicative).</p>
+        </div>
+        <ol>
+          <li>Large scratch in body panel</li>
+          <li>Large scratch in door</li>
+          <li>Paint chipped on body panel; minor scratches in body panel</li>
+          <li>Minor scratches in door</li>
+          <li>Minor scratches in door</li>
+          <li>Dent in body panel</li>
+          <li>Minor scratches in body panel</li>
+          <li>
+            Miscellaneous minor paint chips and scratches on body panels. Minor
+            cosmetic defects may not all be recorded — please satisfy yourself in
+            this regard. Vehicle has had a partial repaint.
+          </li>
+        </ol>
+      </div>
+
+      <h2>Interior condition and comments</h2>
+      <div class="diagram-split">
+        <div class="diagram-panel" aria-hidden="true">
+          <svg viewBox="0 0 320 210" xmlns="http://www.w3.org/2000/svg">
+            <text x="160" y="18" text-anchor="middle" fill="#0d47a1" font-family="Barlow Condensed, sans-serif" font-size="14" font-weight="800" letter-spacing="1">CABIN MAP</text>
+            <rect x="50" y="30" width="220" height="160" rx="18" fill="#e8f1fb" stroke="#1565c0" stroke-width="3"/>
+            <!-- dash -->
+            <rect x="68" y="42" width="184" height="22" rx="4" fill="#c5d5e8" stroke="#0d47a1"/>
+            <text x="160" y="57" text-anchor="middle" fill="#0d47a1" font-size="9" font-weight="700">DASH / HEADLINING</text>
+            <!-- front seats -->
+            <rect x="78" y="78" width="58" height="48" rx="8" fill="#fff" stroke="#1565c0" stroke-width="2"/>
+            <rect x="184" y="78" width="58" height="48" rx="8" fill="#fff" stroke="#1565c0" stroke-width="2"/>
+            <text x="107" y="105" text-anchor="middle" fill="#5b6777" font-size="10">Driver</text>
+            <text x="213" y="105" text-anchor="middle" fill="#5b6777" font-size="10">Passenger</text>
+            <!-- rear bench -->
+            <rect x="78" y="140" width="164" height="36" rx="8" fill="#fff" stroke="#1565c0" stroke-width="2"/>
+            <text x="160" y="162" text-anchor="middle" fill="#5b6777" font-size="10">Rear seat</text>
+            <circle class="pin" cx="107" cy="78" r="10"/><text class="pin-text" x="107" y="78">9</text>
+            <circle class="pin" cx="213" cy="78" r="10"/><text class="pin-text" x="213" y="78">10</text>
+            <circle class="pin" cx="160" cy="140" r="10"/><text class="pin-text" x="160" y="140">11</text>
+            <circle class="pin" cx="160" cy="42" r="10"/><text class="pin-text" x="160" y="42">*</text>
+          </svg>
+          <p class="schematic-note">* Dashboard / headlining wear also noted under observation.</p>
+        </div>
+        <ol start="9">
+          <li>Upholstery general wear and tear</li>
+          <li>Upholstery general wear and tear</li>
+          <li>Upholstery general wear and tear</li>
+        </ol>
+      </div>
+
+      <h2>Tyre condition</h2>
+      <div class="diagram-split">
+        <div class="diagram-panel" aria-hidden="true">
+          <svg viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg">
+            <text x="160" y="18" text-anchor="middle" fill="#0d47a1" font-family="Barlow Condensed, sans-serif" font-size="14" font-weight="800" letter-spacing="1">TYRE DEPTH MAP</text>
+            <path d="M115 48h90c14 0 26 9 30 22l8 24v60c0 8-6 14-14 14H91c-8 0-14-6-14-14v-60l8-24c4-13 16-22 30-22z" fill="#e8f1fb" stroke="#1565c0" stroke-width="3"/>
+            <text x="160" y="78" text-anchor="middle" fill="#5b6777" font-size="10">FRONT</text>
+            <!-- LF -->
+            <rect x="48" y="70" width="44" height="54" rx="8" fill="#1a2332"/>
+            <text x="70" y="92" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">LF</text>
+            <text x="70" y="108" text-anchor="middle" fill="#fff" font-size="12" font-weight="800">7.5</text>
+            <!-- RF -->
+            <rect x="228" y="70" width="44" height="54" rx="8" fill="#1a2332"/>
+            <text x="250" y="92" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">RF</text>
+            <text x="250" y="108" text-anchor="middle" fill="#fff" font-size="12" font-weight="800">7.5</text>
+            <!-- LR -->
+            <rect x="48" y="148" width="44" height="54" rx="8" fill="#1a2332"/>
+            <text x="70" y="170" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">LR</text>
+            <text x="70" y="186" text-anchor="middle" fill="#fff" font-size="12" font-weight="800">7.5</text>
+            <!-- RR -->
+            <rect x="228" y="148" width="44" height="54" rx="8" fill="#1a2332"/>
+            <text x="250" y="170" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">RR</text>
+            <text x="250" y="186" text-anchor="middle" fill="#fff" font-size="12" font-weight="800">7.5</text>
+            <!-- spare -->
+            <circle cx="160" cy="155" r="28" fill="#fff" stroke="#c62828" stroke-width="2.5"/>
+            <text x="160" y="150" text-anchor="middle" fill="#c62828" font-size="9" font-weight="700">SPARE</text>
+            <text x="160" y="166" text-anchor="middle" fill="#1a2332" font-size="12" font-weight="800">7.0</text>
+            <text x="160" y="228" text-anchor="middle" fill="#5b6777" font-size="10">Depths in mm</text>
+          </svg>
+        </div>
+        <div>
+          <p>
+            Spare: <strong>7.0 mm</strong> — space-saver type spare fitted.<br />
+            <span class="muted"
+              >Legal minimum: 1.5 mm (standard tyres) / 4 mm (snow tyres).</span
+            >
+          </p>
+          <div class="tyres" style="max-width: none; margin-top: 0.6rem">
+            <div class="tyre"><span>LF</span><b>7.5 mm</b></div>
+            <div class="tyre"><span>RF</span><b>7.5 mm</b></div>
+            <div class="tyre"><span>LR</span><b>7.5 mm</b></div>
+            <div class="tyre"><span>RR</span><b>7.5 mm</b></div>
+          </div>
+        </div>
+      </div>
+
+      <h2>12V electrical system test</h2>
+      <table class="meta">
+        <tr>
+          <th>Battery test</th>
+          <td>Fault detected</td>
+        </tr>
+        <tr>
+          <th>Starter test</th>
+          <td>Fault detected</td>
+        </tr>
+        <tr>
+          <th>Charging test</th>
+          <td>Good</td>
+        </tr>
+        <tr>
+          <th>Comment</th>
+          <td>Faults detected — further investigation required</td>
+        </tr>
+      </table>
+
+      <h2>Additional tests / information</h2>
+      <table class="meta">
+        <tr>
+          <th>Head gasket test</th>
+          <td>OK — passed; no combustion gases detected</td>
+        </tr>
+        <tr>
+          <th>Timing belt</th>
+          <td>No (not applicable / not fitted as belt type noted)</td>
+        </tr>
+        <tr>
+          <th>Air conditioning</th>
+          <td>6°C measured at dash vent</td>
+        </tr>
+        <tr>
+          <th>Heater</th>
+          <td>40°C measured at dash vent</td>
+        </tr>
+        <tr>
+          <th>Cooling pressure test</th>
+          <td>Acceptable</td>
+        </tr>
+        <tr>
+          <th>Modified vehicle</th>
+          <td>No</td>
+        </tr>
+      </table>
+
+      <h2 class="print-page-break">Items covered by this inspection</h2>
+      <div class="cover-list">
+        <div class="cat">
+          <strong>Braking system</strong>
+          <ol>
+            <li>ABS</li>
+            <li>Parking brake</li>
+            <li>Hose assembly</li>
+            <li>Master cylinder</li>
+            <li>Pedal</li>
+            <li>Pipe assembly</li>
+            <li>Proportioning valve</li>
+            <li>Road test</li>
+            <li>Vacuum pump</li>
+            <li>Wheel assembly</li>
+          </ol>
+        </div>
+        <div class="cat">
+          <strong>Cooling system</strong>
+          <ol start="11">
+            <li>Radiator</li>
+            <li>Water pump (where visible)</li>
+            <li>Thermostat</li>
+            <li>Management</li>
+            <li>Oil cooler</li>
+          </ol>
+        </div>
+        <div class="cat">
+          <strong>Driveline</strong>
+          <ol start="16">
+            <li>Driveshaft</li>
+            <li>Differential</li>
+          </ol>
+        </div>
+        <div class="cat">
+          <strong>Electrical</strong>
+          <ol start="18">
+            <li>Battery</li>
+            <li>Lighting</li>
+            <li>Starter</li>
+            <li>Ignition</li>
+            <li>Alternator</li>
+            <li>Instruments</li>
+            <li>Horn</li>
+            <li>Accessories</li>
+            <li>Wiring</li>
+            <li>Window assembly</li>
+            <li>Switch assembly</li>
+          </ol>
+        </div>
+        <div class="cat">
+          <strong>Engine</strong>
+          <ol start="29">
+            <li>Air filter</li>
+            <li>Noise</li>
+            <li>Road test</li>
+            <li>Assembly</li>
+            <li>Lubrication</li>
+            <li>Tappet / valley / side / sump / timing covers</li>
+            <li>Bellhousing</li>
+            <li>Head / block</li>
+            <li>Mounting</li>
+            <li>Supercharger / turbo / intercooler (if fitted)</li>
+            <li>Management system</li>
+            <li>Breather hose</li>
+          </ol>
+        </div>
+        <div class="cat">
+          <strong>Entrance &amp; exit</strong>
+          <ol start="48">
+            <li>Door assembly</li>
+            <li>Hatch assembly</li>
+            <li>Bonnet assembly</li>
+          </ol>
+        </div>
+        <div class="cat">
+          <strong>Exhaust system</strong>
+          <ol start="51">
+            <li>Assembly</li>
+            <li>Road test</li>
+          </ol>
+        </div>
+        <div class="cat">
+          <strong>Fuel system</strong>
+          <ol start="53">
+            <li>Tank / hoses / pipes</li>
+            <li>Filter / pump / injectors</li>
+            <li>Carburettor / alternate fuel / management / choke (if fitted)</li>
+          </ol>
+        </div>
+        <div class="cat">
+          <strong>Heating &amp; ventilation</strong>
+          <ol start="63">
+            <li>Air conditioning</li>
+            <li>Heater</li>
+          </ol>
+        </div>
+        <div class="cat">
+          <strong>Interior</strong>
+          <ol start="65">
+            <li>Boot / tools / dashboard / seats</li>
+            <li>Cabin ancillaries / cargo bay / roof</li>
+            <li>Seat belts / spare wheel compartment</li>
+          </ol>
+        </div>
+        <div class="cat">
+          <strong>Steering</strong>
+          <ol start="77">
+            <li>Box / column / links / power assist</li>
+            <li>Rack / tie rod / wheel / U-joint</li>
+            <li>Road test</li>
+          </ol>
+        </div>
+        <div class="cat">
+          <strong>Structure</strong>
+          <ol start="90">
+            <li>Body assembly</li>
+            <li>Chassis</li>
+          </ol>
+        </div>
+        <div class="cat">
+          <strong>Suspension</strong>
+          <ol start="92">
+            <li>Axle / springs / shock absorbers</li>
+            <li>Control arms / rods / anti-sway components</li>
+            <li>Road test</li>
+          </ol>
+        </div>
+        <div class="cat">
+          <strong>Transmission / towing / tyres</strong>
+          <ol start="104">
+            <li>Tow bar (if fitted)</li>
+            <li>Transmission assembly</li>
+            <li>Hubs / tyres / wheels</li>
+          </ol>
+        </div>
+        <div class="cat">
+          <strong>Vision</strong>
+          <ol start="109">
+            <li>Mirrors / sun visors</li>
+            <li>Wipers / washers / glazing</li>
+          </ol>
+        </div>
+      </div>
+
+      <h2>Conditions of inspection</h2>
+      <div class="disclaimer">
+        <p>
+          This report describes the results of external examination of the
+          vehicle, limited road testing, and visual inspection on the day shown
+          above. It is supplied for the benefit of the report owner named on
+          this document.
+        </p>
+        <p>This inspection will not tell you about:</p>
+        <ul>
+          <li>hidden defects</li>
+          <li>intermittent problems</li>
+          <li>problems which become apparent after the inspection</li>
+          <li>
+            problems which cannot be identified on a visual inspection or without
+            parts of the vehicle being dismantled
+          </li>
+        </ul>
+        <p>
+          Component assemblies are not dismantled to measure internal parts;
+          these are assessed by noise, operation and road performance where a
+          road test is carried out. Vehicle condition can change after inspection
+          due to wear, use, neglect, collision damage, or deterioration of
+          internal components.
+        </p>
+        <p>
+          The 12V battery / charging assessment is limited to the 12V system and
+          does not cover high-voltage systems on hybrid or electric vehicles.
+          Road testing is limited (typically up to about 50 km/h unless stated)
+          and only undertaken if the vehicle appears safe to test.
+        </p>
+        <p>
+          This report does not confirm vehicle ownership, finance, liens, or
+          write-off history. It is not a Warrant of Fitness. Provided the
+          inspection was carried out with reasonable care and skill, Deane Auto
+          Repairs is not responsible for defects that were not identifiable in
+          this limited inspection. Liability for this service is limited to the
+          cost of the inspection.
+        </p>
+      </div>
+
+      <div class="footer">
+        <strong>Deane Auto Repairs</strong> · (Next to BP Petrol Station) ·
+        63 Hayr Road, Three Kings · 0800 625 9827 · deaneautonz@gmail.com<br />
+        Questions about this report? Call the workshop and quote report number
+        PPI-2021-18670545.
+      </div>
+    </div>
+  </body>
+</html>

@@ -7,3 +7,7 @@ uploads/*
 !uploads/.gitkeep
 .DS_Store
 .env
+
+# Local customer export PDFs (PII)
+exports/DAR-*.pdf
+

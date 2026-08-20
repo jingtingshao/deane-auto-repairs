@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en-NZ">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pre-Purchase Inspection · Deane Auto Repairs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="ppi.css" />
+    <style>
+      .toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.65rem 1rem;
+        background: #0d47a1;
+        color: #fff;
+      }
+      .toolbar strong {
+        font-family: "Barlow Condensed", sans-serif;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .toolbar-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+      }
+      .toolbar button {
+        border: 0;
+        border-radius: 8px;
+        padding: 0.5rem 0.85rem;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        background: #fff;
+        color: #0d47a1;
+      }
+      .toolbar button.ghost {
+        background: transparent;
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.55);
+      }
+
+      .photo-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+        margin: 0.6rem 0 1rem;
+      }
+
+      .photo-slot {
+        border: 1.5px dashed #9db4ce;
+        border-radius: 12px;
+        background: #f7faff;
+        min-height: 190px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .photo-slot header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.45rem 0.65rem;
+        background: #e8f1fb;
+        border-bottom: 1px solid #d0deee;
+      }
+
+      .photo-slot header strong {
+        font-family: "Barlow Condensed", sans-serif;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        font-size: 0.95rem;
+        color: #0d47a1;
+      }
+
+      .photo-slot .body {
+        flex: 1;
+        display: grid;
+        place-items: center;
+        padding: 0.5rem;
+        position: relative;
+        min-height: 150px;
+      }
+
+      .photo-slot img {
+        max-width: 100%;
+        max-height: 220px;
+        object-fit: contain;
+        border-radius: 6px;
+      }
+
+      .photo-slot .placeholder {
+        text-align: center;
+        color: #5b6777;
+        font-size: 0.88rem;
+        padding: 1rem;
+      }
+
+      .photo-slot .placeholder small {
+        display: block;
+        margin-top: 0.25rem;
+        color: #8a96a5;
+      }
+
+      .photo-slot input[type="file"] {
+        display: none;
+      }
+
+      .slot-actions {
+        display: flex;
+        gap: 0.35rem;
+      }
+
+      .slot-actions button,
+      .finding-photo-actions button,
+      #btn-add-finding {
+        border: 1px solid #cfd8e3;
+        background: #fff;
+        border-radius: 8px;
+        padding: 0.28rem 0.55rem;
+        font: inherit;
+        font-size: 0.82rem;
+        font-weight: 700;
+        cursor: pointer;
+        color: #0d47a1;
+      }
+
+      .finding-block {
+        border: 1px solid #cfd8e3;
+        border-radius: 12px;
+        padding: 0.75rem;
+        margin: 0.55rem 0;
+        background: #fff;
+      }
+
+      .finding-block .fields {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.55rem;
+        margin-bottom: 0.55rem;
+      }
+
+      .finding-block label {
+        display: grid;
+        gap: 0.25rem;
+        font-weight: 700;
+        font-size: 0.88rem;
+      }
+
+      .finding-block input,
+      .finding-block select,
+      .finding-block textarea,
+      .writable {
+        width: 100%;
+        border: 1px solid #cfd8e3;
+        border-radius: 8px;
+        padding: 0.45rem 0.55rem;
+        font: inherit;
+      }
+
+      .finding-photos {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.55rem;
+      }
+
+      .hint {
+        font-size: 0.85rem;
+        color: #5b6777;
+        margin: 0.2rem 0 0.6rem;
+      }
+
+      @media print {
+        .toolbar,
+        .slot-actions,
+        .finding-photo-actions,
+        #btn-add-finding,
+        .no-print {
+          display: none !important;
+        }
+        .photo-slot {
+          break-inside: avoid;
+          min-height: 160px;
+        }
+        .photo-slot img {
+          max-height: 180px;
+        }
+      }
+
+      @media (max-width: 700px) {
+        .photo-grid,
+        .finding-photos,
+        .finding-block .fields,
+        .diagram-split {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar no-print">
+      <strong>Deane PPI — fill, add photos, then print / save as PDF</strong>
+      <div class="toolbar-actions">
+        <button type="button" id="btn-add-finding-top">+ Problem photo block</button>
+        <button type="button" class="ghost" onclick="window.print()">Print / Save PDF</button>
+      </div>
+    </div>
+
+    <section class="ppi-cover" aria-label="Report cover">
+      <div class="ppi-cover-inner">
+        <p class="brand-name"><span>Deane</span> Auto Repairs</p>
+        <p class="ppi-cover-tag">Inspection document</p>
+        <h1 class="ppi-cover-title">Pre-Purchase Inspection Report</h1>
+        <div id="cover-photo" class="ppi-cover-photo is-empty">Vehicle photo</div>
+        <p class="ppi-cover-rego" id="cover-rego">————</p>
+        <p class="ppi-cover-model" id="cover-vehicle">Vehicle make / model / year</p>
+        <dl class="ppi-cover-meta">
+          <div>
+            <dt>Report No.</dt>
+            <dd id="cover-reportNo">—</dd>
+          </div>
+          <div>
+            <dt>Date</dt>
+            <dd id="cover-date">—</dd>
+          </div>
+          <div>
+            <dt>Customer</dt>
+            <dd id="cover-customer">—</dd>
+          </div>
+          <div>
+            <dt>Odometer</dt>
+            <dd id="cover-odometer">—</dd>
+          </div>
+        </dl>
+        <div class="ppi-cover-shop">
+          <strong>Deane Auto Repairs</strong><br />
+          (Next to BP Petrol Station)<br />
+          63 Hayr Road, Three Kings, Auckland<br />
+          0800 625 9827 · deaneautonz@gmail.com<br />
+          Mon–Sat 8:30am – 5:30pm
+        </div>
+      </div>
+    </section>
+
+    <div class="page">
+      <header class="brand-bar">
+        <div>
+          <p class="brand-name"><span>Deane</span> Auto Repairs</p>
+          <p class="brand-meta">
+            (Next to BP Petrol Station)<br />
+            63 Hayr Road, Three Kings<br />
+            0800 625 9827 · deaneautonz@gmail.com<br />
+            Mon–Sat 8:30am – 5:30pm
+          </p>
+        </div>
+        <div>
+          <p class="doc-title">Pre-Purchase<br />Inspection Report</p>
+          <p class="brand-meta right">
+            Report No.:
+            <input class="writable" style="width: 10rem" name="reportNo" id="field-reportNo" placeholder="PPI-____" /><br />
+            Date:
+            <input class="writable" style="width: 10rem; margin-top: 0.25rem" type="date" name="date" id="field-date" />
+          </p>
+        </div>
+      </header>
+
+      <p class="muted">
+        Independent workshop inspection at the time of examination.
+        This is <strong>not</strong> a Warrant of Fitness certificate.
+      </p>
+
+      <div class="grid-2">
+        <div>
+          <h2>Report owner</h2>
+          <table class="meta">
+            <tr>
+              <th>Name</th>
+              <td><input class="writable" name="customerName" id="field-customer" /></td>
+            </tr>
+            <tr>
+              <th>Phone</th>
+              <td><input class="writable" name="phone" /></td>
+            </tr>
+            <tr>
+              <th>Email</th>
+              <td><input class="writable" name="email" type="email" /></td>
+            </tr>
+          </table>
+        </div>
+        <div>
+          <h2>Vehicle</h2>
+          <table class="meta">
+            <tr>
+              <th>Rego</th>
+              <td><input class="writable" name="rego" id="field-rego" /></td>
+            </tr>
+            <tr>
+              <th>Make / model / year</th>
+              <td><input class="writable" name="vehicle" id="field-vehicle" /></td>
+            </tr>
+            <tr>
+              <th>Odometer</th>
+              <td><input class="writable" name="odometer" id="field-odometer" placeholder="km" /></td>
+            </tr>
+            <tr>
+              <th>VIN</th>
+              <td><input class="writable" name="vin" /></td>
+            </tr>
+          </table>
+        </div>
+      </div>
+
+      <h2>Vehicle photo areas</h2>
+      <p class="hint">
+        Upload photos for each view. Leave empty if not taken — the box stays as a blank slot on the PDF.
+      </p>
+      <div class="photo-grid" id="main-photos">
+        <div class="photo-slot" data-slot="interior">
+          <header>
+            <strong>Interior</strong>
+            <div class="slot-actions">
+              <button type="button" data-upload>Upload</button>
+              <button type="button" data-clear>Clear</button>
+            </div>
+          </header>
+          <div class="body">
+            <div class="placeholder">Photo slot empty<br /><small>Cabin / seats / dash</small></div>
+            <img alt="Interior" hidden />
+            <input type="file" accept="image/*" />
+          </div>
+        </div>
+        <div class="photo-slot" data-slot="front-side">
+          <header>
+            <strong>Front &amp; Side</strong>
+            <div class="slot-actions">
+              <button type="button" data-upload>Upload</button>
+              <button type="button" data-clear>Clear</button>
+            </div>
+          </header>
+          <div class="body">
+            <div class="placeholder">Photo slot empty<br /><small>Front quarter / side profile</small></div>
+            <img alt="Front and side" hidden />
+            <input type="file" accept="image/*" />
+          </div>
+        </div>
+        <div class="photo-slot" data-slot="engine">
+          <header>
+            <strong>Engine</strong>
+            <div class="slot-actions">
+              <button type="button" data-upload>Upload</button>
+              <button type="button" data-clear>Clear</button>
+            </div>
+          </header>
+          <div class="body">
+            <div class="placeholder">Photo slot empty<br /><small>Engine bay</small></div>
+            <img alt="Engine" hidden />
+            <input type="file" accept="image/*" />
+          </div>
+        </div>
+        <div class="photo-slot" data-slot="rear">
+          <header>
+            <strong>Rear &amp; Back</strong>
+            <div class="slot-actions">
+              <button type="button" data-upload>Upload</button>
+              <button type="button" data-clear>Clear</button>
+            </div>
+          </header>
+          <div class="body">
+            <div class="placeholder">Photo slot empty<br /><small>Rear / boot area</small></div>
+            <img alt="Rear and back" hidden />
+            <input type="file" accept="image/*" />
+          </div>
+        </div>
+      </div>
+
+      <h2>Report summary</h2>
+      <div class="box">
+        <label style="display: grid; gap: 0.3rem; font-weight: 700">
+          Vehicle condition summary
+          <textarea class="writable" name="summary" rows="3"></textarea>
+        </label>
+        <label style="display: grid; gap: 0.3rem; font-weight: 700; margin-top: 0.6rem">
+          Inspector comments
+          <textarea class="writable" name="comments" rows="3"></textarea>
+        </label>
+      </div>
+
+      <h2>Status key</h2>
+      <div class="legend">
+        <div class="l-ok">OK</div>
+        <div class="l-na">Not applicable</div>
+        <div class="l-wof">Potential WOF defect — urgent</div>
+        <div class="l-fix">Needs investigation / repair</div>
+        <div class="l-obs">Keep under observation</div>
+      </div>
+
+      <h2>Problems found — notes &amp; photos</h2>
+      <p class="hint">
+        Add a block for each issue. Each block has space for description plus up to 2 photos.
+      </p>
+      <div id="findings"></div>
+      <p class="no-print">
+        <button type="button" id="btn-add-finding">+ Add another problem / photo block</button>
+      </p>
+
+      <h2>Body condition and comments</h2>
+      <div class="diagram-split">
+        <div class="diagram-panel" aria-hidden="true">
+          <svg viewBox="0 0 360 200" xmlns="http://www.w3.org/2000/svg">
+            <text x="180" y="18" text-anchor="middle" fill="#0d47a1" font-family="Barlow Condensed, sans-serif" font-size="14" font-weight="800">BODY MAP</text>
+            <path d="M110 36h140c18 0 34 10 40 26l10 24v48c0 10-8 18-18 18H88c-10 0-18-8-18-18v-48l10-24c6-16 22-26 40-26z" fill="#e8f1fb" stroke="#1565c0" stroke-width="3"/>
+            <circle class="pin" cx="96" cy="58" r="9"/><text class="pin-text" x="96" y="58">1</text>
+            <circle class="pin" cx="96" cy="100" r="9"/><text class="pin-text" x="96" y="100">2</text>
+            <circle class="pin" cx="264" cy="58" r="9"/><text class="pin-text" x="264" y="58">3</text>
+            <circle class="pin" cx="264" cy="100" r="9"/><text class="pin-text" x="264" y="100">4</text>
+            <circle class="pin" cx="250" cy="160" r="9"/><text class="pin-text" x="250" y="160">5</text>
+            <circle class="pin" cx="180" cy="160" r="9"/><text class="pin-text" x="180" y="160">6</text>
+          </svg>
+        </div>
+        <div class="diagram-panel" aria-hidden="true">
+          <svg viewBox="0 0 320 200" xmlns="http://www.w3.org/2000/svg">
+            <text x="160" y="18" text-anchor="middle" fill="#0d47a1" font-family="Barlow Condensed, sans-serif" font-size="14" font-weight="800">CABIN MAP</text>
+            <rect x="50" y="30" width="220" height="150" rx="16" fill="#e8f1fb" stroke="#1565c0" stroke-width="3"/>
+            <rect x="78" y="70" width="58" height="44" rx="8" fill="#fff" stroke="#1565c0" stroke-width="2"/>
+            <rect x="184" y="70" width="58" height="44" rx="8" fill="#fff" stroke="#1565c0" stroke-width="2"/>
+            <rect x="78" y="128" width="164" height="34" rx="8" fill="#fff" stroke="#1565c0" stroke-width="2"/>
+            <circle class="pin" cx="107" cy="70" r="9"/><text class="pin-text" x="107" y="70">A</text>
+            <circle class="pin" cx="213" cy="70" r="9"/><text class="pin-text" x="213" y="70">B</text>
+            <circle class="pin" cx="160" cy="128" r="9"/><text class="pin-text" x="160" y="128">C</text>
+          </svg>
+        </div>
+      </div>
+
+      <h2>Tyre depths</h2>
+      <div class="tyres">
+        <div class="tyre"><span>LF</span><input class="writable" placeholder="mm" style="text-align:center;font-weight:800" /></div>
+        <div class="tyre"><span>RF</span><input class="writable" placeholder="mm" style="text-align:center;font-weight:800" /></div>
+        <div class="tyre"><span>LR</span><input class="writable" placeholder="mm" style="text-align:center;font-weight:800" /></div>
+        <div class="tyre"><span>RR</span><input class="writable" placeholder="mm" style="text-align:center;font-weight:800" /></div>
+      </div>
+      <p>Spare: <input class="writable" style="width:6rem" placeholder="mm" /> · Type: <input class="writable" style="width:12rem" placeholder="e.g. space-saver" /></p>
+
+      <h2 class="print-page-break">Items covered by this inspection</h2>
+      <p class="muted">
+        Braking · Cooling · Driveline · Electrical · Engine · Doors/hatch/bonnet ·
+        Exhaust · Fuel · Heating/AC · Interior · Steering · Structure · Suspension ·
+        Transmission · Towing (if fitted) · Tyres/wheels/hubs · Vision (glass, wipers, mirrors)
+      </p>
+      <p class="muted">
+        Full itemised checklist available on request / attached workshop sheet.
+      </p>
+
+      <h2>Conditions of inspection</h2>
+      <div class="disclaimer">
+        <p>
+          This report describes external examination, limited road testing, and
+          visual inspection on the date shown. It is not a WOF and does not
+          confirm ownership, finance, or write-off history. Hidden, intermittent,
+          or post-inspection faults may not be shown. Liability is limited to the
+          cost of the inspection.
+        </p>
+      </div>
+
+      <div class="footer">
+        <strong>Deane Auto Repairs</strong> · (Next to BP Petrol Station) ·
+        63 Hayr Road, Three Kings · 0800 625 9827 · deaneautonz@gmail.com
+      </div>
+    </div>
+
+    <template id="finding-template">
+      <article class="finding-block">
+        <div class="fields">
+          <label>
+            Area / system
+            <input name="area" placeholder="e.g. Engine oil leak" />
+          </label>
+          <label>
+            Status
+            <select name="status">
+              <option value="fix">Needs investigation / repair</option>
+              <option value="wof">Potential WOF — urgent</option>
+              <option value="obs">Keep under observation</option>
+            </select>
+          </label>
+        </div>
+        <label style="display: grid; gap: 0.25rem; font-weight: 700; font-size: 0.88rem; margin-bottom: 0.55rem">
+          Notes for customer
+          <textarea name="note" rows="2" placeholder="Describe the issue in plain English"></textarea>
+        </label>
+        <div class="finding-photos">
+          <div class="photo-slot" data-slot="finding-a">
+            <header>
+              <strong>Issue photo 1</strong>
+              <div class="slot-actions finding-photo-actions">
+                <button type="button" data-upload>Upload</button>
+                <button type="button" data-clear>Clear</button>
+              </div>
+            </header>
+            <div class="body">
+              <div class="placeholder">Upload problem photo</div>
+              <img alt="Issue photo 1" hidden />
+              <input type="file" accept="image/*" />
+            </div>
+          </div>
+          <div class="photo-slot" data-slot="finding-b">
+            <header>
+              <strong>Issue photo 2</strong>
+              <div class="slot-actions finding-photo-actions">
+                <button type="button" data-upload>Upload</button>
+                <button type="button" data-clear>Clear</button>
+              </div>
+            </header>
+            <div class="body">
+              <div class="placeholder">Optional second photo</div>
+              <img alt="Issue photo 2" hidden />
+              <input type="file" accept="image/*" />
+            </div>
+          </div>
+        </div>
+        <p class="no-print" style="margin: 0.5rem 0 0">
+          <button type="button" data-remove-finding>Remove this block</button>
+        </p>
+      </article>
+    </template>
+
+    <script>
+      function wirePhotoSlot(slot) {
+        const input = slot.querySelector('input[type="file"]');
+        const img = slot.querySelector("img");
+        const placeholder = slot.querySelector(".placeholder");
+        const uploadBtn = slot.querySelector("[data-upload]");
+        const clearBtn = slot.querySelector("[data-clear]");
+
+        uploadBtn.addEventListener("click", () => input.click());
+        clearBtn.addEventListener("click", () => {
+          input.value = "";
+          img.removeAttribute("src");
+          img.hidden = true;
+          placeholder.hidden = false;
+        });
+        input.addEventListener("change", () => {
+          const file = input.files && input.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            img.src = reader.result;
+            img.hidden = false;
+            placeholder.hidden = true;
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      function addFinding() {
+        const node = document
+          .getElementById("finding-template")
+          .content.cloneNode(true);
+        const article = node.querySelector(".finding-block");
+        article.querySelectorAll(".photo-slot").forEach(wirePhotoSlot);
+        article.querySelector("[data-remove-finding]").addEventListener("click", () => {
+          article.remove();
+        });
+        document.getElementById("findings").appendChild(article);
+      }
+
+      document.querySelectorAll("#main-photos .photo-slot").forEach(wirePhotoSlot);
+      document.getElementById("btn-add-finding").addEventListener("click", addFinding);
+      document.getElementById("btn-add-finding-top").addEventListener("click", addFinding);
+
+      function textOrDash(value, fallback) {
+        const v = (value || "").trim();
+        return v || fallback || "—";
+      }
+
+      function syncCover() {
+        document.getElementById("cover-reportNo").textContent = textOrDash(
+          document.getElementById("field-reportNo").value
+        );
+        document.getElementById("cover-date").textContent = textOrDash(
+          document.getElementById("field-date").value
+        );
+        document.getElementById("cover-customer").textContent = textOrDash(
+          document.getElementById("field-customer").value
+        );
+        const odo = document.getElementById("field-odometer").value.trim();
+        document.getElementById("cover-odometer").textContent = odo
+          ? `${odo} km`
+          : "—";
+        document.getElementById("cover-rego").textContent = textOrDash(
+          document.getElementById("field-rego").value,
+          "————"
+        );
+        document.getElementById("cover-vehicle").textContent = textOrDash(
+          document.getElementById("field-vehicle").value,
+          "Vehicle make / model / year"
+        );
+
+        const coverPhoto = document.getElementById("cover-photo");
+        const frontImg = document.querySelector(
+          '.photo-slot[data-slot="front-side"] img'
+        );
+        if (frontImg && frontImg.src && !frontImg.hidden) {
+          coverPhoto.style.backgroundImage = `url("${frontImg.src}")`;
+          coverPhoto.style.backgroundSize = "cover";
+          coverPhoto.style.backgroundPosition = "center";
+          coverPhoto.textContent = "";
+          coverPhoto.classList.remove("is-empty");
+        } else {
+          coverPhoto.style.backgroundImage = "";
+          coverPhoto.textContent = "Vehicle photo";
+          coverPhoto.classList.add("is-empty");
+        }
+      }
+
+      [
+        "field-reportNo",
+        "field-date",
+        "field-customer",
+        "field-odometer",
+        "field-rego",
+        "field-vehicle",
+      ].forEach((id) => {
+        const el = document.getElementById(id);
+        el.addEventListener("input", syncCover);
+        el.addEventListener("change", syncCover);
+      });
+
+      const frontSlot = document.querySelector(
+        '.photo-slot[data-slot="front-side"]'
+      );
+      if (frontSlot) {
+        frontSlot
+          .querySelector('input[type="file"]')
+          .addEventListener("change", () => setTimeout(syncCover, 50));
+        frontSlot
+          .querySelector("[data-clear]")
+          .addEventListener("click", () => setTimeout(syncCover, 50));
+      }
+
+      // Start with two empty problem blocks so space is clearly reserved
+      addFinding();
+      addFinding();
+      syncCover();
+    </script>
+  </body>
+</html>
