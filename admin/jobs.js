@@ -181,9 +181,31 @@ function renderParts() {
   });
 }
 
+function jobInput(name) {
+  return (
+    document.getElementById(
+      name === "customerName"
+        ? "job-customer-name"
+        : name === "customerEmail"
+          ? "job-customer-email"
+          : name === "customerPhone"
+            ? "job-customer-phone"
+            : name === "registration"
+              ? "job-registration"
+              : name === "vehicle"
+                ? "job-vehicle"
+                : name === "odometer"
+                  ? "job-odometer"
+                  : ""
+    ) ||
+    jobsForm?.elements?.namedItem?.(name) ||
+    document.querySelector(`#jobs-form [name="${name}"]`)
+  );
+}
+
 function fillForm(job) {
   const set = (name, value) => {
-    const el = jobsForm.elements.namedItem(name);
+    const el = jobInput(name);
     if (!el) return;
     el.value = value ?? "";
   };
@@ -218,18 +240,18 @@ function fillForm(job) {
 }
 
 function collectJob() {
-  const f = jobsForm;
+  const value = (name) => String(jobInput(name)?.value || "").trim();
   return {
-    status: f.status.value,
-    technicianName: f.technicianName.value.trim(),
-    customerName: f.customerName.value.trim(),
-    customerEmail: f.customerEmail.value.trim(),
-    customerPhone: f.customerPhone.value.trim(),
-    registration: f.registration.value.trim(),
-    vehicle: f.vehicle.value.trim(),
-    odometer: f.odometer.value.trim(),
-    workRequested: f.workRequested.value,
-    notes: f.notes.value,
+    status: jobInput("status")?.value || "booked",
+    technicianName: value("technicianName"),
+    customerName: value("customerName"),
+    customerEmail: value("customerEmail"),
+    customerPhone: value("customerPhone"),
+    registration: value("registration"),
+    vehicle: value("vehicle"),
+    odometer: value("odometer"),
+    workRequested: String(jobInput("workRequested")?.value || ""),
+    notes: String(jobInput("notes")?.value || ""),
     parts: partRows.map((part) => ({ ...part })),
   };
 }
@@ -240,7 +262,8 @@ async function saveJob() {
     method: "PUT",
     body: JSON.stringify(collectJob()),
   });
-  jobsForm.elements.namedItem("status").value = currentJob.status;
+  const statusEl = jobInput("status");
+  if (statusEl) statusEl.value = currentJob.status;
   const el = document.getElementById("jobs-save-status");
   if (el) {
     el.hidden = false;

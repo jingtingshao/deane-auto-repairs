@@ -255,16 +255,91 @@ function linkJobToBilling(docs, job, quote, invoice) {
   }
 }
 
+/** Prefer quote/invoice fields, then fill blanks from the customers list. */
+function customerFieldsForJob(source = {}) {
+  const fields = {
+    customerName: String(source.customerName || "").trim(),
+    customerEmail: String(source.customerEmail || "").trim(),
+    customerPhone: String(source.customerPhone || "").trim(),
+    registration: String(source.registration || "").trim().toUpperCase(),
+    vehicle: String(source.vehicle || "").trim(),
+    odometer: String(source.odometer || "").trim(),
+  };
+
+  const plate = plateKey(fields.registration);
+  const email = fields.customerEmail.toLowerCase();
+  const name = fields.customerName.toLowerCase();
+
+  let match = null;
+  const directory = listCustomers();
+  if (plate) {
+    match = directory.find((row) => plateKey(row.registration) === plate) || null;
+  }
+  if (!match && email) {
+    match =
+      directory.find(
+        (row) => String(row.customerEmail || "").trim().toLowerCase() === email
+      ) || null;
+  }
+  if (!match && name) {
+    const nameMatches = directory.filter(
+      (row) => String(row.customerName || "").trim().toLowerCase() === name
+    );
+    if (nameMatches.length === 1) match = nameMatches[0];
+  }
+
+  if (match) {
+    if (!fields.customerName) fields.customerName = String(match.customerName || "").trim();
+    if (!fields.customerEmail) fields.customerEmail = String(match.customerEmail || "").trim();
+    if (!fields.customerPhone) fields.customerPhone = String(match.customerPhone || "").trim();
+    if (!fields.registration) {
+      fields.registration = String(match.registration || "").trim().toUpperCase();
+    }
+    if (!fields.vehicle) fields.vehicle = String(match.vehicle || "").trim();
+  }
+
+  return fields;
+}
+
+function applyCustomerFieldsToJob(job, fields) {
+  let changed = false;
+  for (const key of [
+    "customerName",
+    "customerEmail",
+    "customerPhone",
+    "registration",
+    "vehicle",
+    "odometer",
+  ]) {
+    const next = String(fields[key] || "").trim();
+    if (next && !String(job[key] || "").trim()) {
+      job[key] = key === "registration" ? next.toUpperCase() : next;
+      changed = true;
+    }
+  }
+  if (changed) job.updatedAt = new Date().toISOString();
+  return changed;
+}
+
 /** Create a job card from an accepted quote (or return the existing one). */
 function ensureJobFromAcceptedQuote(docs, quote, invoice) {
   if (!quote && !invoice) return null;
+  const source = quote || invoice;
+  const fields = customerFieldsForJob(source);
   const existingId = quote?.jobId || invoice?.jobId || "";
   if (existingId) {
-    const existing = readJobs().find((j) => j.id === existingId);
-    if (existing) return { job: existing, created: false };
+    const jobs = readJobs();
+    const index = jobs.findIndex((j) => j.id === existingId);
+    if (index >= 0) {
+      const existing = jobs[index];
+      if (applyCustomerFieldsToJob(existing, fields)) {
+        jobs[index] = existing;
+        writeJobs(jobs);
+      }
+      return { job: existing, created: false };
+    }
   }
 
-  const source = quote || invoice;
   const jobs = readJobs();
   const now = new Date().toISOString();
   const parts = jobsLib.partsFromQuoteLines(source.lines || quote?.lines || [], () =>
@@ -273,12 +348,7 @@ function ensureJobFromAcceptedQuote(docs, quote, invoice) {
   const job = {
     ...emptyJob(now),
     number: nextJobCardNumber(jobs),
-    customerName: source.customerName || "",
-    customerEmail: source.customerEmail || "",
-    customerPhone: source.customerPhone || "",
-    registration: String(source.registration || "").toUpperCase(),
-    vehicle: source.vehicle || "",
-    odometer: source.odometer || "",
+    ...fields,
     workRequested: jobsLib.workRequestedFromQuote(quote || source),
     parts,
   };
@@ -1769,8 +1839,21 @@ app.post("/api/jobs/from-quote/:id", requireAdmin, (req, res) => {
 });
 
 app.get("/api/jobs/:id", requireAdmin, (req, res) => {
-  const job = readJobs().find((j) => j.id === req.params.id);
-  if (!job) return res.status(404).json({ error: "Job not found" });
+  const jobs = readJobs();
+  const index = jobs.findIndex((j) => j.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: "Job not found" });
+
+  const job = jobs[index];
+  if (job.quoteId || job.invoiceId) {
+    const docs = readBilling();
+    const quote = job.quoteId ? docs.find((d) => d.id === job.quoteId) : null;
+    const invoice = job.invoiceId ? docs.find((d) => d.id === job.invoiceId) : null;
+    const fields = customerFieldsForJob(quote || invoice || {});
+    if (applyCustomerFieldsToJob(job, fields)) {
+      jobs[index] = job;
+      writeJobs(jobs);
+    }
+  }
   res.json(job);
 });
 
