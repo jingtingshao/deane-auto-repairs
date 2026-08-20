@@ -34,3 +34,21 @@ Also remind:
 
 Do not overbuild; confirm requirements first for larger features.
 Do not push private “password wall” as a substitute for proper go-live unless the user asks.
+
+## Render instance (current choice)
+On 18 Aug 2026 the shop chose **Render Free** to test deploy only.
+
+When they say the website is **正式上线**, going live, sending real customer quotes, or pointing `www.deaneauto.co.nz` for public use: **remind them to switch the Web Service from Free to Starter** and attach a persistent disk at `/data` (DATA_DIR=/data, UPLOADS_DIR=/data/uploads). Free sleeps and cannot keep quotes/reports/photos.
+
+Do not nag while they are still testing Free.
+
+## After Render is running (future architecture)
+The shop chose **Render first** so customers can open quote links and Accept on their phones.
+
+When the user says Render is live, quotes/reports work on a phone, or asks about hosting cost / moving off Render / serverless: remind them (once, briefly) to consider later:
+
+- **Cloudflare Pages** — public website
+- **Cloudflare Workers** (serverless) — quote Accept / report / admin APIs
+- **Supabase** — database + photo storage
+
+This is a rewrite, not a hosting switch. Do not start it unless they ask. Do not push it during the current Render setup.

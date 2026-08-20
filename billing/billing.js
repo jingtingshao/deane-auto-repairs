@@ -112,7 +112,29 @@ function render(doc) {
         <button type="button" id="btn-print">Print / save PDF</button>
       </div>`;
 
+  const shopName = shop.name || "Deane Auto Repairs";
+  const shopLandmark = shop.addressLine2 || "(Next to BP Petrol Station)";
+  const shopStreet = [shop.street || "63 Hayr Road", shop.suburb || "Three Kings", shop.city || "Auckland"]
+    .filter(Boolean)
+    .join(", ");
+  const shopPhone = shop.phoneDisplay || "0800 625 9827";
+  const shopPhoneTel = shop.phoneTel || "08006259827";
+  const shopEmail = shop.email || "deaneautonz@gmail.com";
+
+  const letterhead = `
+    <header class="letterhead">
+      <p class="letterhead-brand"><span class="script">Deane</span> <span class="sans">AUTO REPAIRS</span></p>
+      <p class="letterhead-contact">
+        ${escapeHtml(shopName)}<br />
+        ${escapeHtml(shopLandmark)}<br />
+        ${escapeHtml(shopStreet)}<br />
+        <a href="tel:${escapeHtml(shopPhoneTel)}">${escapeHtml(shopPhone)}</a>
+        · <a href="mailto:${escapeHtml(shopEmail)}">${escapeHtml(shopEmail)}</a>
+      </p>
+    </header>`;
+
   docEl.innerHTML = `
+    ${letterhead}
     ${banner}
     <section class="panel">
       <h1>${escapeHtml(isInvoice ? "Tax Invoice" : "Quote")} ${escapeHtml(doc.number)}</h1>
@@ -140,7 +162,7 @@ function render(doc) {
           <tr>
             <th>Description</th>
             <th class="num">Qty</th>
-            <th class="num">Price incl. GST</th>
+            <th class="num">Price excl. GST</th>
             <th class="num">Total</th>
           </tr>
         </thead>
@@ -149,7 +171,7 @@ function render(doc) {
       <div class="totals">
         <p><span>Subtotal excl. GST</span><span>${money(totals.net)}</span></p>
         <p><span>GST (15%)</span><span>${money(totals.gst)}</span></p>
-        <p class="grand"><span>Total incl. GST</span><span>${money(totals.totalIncl)}</span></p>
+        <p class="grand"><span>Total (plus GST)</span><span>${money(totals.totalIncl)}</span></p>
       </div>
       ${doc.notes ? `<p class="note" style="margin-top:1rem">${escapeHtml(doc.notes)}</p>` : ""}
       <div class="pay">

@@ -162,10 +162,30 @@ function readSavedCustomers() {
 function readJobs() {
   try {
     const rows = JSON.parse(fs.readFileSync(JOBS_FILE, "utf8"));
-    return Array.isArray(rows) ? rows : [];
+    const jobs = Array.isArray(rows) ? rows : [];
+    return ensureJobStatuses(jobs);
   } catch {
     return [];
   }
+}
+
+function ensureJobStatuses(jobs) {
+  let changed = false;
+  for (const job of jobs) {
+    const next = jobsLib.normalizeJobStatus(job.status, job.parts);
+    if (next !== job.status) {
+      job.status = next;
+      changed = true;
+    }
+  }
+  if (changed) {
+    try {
+      writeJobs(jobs);
+    } catch (err) {
+      console.error("Could not migrate job statuses:", err);
+    }
+  }
+  return jobs;
 }
 
 function writeJobs(jobs) {
@@ -195,11 +215,12 @@ function nextJobCardNumber(jobs) {
 }
 
 function summarizeJob(job) {
+  const status = jobsLib.normalizeJobStatus(job.status, job.parts);
   const parts = jobsLib.partsSummary(job.parts);
   return {
     id: job.id,
     number: job.number,
-    status: job.status,
+    status,
     customerName: job.customerName,
     customerPhone: job.customerPhone,
     registration: job.registration,
@@ -273,7 +294,15 @@ function customerFieldsForJob(source = {}) {
   let match = null;
   const directory = listCustomers();
   if (plate) {
-    match = directory.find((row) => plateKey(row.registration) === plate) || null;
+    match =
+      directory.find((row) => {
+        const plates = Array.isArray(row.registrations)
+          ? row.registrations
+          : String(row.registration || "")
+              .split(",")
+              .map((p) => p.trim());
+        return plates.some((p) => plateKey(p) === plate);
+      }) || null;
   }
   if (!match && email) {
     match =
@@ -293,9 +322,19 @@ function customerFieldsForJob(source = {}) {
     if (!fields.customerEmail) fields.customerEmail = String(match.customerEmail || "").trim();
     if (!fields.customerPhone) fields.customerPhone = String(match.customerPhone || "").trim();
     if (!fields.registration) {
-      fields.registration = String(match.registration || "").trim().toUpperCase();
+      fields.registration = String(
+        match.registrations?.[0] || match.registration || ""
+      )
+        .split(",")[0]
+        .trim()
+        .toUpperCase();
     }
-    if (!fields.vehicle) fields.vehicle = String(match.vehicle || "").trim();
+    if (!fields.vehicle) {
+      const vehicleRow = (match.vehicles || []).find(
+        (v) => plateKey(v.registration) === plate
+      );
+      fields.vehicle = String(vehicleRow?.vehicle || match.vehicle || "").trim();
+    }
   }
 
   return fields;
@@ -375,7 +414,7 @@ function emptyJob(now) {
   return {
     id: randomUUID(),
     number: "",
-    status: "booked",
+    status: "in_progress",
     createdAt: now,
     updatedAt: now,
     customerName: "",
@@ -396,12 +435,26 @@ function emptyJob(now) {
 }
 
 function applyJobFields(job, body = {}) {
-  const status = body.status != null ? String(body.status) : job.status;
-  if (body.status != null && !jobsLib.isJobStatus(status)) {
-    const err = new Error("Choose a valid job status.");
-    err.status = 400;
-    throw err;
+  const parts =
+    body.parts != null
+      ? jobsLib.normalizeParts(body.parts, () => randomUUID())
+      : job.parts;
+
+  let status = body.status != null ? String(body.status) : job.status;
+  if (body.status != null) {
+    const known =
+      jobsLib.isJobStatus(status) ||
+      status === "booked" ||
+      status === "waiting_customer" ||
+      status === "ready";
+    if (!known) {
+      const err = new Error("Choose a valid job status.");
+      err.status = 400;
+      throw err;
+    }
   }
+  status = jobsLib.normalizeJobStatus(status, parts);
+
   return {
     ...job,
     status,
@@ -425,10 +478,7 @@ function applyJobFields(job, body = {}) {
         ? String(body.technicianName).trim()
         : job.technicianName,
     notes: body.notes != null ? String(body.notes) : job.notes,
-    parts:
-      body.parts != null
-        ? jobsLib.normalizeParts(body.parts, () => randomUUID())
-        : job.parts,
+    parts,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -447,20 +497,59 @@ function writeSavedCustomers(rows) {
   }
 }
 
+function normalizeVehicles(body = {}, current = {}) {
+  let raw = [];
+  if (Array.isArray(body.vehicles)) {
+    raw = body.vehicles;
+  } else if (body.registration != null && String(body.registration).trim()) {
+    raw = [
+      {
+        registration: body.registration,
+        vehicle: body.vehicle || "",
+      },
+    ];
+  } else if (Array.isArray(current.vehicles) && current.vehicles.length) {
+    raw = current.vehicles;
+  } else if (current.registration) {
+    raw = [
+      {
+        registration: current.registration,
+        vehicle: current.vehicle || "",
+      },
+    ];
+  }
+
+  const vehicles = [];
+  const seen = new Set();
+  for (const row of raw) {
+    const registration = String(row?.registration || "")
+      .trim()
+      .toUpperCase();
+    if (!registration) continue;
+    const key = plateKey(registration);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    vehicles.push({
+      id: row.id || randomUUID(),
+      registration,
+      vehicle: String(row?.vehicle || "").trim(),
+    });
+  }
+  return vehicles;
+}
+
 function normalizeSavedCustomer(body, current = {}) {
   const customerName = String(body?.customerName ?? current.customerName ?? "").trim();
   const customerAddress = String(body?.customerAddress ?? current.customerAddress ?? "").trim();
   const customerPhone = String(body?.customerPhone ?? current.customerPhone ?? "").trim();
-  const registration = String(body?.registration ?? current.registration ?? "")
-    .trim()
-    .toUpperCase();
+  const vehicles = normalizeVehicles(body || {}, current || {});
   if (!customerName) {
     const err = new Error("Customer name is required.");
     err.status = 400;
     throw err;
   }
-  if (!registration) {
-    const err = new Error("Registration / plate is required.");
+  if (!vehicles.length) {
+    const err = new Error("Add at least one registration / plate.");
     err.status = 400;
     throw err;
   }
@@ -469,7 +558,8 @@ function normalizeSavedCustomer(body, current = {}) {
     customerAddress,
     customerPhone,
     customerEmail: String(body?.customerEmail ?? current.customerEmail ?? "").trim(),
-    registration,
+    vehicles,
+    registration: vehicles[0].registration,
   };
 }
 
@@ -480,6 +570,7 @@ function plateKey(value) {
 }
 
 function customerRecordKey(item) {
+  if (item.customerId) return `id:${item.customerId}`;
   const plate = plateKey(item.registration);
   if (plate) return `rego:${plate}`;
   const email = String(item.customerEmail || "").trim().toLowerCase();
@@ -511,6 +602,8 @@ function mergeCustomer(map, incoming) {
     customerEmail: "",
     customerPhone: "",
     registration: "",
+    registrations: [],
+    vehicles: [],
     vehicle: "",
     wofExpiry: "",
     lastVisit: "",
@@ -522,22 +615,70 @@ function mergeCustomer(map, incoming) {
   };
   const incomingVisit = incoming.lastVisit || "";
   const isNewerVisit = !cur.lastVisit || incomingVisit >= cur.lastVisit;
+
+  let vehicles = Array.isArray(cur.vehicles) ? [...cur.vehicles] : [];
+  if (Array.isArray(incoming.vehicles) && incoming.vehicles.length) {
+    for (const v of incoming.vehicles) {
+      const pk = plateKey(v.registration);
+      if (!pk) continue;
+      const idx = vehicles.findIndex((x) => plateKey(x.registration) === pk);
+      if (idx >= 0) {
+        vehicles[idx] = {
+          ...vehicles[idx],
+          ...v,
+          registration: String(v.registration || vehicles[idx].registration).toUpperCase(),
+          vehicle: v.vehicle || vehicles[idx].vehicle || "",
+          wofExpiry: v.wofExpiry || vehicles[idx].wofExpiry || "",
+        };
+      } else {
+        vehicles.push({
+          id: v.id || randomUUID(),
+          registration: String(v.registration || "").toUpperCase(),
+          vehicle: String(v.vehicle || "").trim(),
+          wofExpiry: v.wofExpiry || "",
+        });
+      }
+    }
+  } else if (incoming.registration) {
+    const pk = plateKey(incoming.registration);
+    const idx = vehicles.findIndex((x) => plateKey(x.registration) === pk);
+    const nextVehicle = {
+      id: idx >= 0 ? vehicles[idx].id : randomUUID(),
+      registration: String(incoming.registration).toUpperCase(),
+      vehicle:
+        (isNewerVisit && incoming.vehicle) ||
+        (idx >= 0 ? vehicles[idx].vehicle : "") ||
+        incoming.vehicle ||
+        "",
+      wofExpiry:
+        incoming.wofExpiry && (isNewerVisit || !(idx >= 0 && vehicles[idx].wofExpiry))
+          ? incoming.wofExpiry
+          : idx >= 0
+            ? vehicles[idx].wofExpiry || ""
+            : "",
+    };
+    if (idx >= 0) vehicles[idx] = { ...vehicles[idx], ...nextVehicle };
+    else vehicles.push(nextVehicle);
+  }
+
+  const registrations = vehicles.map((v) => v.registration).filter(Boolean);
+  const bestWof = vehicles
+    .map((v) => v.wofExpiry)
+    .filter(Boolean)
+    .sort()[0] || incoming.wofExpiry || cur.wofExpiry || "";
+
   map.set(key, {
     ...cur,
-    customerName:
-      incoming.customerName ||
-      cur.customerName ||
-      "",
+    customerName: incoming.customerName || cur.customerName || "",
     customerAddress: incoming.customerAddress || cur.customerAddress,
     customerEmail: incoming.customerEmail || cur.customerEmail,
     customerPhone: incoming.customerPhone || cur.customerPhone,
-    registration: incoming.registration || cur.registration,
+    vehicles,
+    registrations,
+    registration: registrations.join(", "),
     vehicle:
       (isNewerVisit && incoming.vehicle) || cur.vehicle || incoming.vehicle || "",
-    wofExpiry:
-      incoming.wofExpiry && (isNewerVisit || !cur.wofExpiry)
-        ? incoming.wofExpiry
-        : cur.wofExpiry,
+    wofExpiry: bestWof,
     lastVisit: incomingVisit >= (cur.lastVisit || "") ? incomingVisit : cur.lastVisit,
     lastJobNumber:
       isNewerVisit && incoming.lastJobNumber
@@ -551,8 +692,43 @@ function mergeCustomer(map, incoming) {
 
 function listCustomers() {
   const map = new Map();
-  for (const r of readReports()) {
+  const plateOwner = new Map();
+
+  for (const c of readSavedCustomers()) {
+    const vehicles = normalizeVehicles(c, c);
+    const key = `id:${c.id}`;
+    for (const v of vehicles) {
+      const pk = plateKey(v.registration);
+      if (pk) plateOwner.set(pk, key);
+    }
     mergeCustomer(map, {
+      customerName: c.customerName,
+      customerAddress: c.customerAddress,
+      customerPhone: c.customerPhone,
+      customerEmail: c.customerEmail || "",
+      vehicles,
+      registration: vehicles[0]?.registration || c.registration || "",
+      vehicle: "",
+      wofExpiry: "",
+      lastVisit: "",
+      lastJobNumber: "",
+      lastReportId: "",
+      lastBillingId: "",
+      customerId: c.id,
+    });
+  }
+
+  function mergeIncoming(incoming) {
+    const pk = plateKey(incoming.registration);
+    const owned = pk ? plateOwner.get(pk) : "";
+    mergeCustomer(map, {
+      ...incoming,
+      customerId: owned ? owned.slice(3) : incoming.customerId || "",
+    });
+  }
+
+  for (const r of readReports()) {
+    mergeIncoming({
       customerName: r.customerName,
       customerEmail: r.customerEmail,
       customerPhone: r.customerPhone,
@@ -567,7 +743,7 @@ function listCustomers() {
   }
   for (const d of readBilling()) {
     if (d.status === "void") continue;
-    mergeCustomer(map, {
+    mergeIncoming({
       customerName: d.customerName,
       customerEmail: d.customerEmail,
       customerPhone: d.customerPhone,
@@ -580,25 +756,21 @@ function listCustomers() {
       lastBillingId: d.id,
     });
   }
-  for (const c of readSavedCustomers()) {
-    mergeCustomer(map, {
-      customerName: c.customerName,
-      customerAddress: c.customerAddress,
-      customerPhone: c.customerPhone,
-      customerEmail: c.customerEmail || "",
-      registration: c.registration,
-      vehicle: "",
-      wofExpiry: "",
-      lastVisit: "",
-      lastJobNumber: "",
-      lastReportId: "",
-      lastBillingId: "",
-      customerId: c.id,
-    });
-  }
+
   const rank = { overdue: 0, due_soon: 1, ok: 2, missing: 3 };
   return [...map.values()]
-    .map((row) => ({ ...row, ...wofMeta(row.wofExpiry) }))
+    .map((row) => {
+      const hasReport = Boolean(row.lastReportId);
+      const hasBilling = Boolean(row.lastBillingId);
+      const canDelete = Boolean(row.customerId) && !hasReport && !hasBilling;
+      return {
+        ...row,
+        ...wofMeta(row.wofExpiry),
+        hasReport,
+        hasBilling,
+        canDelete,
+      };
+    })
     .sort((a, b) => {
       const rankDiff = rank[a.wofStatus] - rank[b.wofStatus];
       if (rankDiff) return rankDiff;
@@ -655,10 +827,183 @@ function billableLines(lines) {
   );
 }
 
+const PAYMENT_STATUSES = ["unpaid", "deposit", "paid"];
+
+function emptyPaymentFields() {
+  return {
+    payments: [],
+    paymentStatus: "unpaid",
+    amountPaid: 0,
+    paidAt: "",
+    paymentNote: "",
+  };
+}
+
+function normalizePaymentRows(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row) => ({
+      id: row.id || randomUUID(),
+      amount: catalog.round2(Math.max(0, Number(row.amount) || 0)),
+      paidAt: String(row.paidAt || "").trim(),
+      note: String(row.note || "").trim(),
+    }))
+    .filter((row) => row.amount > 0);
+}
+
+/** Migrate legacy single amountPaid into a payments[] list. */
+function paymentsFromDoc(doc, body) {
+  if (body.payments != null) return normalizePaymentRows(body.payments);
+  if (Array.isArray(doc.payments) && doc.payments.length) {
+    return normalizePaymentRows(doc.payments);
+  }
+  const legacy = catalog.round2(Math.max(0, Number(doc.amountPaid) || 0));
+  if (legacy > 0) {
+    return normalizePaymentRows([
+      {
+        id: randomUUID(),
+        amount: legacy,
+        paidAt: doc.paidAt || "",
+        note: doc.paymentNote || "",
+      },
+    ]);
+  }
+  return [];
+}
+
+function derivePaymentStatus(amountPaid, totalIncl) {
+  if (amountPaid <= 0) return "unpaid";
+  if (totalIncl > 0 && amountPaid + 0.001 >= totalIncl) return "paid";
+  return "deposit";
+}
+
+function normalizeInvoicePayment(doc, body = {}, totals) {
+  const totalIncl =
+    Number(totals?.totalIncl) || catalog.computeTotals(doc.lines || []).totalIncl;
+  const payments = paymentsFromDoc(doc, body);
+  const amountPaid = catalog.round2(
+    payments.reduce((sum, row) => sum + row.amount, 0)
+  );
+  const paymentStatus = derivePaymentStatus(amountPaid, totalIncl);
+  const last = payments[payments.length - 1];
+  return {
+    payments,
+    paymentStatus,
+    amountPaid,
+    paidAt: last?.paidAt || "",
+    paymentNote: last?.note || "",
+    balanceDue: catalog.round2(Math.max(0, totalIncl - amountPaid)),
+  };
+}
+
+function appendHistory(doc, entry = {}) {
+  if (!doc || typeof doc !== "object") return;
+  if (!Array.isArray(doc.history)) doc.history = [];
+  doc.history.push({
+    id: randomUUID(),
+    at: entry.at || new Date().toISOString(),
+    type: String(entry.type || "note"),
+    summary: String(entry.summary || "").trim(),
+    detail: String(entry.detail || "").trim(),
+    amount:
+      entry.amount == null || entry.amount === ""
+        ? null
+        : catalog.round2(Number(entry.amount) || 0),
+  });
+  if (doc.history.length > 120) doc.history = doc.history.slice(-120);
+}
+
+function ensureHistory(doc) {
+  if (!doc) return;
+  if (Array.isArray(doc.history) && doc.history.length) return;
+  doc.history = [];
+  const totals = catalog.computeTotals(doc.lines || []);
+  appendHistory(doc, {
+    at: doc.createdAt || new Date().toISOString(),
+    type: "created",
+    summary: doc.kind === "invoice" ? "Invoice created" : "Quote created",
+    amount: totals.totalIncl,
+  });
+}
+
+function describeLineChanges(beforeLines, afterLines) {
+  const before = (beforeLines || []).filter((l) => String(l.description || "").trim());
+  const after = (afterLines || []).filter((l) => String(l.description || "").trim());
+  const details = [];
+  const usedBefore = new Set();
+
+  for (const line of after) {
+    const prevById = before.find((l) => l.id && line.id && l.id === line.id);
+    const prev =
+      prevById ||
+      before.find(
+        (l, i) =>
+          !usedBefore.has(i) &&
+          String(l.description).trim().toLowerCase() ===
+            String(line.description).trim().toLowerCase()
+      );
+    if (prev) {
+      const idx = before.indexOf(prev);
+      usedBefore.add(idx);
+      if (
+        Number(prev.qty) !== Number(line.qty) ||
+        Number(prev.unitPriceIncl) !== Number(line.unitPriceIncl)
+      ) {
+        details.push(`Changed: ${line.description}`);
+      }
+    } else {
+      details.push(`Added: ${line.description}`);
+    }
+  }
+  before.forEach((line, i) => {
+    if (usedBefore.has(i)) return;
+    const still = after.some(
+      (l) =>
+        (l.id && line.id && l.id === line.id) ||
+        String(l.description).trim().toLowerCase() ===
+          String(line.description).trim().toLowerCase()
+    );
+    if (!still) details.push(`Removed: ${line.description}`);
+  });
+  return details;
+}
+
+function describeFieldChanges(before, after) {
+  const labels = [
+    ["customerName", "Customer"],
+    ["customerEmail", "Email"],
+    ["customerPhone", "Phone"],
+    ["registration", "Registration"],
+    ["vehicle", "Vehicle"],
+    ["notes", "Notes"],
+    ["validUntil", "Valid until"],
+  ];
+  const details = [];
+  for (const [field, label] of labels) {
+    if (String(before[field] || "") !== String(after[field] || "")) {
+      details.push(`${label} updated`);
+    }
+  }
+  return details;
+}
+
+function paymentMap(rows) {
+  const map = new Map();
+  for (const row of rows || []) {
+    if (row?.id) map.set(row.id, row);
+  }
+  return map;
+}
+
 function withBillingTotals(doc, isAdmin) {
+  const totals = catalog.computeTotals(doc.lines);
+  const payment =
+    doc.kind === "invoice"
+      ? normalizeInvoicePayment(doc, {}, totals)
+      : null;
   const payload = {
     ...doc,
-    totals: catalog.computeTotals(doc.lines),
+    totals,
     shop: {
       name: business.name,
       addressLine2: business.addressLine2,
@@ -674,7 +1019,24 @@ function withBillingTotals(doc, isAdmin) {
       depositNote: business.depositNote || "",
     },
   };
-  if (!isAdmin) delete payload.acceptToken;
+  if (payment) {
+    payload.payments = payment.payments;
+    payload.paymentStatus = payment.paymentStatus;
+    payload.amountPaid = payment.amountPaid;
+    payload.paidAt = payment.paidAt;
+    payload.paymentNote = payment.paymentNote;
+    payload.balanceDue = payment.balanceDue;
+  }
+  if (!isAdmin) {
+    delete payload.acceptToken;
+    delete payload.history;
+  } else if (Array.isArray(payload.history)) {
+    payload.history = [...payload.history].sort((a, b) =>
+      String(b.at).localeCompare(String(a.at))
+    );
+  } else {
+    payload.history = [];
+  }
   return payload;
 }
 
@@ -886,8 +1248,11 @@ app.post("/api/customers", requireAdmin, (req, res) => {
   try {
     const fields = normalizeSavedCustomer(req.body);
     const rows = readSavedCustomers();
-    const plate = plateKey(fields.registration);
-    const existing = rows.find((c) => plateKey(c.registration) === plate);
+    const plates = new Set(fields.vehicles.map((v) => plateKey(v.registration)));
+    const existing = rows.find((c) => {
+      const vehicles = normalizeVehicles(c, c);
+      return vehicles.some((v) => plates.has(plateKey(v.registration)));
+    });
     const now = new Date().toISOString();
     if (existing) {
       Object.assign(existing, fields, { updatedAt: now });
@@ -930,11 +1295,45 @@ app.put("/api/customers/:id", requireAdmin, (req, res) => {
 
 app.delete("/api/customers/:id", requireAdmin, (req, res) => {
   const rows = readSavedCustomers();
-  const next = rows.filter((c) => c.id !== req.params.id);
-  if (next.length === rows.length) {
-    return res.status(404).json({ error: "Customer not found" });
+  const customer = rows.find((c) => c.id === req.params.id);
+  if (!customer) return res.status(404).json({ error: "Customer not found" });
+
+  const vehicles = normalizeVehicles(customer, customer);
+  const plates = new Set(vehicles.map((v) => plateKey(v.registration)).filter(Boolean));
+  const name = String(customer.customerName || "").trim().toLowerCase();
+  const email = String(customer.customerEmail || "").trim().toLowerCase();
+
+  const hasReport = readReports().some((r) => {
+    const plate = plateKey(r.registration);
+    if (plate && plates.has(plate)) return true;
+    if (email && String(r.customerEmail || "").trim().toLowerCase() === email) return true;
+    return (
+      name &&
+      String(r.customerName || "").trim().toLowerCase() === name &&
+      plate &&
+      plates.has(plate)
+    );
+  });
+  if (hasReport) {
+    return res.status(400).json({
+      error: "This customer has a service report. Delete is not available.",
+    });
   }
-  writeSavedCustomers(next);
+
+  const hasBilling = readBilling().some((d) => {
+    if (d.status === "void") return false;
+    const plate = plateKey(d.registration);
+    if (plate && plates.has(plate)) return true;
+    if (email && String(d.customerEmail || "").trim().toLowerCase() === email) return true;
+    return false;
+  });
+  if (hasBilling) {
+    return res.status(400).json({
+      error: "This customer has a quote or invoice. Delete is not available.",
+    });
+  }
+
+  writeSavedCustomers(rows.filter((c) => c.id !== req.params.id));
   res.json({ ok: true });
 });
 
@@ -1063,6 +1462,77 @@ app.get("/api/admin/email-status", requireAdmin, (_req, res) => {
     dataDir: DATA_DIR,
     customersSaved,
   });
+});
+
+app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
+  try {
+    const jobs = readJobs();
+    const jobCounts = {
+      waiting_parts: 0,
+      in_progress: 0,
+      completed: 0,
+    };
+    for (const job of jobs) {
+      const status = jobsLib.normalizeJobStatus(job.status, job.parts || []);
+      if (jobCounts[status] != null) jobCounts[status] += 1;
+    }
+    const jobTotal =
+      jobCounts.waiting_parts + jobCounts.in_progress + jobCounts.completed;
+
+    let quotesAwaiting = 0;
+    let quotesAwaitingTotal = 0;
+    let invoicesUnpaidTotal = 0;
+    let invoicesUnpaidCount = 0;
+    let depositsOutstandingTotal = 0;
+    let depositsOutstandingCount = 0;
+
+    for (const doc of readBilling()) {
+      if (doc.status === "void") continue;
+      const totals = catalog.computeTotals(doc.lines || []);
+      if (doc.kind === "quote" && doc.status === "sent") {
+        quotesAwaiting += 1;
+        quotesAwaitingTotal = catalog.round2(quotesAwaitingTotal + totals.totalIncl);
+      }
+      if (doc.kind === "invoice") {
+        const payment = normalizeInvoicePayment(doc, {}, totals);
+        if (payment.paymentStatus === "unpaid" && payment.balanceDue > 0) {
+          invoicesUnpaidCount += 1;
+          invoicesUnpaidTotal = catalog.round2(
+            invoicesUnpaidTotal + payment.balanceDue
+          );
+        } else if (payment.paymentStatus === "deposit" && payment.balanceDue > 0) {
+          depositsOutstandingCount += 1;
+          depositsOutstandingTotal = catalog.round2(
+            depositsOutstandingTotal + payment.balanceDue
+          );
+        }
+      }
+    }
+
+    res.json({
+      jobs: {
+        total: jobTotal,
+        waiting_parts: jobCounts.waiting_parts,
+        in_progress: jobCounts.in_progress,
+        completed: jobCounts.completed,
+      },
+      quotesAwaitingAcceptance: {
+        count: quotesAwaiting,
+        totalIncl: quotesAwaitingTotal,
+      },
+      invoicesOutstanding: {
+        count: invoicesUnpaidCount,
+        totalIncl: invoicesUnpaidTotal,
+      },
+      depositsOutstanding: {
+        count: depositsOutstandingCount,
+        totalIncl: depositsOutstandingTotal,
+      },
+    });
+  } catch (err) {
+    console.error("Dashboard failed:", err);
+    res.status(500).json({ error: "Could not load dashboard." });
+  }
 });
 
 app.post("/api/customers/wof-reminder", requireAdmin, async (req, res) => {
@@ -1292,6 +1762,8 @@ app.get("/api/billing", requireAdmin, (_req, res) => {
   const docs = readBilling()
     .map((d) => {
       const totals = catalog.computeTotals(d.lines);
+      const payment =
+        d.kind === "invoice" ? normalizeInvoicePayment(d, {}, totals) : null;
       return {
         id: d.id,
         kind: d.kind,
@@ -1309,6 +1781,9 @@ app.get("/api/billing", requireAdmin, (_req, res) => {
         invoiceId: d.invoiceId || "",
         quoteId: d.quoteId || "",
         jobId: d.jobId || "",
+        paymentStatus: payment?.paymentStatus || "",
+        amountPaid: payment?.amountPaid ?? null,
+        balanceDue: payment?.balanceDue ?? null,
       };
     })
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
@@ -1352,7 +1827,14 @@ app.post("/api/billing", requireAdmin, (req, res) => {
     jobId: "",
     lastEmailedAt: "",
     lastEmailedTo: "",
+    history: [],
+    ...(preset.kind === "invoice" ? emptyPaymentFields() : {}),
   };
+  appendHistory(doc, {
+    type: "created",
+    summary: doc.kind === "invoice" ? "Invoice created" : "Quote created",
+    amount: catalog.computeTotals(doc.lines).totalIncl,
+  });
 
   docs.push(doc);
   writeBilling(docs);
@@ -1360,8 +1842,10 @@ app.post("/api/billing", requireAdmin, (req, res) => {
 });
 
 app.get("/api/billing/:id", (req, res) => {
-  const doc = readBilling().find((d) => d.id === req.params.id);
-  if (!doc) return res.status(404).json({ error: "Not found" });
+  const docs = readBilling();
+  const index = docs.findIndex((d) => d.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: "Not found" });
+  const doc = docs[index];
 
   const isAdmin = (req.headers["x-admin-pin"] || req.query.pin) === ADMIN_PIN;
   const token = String(req.query.t || "");
@@ -1374,6 +1858,13 @@ app.get("/api/billing/:id", (req, res) => {
       return res.status(404).json({ error: "Not found" });
     }
   }
+
+  if (isAdmin) {
+    const before = Array.isArray(doc.history) ? doc.history.length : 0;
+    ensureHistory(doc);
+    if ((doc.history || []).length > before) writeBilling(docs);
+  }
+
   res.json(withBillingTotals(doc, isAdmin));
 });
 
@@ -1401,7 +1892,7 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
     ? current.lines
     : normalizeLines(body.lines != null ? body.lines : current.lines);
 
-  docs[index] = {
+  const next = {
     ...current,
     customerName: body.customerName != null ? String(body.customerName).trim() : current.customerName,
     customerEmail: body.customerEmail != null ? String(body.customerEmail).trim() : current.customerEmail,
@@ -1417,6 +1908,63 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
     lines: nextLines,
     updatedAt: new Date().toISOString(),
   };
+
+  if (current.kind === "invoice") {
+    const payment = normalizeInvoicePayment(next, body, catalog.computeTotals(nextLines));
+    next.payments = payment.payments;
+    next.paymentStatus = payment.paymentStatus;
+    next.amountPaid = payment.amountPaid;
+    next.paidAt = payment.paidAt;
+    next.paymentNote = payment.paymentNote;
+  }
+
+  if (!Array.isArray(next.history)) next.history = Array.isArray(current.history) ? [...current.history] : [];
+  ensureHistory(next);
+
+  const beforePayments = normalizePaymentRows(current.payments || []);
+  const afterPayments =
+    current.kind === "invoice" ? normalizePaymentRows(next.payments || []) : [];
+  if (current.kind === "invoice") {
+    const beforeMap = paymentMap(beforePayments);
+    const afterMap = paymentMap(afterPayments);
+    for (const [id, row] of afterMap) {
+      if (!beforeMap.has(id)) {
+        appendHistory(next, {
+          type: "payment",
+          summary: "Payment received",
+          detail: row.note || "",
+          amount: row.amount,
+        });
+      }
+    }
+    for (const [id, row] of beforeMap) {
+      if (!afterMap.has(id)) {
+        appendHistory(next, {
+          type: "payment_removed",
+          summary: "Payment removed",
+          detail: row.note || "",
+          amount: row.amount,
+        });
+      }
+    }
+  }
+
+  const fieldDetails = describeFieldChanges(current, next);
+  const lineDetails =
+    locked && body.lines == null
+      ? []
+      : describeLineChanges(current.lines, next.lines);
+  const editDetails = [...fieldDetails, ...lineDetails];
+  if (editDetails.length) {
+    appendHistory(next, {
+      type: "edited",
+      summary: current.kind === "invoice" ? "Invoice edited" : "Quote edited",
+      detail: editDetails.slice(0, 8).join("; "),
+      amount: catalog.computeTotals(next.lines).totalIncl,
+    });
+  }
+
+  docs[index] = next;
 
   writeBilling(docs);
   res.json(withBillingTotals(docs[index], true));
@@ -1454,6 +2002,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
   }
 
   let url;
+  const wasResend = Boolean(doc.lastEmailedAt);
   try {
     url = issueBillingDoc(doc, req, req.body);
   } catch (err) {
@@ -1476,7 +2025,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
     text =
       `Hi ${name},\n\n` +
       `Here is your quote for ${vehicleBit}: ${doc.number}.\n` +
-      `Total (incl. GST): $${money}\n\n` +
+      `Total (plus GST): $${money}\n\n` +
       `Please review and accept this quote before we start work:\n${url}\n\n` +
       (doc.validUntil ? `This quote is valid until ${doc.validUntil}.\n\n` : "") +
       `${business.paymentText()}\n\n` +
@@ -1484,7 +2033,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
     html = `
       <p>Hi ${escapeHtml(name)},</p>
       <p>Here is your quote for <strong>${escapeHtml(vehicleBit)}</strong> — ${escapeHtml(doc.number)}.</p>
-      <p>Total (incl. GST): <strong>$${escapeHtml(money)}</strong></p>
+      <p>Total (plus GST): <strong>$${escapeHtml(money)}</strong></p>
       <p>Please review and accept this quote before we start work.</p>
       <p><a href="${escapeAttr(url)}" style="display:inline-block;background:#1565c0;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:700;">Review &amp; accept quote</a></p>
       <p>Or open this link:<br/><a href="${escapeAttr(url)}">${escapeHtml(url)}</a></p>
@@ -1506,14 +2055,14 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
     text =
       `Hi ${name},\n\n` +
       `Here is your tax invoice for ${vehicleBit}: ${doc.number}.\n` +
-      `Total (incl. GST): $${money}\n\n` +
+      `Total (plus GST): $${money}\n\n` +
       `View / print your invoice:\n${url}\n\n` +
       `${business.paymentText()}\n\n` +
       `${business.fullAddress()}\n${business.phoneDisplay}\n${business.email}\n`;
     html = `
       <p>Hi ${escapeHtml(name)},</p>
       <p>Here is your tax invoice for <strong>${escapeHtml(vehicleBit)}</strong> — ${escapeHtml(doc.number)}.</p>
-      <p>Total (incl. GST): <strong>$${escapeHtml(money)}</strong></p>
+      <p>Total (plus GST): <strong>$${escapeHtml(money)}</strong></p>
       <p><a href="${escapeAttr(url)}">View / print your invoice</a></p>
       <p><strong>How to pay</strong><br/>
       Bank account number: <strong>${escapeHtml(business.bankAccount)}</strong><br/>
@@ -1543,6 +2092,19 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
     doc.lastEmailedAt = new Date().toISOString();
     doc.lastEmailedTo = to;
     doc.updatedAt = doc.lastEmailedAt;
+    ensureHistory(doc);
+    appendHistory(doc, {
+      type: "sent",
+      summary: wasResend
+        ? doc.kind === "invoice"
+          ? "Updated invoice sent to customer"
+          : "Updated quote sent to customer"
+        : doc.kind === "invoice"
+          ? "Invoice emailed to customer"
+          : "Quote emailed to customer",
+      detail: to,
+      amount: totals.totalIncl,
+    });
     writeBilling(docs);
 
     res.json({
@@ -1609,7 +2171,22 @@ function convertQuoteToInvoice(docs, quote) {
     jobId: quote.jobId || "",
     lastEmailedAt: "",
     lastEmailedTo: "",
+    history: [],
+    ...emptyPaymentFields(),
   };
+  appendHistory(invoice, {
+    type: "created",
+    summary: "Invoice created",
+    detail: `From ${quote.number}`,
+    amount: catalog.computeTotals(invoice.lines).totalIncl,
+  });
+  ensureHistory(quote);
+  appendHistory(quote, {
+    type: "invoiced",
+    summary: "Converted to invoice",
+    detail: invoice.number,
+    amount: catalog.computeTotals(invoice.lines).totalIncl,
+  });
 
   quote.status = "invoiced";
   quote.invoiceId = invoice.id;
@@ -1638,7 +2215,7 @@ async function notifyWorkshopQuoteAccepted(quote, invoice, job, req) {
     (invoiceNumber ? `Invoice created: ${invoiceNumber}\n` : "") +
     (jobNumber ? `Job card created: ${jobNumber}\n` : "") +
     `\nVehicle: ${vehicleBit}\n` +
-    `Total (incl. GST): $${money}\n` +
+    `Total (plus GST): $${money}\n` +
     (quote.customerEmail ? `Email: ${quote.customerEmail}\n` : "") +
     (quote.customerPhone ? `Phone: ${quote.customerPhone}\n` : "") +
     `\nView quote:\n${quoteUrl}\n` +
@@ -1649,7 +2226,7 @@ async function notifyWorkshopQuoteAccepted(quote, invoice, job, req) {
     ${jobNumber ? `<p>Job card created: <strong>${escapeHtml(jobNumber)}</strong></p>` : ""}
     <p>
       Vehicle: ${escapeHtml(vehicleBit)}<br/>
-      Total (incl. GST): <strong>$${escapeHtml(money)}</strong><br/>
+      Total (plus GST): <strong>$${escapeHtml(money)}</strong><br/>
       ${quote.customerEmail ? `Email: ${escapeHtml(quote.customerEmail)}<br/>` : ""}
       ${quote.customerPhone ? `Phone: ${escapeHtml(quote.customerPhone)}` : ""}
     </p>
@@ -1717,6 +2294,12 @@ app.post("/api/billing/:id/accept", async (req, res) => {
   doc.status = "accepted";
   doc.acceptedAt = new Date().toISOString();
   doc.updatedAt = doc.acceptedAt;
+  ensureHistory(doc);
+  appendHistory(doc, {
+    type: "accepted",
+    summary: "Quote accepted by customer",
+    amount: catalog.computeTotals(doc.lines).totalIncl,
+  });
 
   let invoice = null;
   try {
@@ -1773,6 +2356,73 @@ app.post("/api/billing/:id/convert", requireAdmin, (req, res) => {
   }
 });
 
+app.post("/api/billing/:id/revise", requireAdmin, (req, res) => {
+  const docs = readBilling();
+  const source = docs.find((d) => d.id === req.params.id);
+  if (!source) return res.status(404).json({ error: billingMissingError() });
+  if (source.kind !== "quote") {
+    return res.status(400).json({ error: "Only quotes can be revised." });
+  }
+  if (source.status !== "accepted" && source.status !== "invoiced") {
+    return res.status(400).json({
+      error: "Edit this quote and click Save changes. Revise is only for accepted or invoiced quotes.",
+    });
+  }
+
+  const now = new Date().toISOString();
+  const today = todayIso();
+  const revisedNote = `Revised from ${source.number}`;
+  const notes = String(source.notes || "").trim();
+  const doc = {
+    id: randomUUID(),
+    kind: "quote",
+    number: nextBillingNumber(docs, "quote"),
+    status: "draft",
+    preset: source.preset || "custom",
+    createdAt: now,
+    updatedAt: now,
+    sentAt: "",
+    acceptedAt: "",
+    validUntil: plusDays(today, catalog.QUOTE_VALID_DAYS),
+    customerName: source.customerName || "",
+    customerEmail: source.customerEmail || "",
+    customerPhone: source.customerPhone || "",
+    registration: String(source.registration || "").toUpperCase(),
+    vehicle: source.vehicle || "",
+    odometer: source.odometer || "",
+    notes: notes ? `${notes}\n\n(${revisedNote})` : revisedNote,
+    lines: (source.lines || []).map((line) => ({
+      ...line,
+      id: randomUUID(),
+    })),
+    acceptToken: newAcceptToken(),
+    quoteId: "",
+    invoiceId: "",
+    jobId: "",
+    lastEmailedAt: "",
+    lastEmailedTo: "",
+    revisedFromId: source.id,
+    revisedFromNumber: source.number,
+    history: [],
+  };
+  appendHistory(doc, {
+    type: "created",
+    summary: "Quote created",
+    detail: `Revised from ${source.number}`,
+    amount: catalog.computeTotals(doc.lines).totalIncl,
+  });
+  ensureHistory(source);
+  appendHistory(source, {
+    type: "revised",
+    summary: "Revised quote created",
+    detail: doc.number,
+  });
+
+  docs.push(doc);
+  writeBilling(docs);
+  res.status(201).json(withBillingTotals(doc, true));
+});
+
 app.post("/api/billing/:id/void", requireAdmin, (req, res) => {
   const docs = readBilling();
   const index = docs.findIndex((d) => d.id === req.params.id);
@@ -1783,6 +2433,11 @@ app.post("/api/billing/:id/void", requireAdmin, (req, res) => {
   docs[index].status = "void";
   docs[index].voidedAt = new Date().toISOString();
   docs[index].updatedAt = docs[index].voidedAt;
+  ensureHistory(docs[index]);
+  appendHistory(docs[index], {
+    type: "voided",
+    summary: "Document voided",
+  });
   writeBilling(docs);
   res.json(withBillingTotals(docs[index], true));
 });

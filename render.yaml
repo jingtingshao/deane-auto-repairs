@@ -22,8 +22,6 @@ services:
         value: https://www.deaneauto.co.nz
       - key: MAIL_FROM
         value: Deane Auto Repairs <deaneautonz@gmail.com>
-      - key: MAIL_BCC
-        value: deaneautonz@gmail.com
       - key: SMTP_HOST
         value: smtp.gmail.com
       - key: SMTP_PORT

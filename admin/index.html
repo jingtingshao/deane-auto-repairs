@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260820x" />
+    <link rel="stylesheet" href="admin.css?v=20260820ah" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -29,11 +29,12 @@
       <header class="topbar">
         <div>
           <p class="brand small"><span class="script">Deane</span> ADMIN</p>
-          <h1 id="view-title">Reports</h1>
+          <h1 id="view-title">Dashboard</h1>
         </div>
         <div class="topbar-actions">
           <nav class="admin-nav" aria-label="Admin sections">
-            <button type="button" id="nav-reports" class="nav-tab is-active">Reports</button>
+            <button type="button" id="nav-dashboard" class="nav-tab is-active">Dashboard</button>
+            <button type="button" id="nav-reports" class="nav-tab">Reports</button>
             <button type="button" id="nav-jobs" class="nav-tab">Jobs</button>
             <button type="button" id="nav-billing" class="nav-tab">Quotes &amp; invoices</button>
             <button type="button" id="nav-customers" class="nav-tab">Customers</button>
@@ -45,7 +46,13 @@
       </header>
 
       <main>
-        <section id="reports-section">
+        <section id="dashboard-section">
+          <div id="dashboard-root" class="dashboard">
+            <p class="muted">Loading dashboard…</p>
+          </div>
+        </section>
+
+        <section id="reports-section" hidden>
         <section id="list-view">
           <label class="list-search">
             Search reports
@@ -103,10 +110,18 @@
             <fieldset>
               <legend>Customer &amp; vehicle</legend>
               <div class="grid-3">
-                <label>Customer name<input name="customerName" required /></label>
+                <label class="suggest-wrap">
+                  Customer name
+                  <input name="customerName" id="report-customer-name" autocomplete="off" required />
+                  <div id="report-customer-suggest" class="suggest-list" hidden></div>
+                </label>
                 <label>Email<input name="customerEmail" type="email" /></label>
                 <label>Phone<input name="customerPhone" type="tel" /></label>
-                <label>Registration<input name="registration" required /></label>
+                <label class="suggest-wrap">
+                  Registration
+                  <input name="registration" id="report-registration" autocomplete="off" required />
+                  <div id="report-rego-suggest" class="suggest-list" hidden></div>
+                </label>
                 <label>Vehicle (make/model/year)<input name="vehicle" required /></label>
                 <label>Odometer (km)<input name="odometer" /></label>
                 <label>VIN<input name="vin" /></label>
@@ -179,7 +194,7 @@
 
         <section id="jobs-section" hidden>
           <section id="jobs-list-view">
-            <p class="muted small">Workshop job cards. Tick parts when they arrive, or put an ETA in the note.</p>
+            <p class="muted small">Workshop job cards. Status: Waiting parts / In progress / Completed. Tick Ordered or Received to move between Waiting parts and In progress; set Completed by hand when done.</p>
             <label class="list-search">
               Search jobs
               <input
@@ -274,10 +289,16 @@
               <div class="grid-3">
                 <label>Name<input id="customer-name" name="customerName" required /></label>
                 <label>Phone<input id="customer-phone" name="customerPhone" type="tel" /></label>
-                <label>Registration<input id="customer-rego" name="registration" required /></label>
                 <label>Email<input id="customer-email" name="customerEmail" type="email" /></label>
               </div>
               <label>Address<textarea id="customer-address" name="customerAddress" rows="2"></textarea></label>
+              <div class="vehicles-block">
+                <div class="vehicles-head">
+                  <p class="vehicles-label">Vehicles</p>
+                  <button type="button" id="btn-add-vehicle" class="ghost">+ Add vehicle</button>
+                </div>
+                <div id="customer-vehicles" class="vehicle-rows"></div>
+              </div>
               <p id="customer-save-status" class="status-line" hidden></p>
               <div class="line-actions">
                 <button type="submit" id="btn-customer-save" class="primary">Save customer</button>
@@ -334,8 +355,9 @@
             <div class="edit-toolbar">
               <button type="button" id="btn-billing-back" class="ghost">← All quotes &amp; invoices</button>
               <div class="edit-actions">
-                <button type="button" id="btn-billing-save" class="ghost">Save</button>
-                <button type="button" id="btn-billing-email" class="primary">Send email</button>
+                <button type="button" id="btn-billing-save" class="primary">Save changes</button>
+                <button type="button" id="btn-billing-email" class="ghost">Send email</button>
+                <button type="button" id="btn-billing-revise" class="primary" hidden>Revise quote</button>
                 <button type="button" id="btn-billing-convert" class="primary" hidden>Convert to invoice</button>
                 <button type="button" id="btn-billing-open-invoice" class="ghost" hidden>Open invoice</button>
                 <button type="button" id="btn-billing-job" class="primary" hidden>Create job card</button>
@@ -344,6 +366,7 @@
               </div>
             </div>
             <p id="billing-save-status" class="status-line" hidden></p>
+            <p id="billing-edit-hint" class="muted small" hidden></p>
 
             <form id="billing-form" class="report-form">
               <fieldset>
@@ -374,8 +397,54 @@
                 </p>
               </fieldset>
 
+              <fieldset id="billing-payment-fieldset" hidden>
+                <legend>Payment</legend>
+                <p class="muted small">
+                  Record each payment separately (deposit, then balance). Amounts are GST-inclusive.
+                  Status updates automatically from the total paid.
+                </p>
+                <p id="billing-payment-summary" class="muted small"></p>
+                <div class="line-table-wrap">
+                  <table class="line-table parts-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th>Note</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="billing-payments"></tbody>
+                  </table>
+                </div>
+                <div class="grid-3" style="margin-top: 0.75rem">
+                  <label>
+                    Date
+                    <input id="billing-pay-date" type="date" />
+                  </label>
+                  <label>
+                    Amount
+                    <input id="billing-pay-amount" type="number" min="0" step="0.01" placeholder="0.00" />
+                  </label>
+                  <label>
+                    Note
+                    <input id="billing-pay-note" placeholder="Bank / cash / reference" />
+                  </label>
+                </div>
+                <div class="preset-row" id="billing-payment-actions" style="margin-top: 0.5rem">
+                  <button type="button" class="primary" id="btn-add-payment">Add payment</button>
+                  <button type="button" class="ghost" id="btn-add-deposit-30">Add 30% deposit</button>
+                  <button type="button" class="ghost" id="btn-add-balance">Add balance due</button>
+                </div>
+              </fieldset>
+
+              <fieldset id="billing-history-fieldset">
+                <legend>History</legend>
+                <ol id="billing-history" class="billing-history"></ol>
+              </fieldset>
+
               <fieldset>
-                <legend>Line items (GST inclusive)</legend>
+                <legend>Line items (excl. GST)</legend>
                 <div id="quick-adds" class="preset-row"></div>
                 <div class="line-table-wrap">
                   <table class="line-table">
@@ -383,7 +452,7 @@
                       <tr>
                         <th>Description</th>
                         <th>Qty</th>
-                        <th>Price incl. GST</th>
+                        <th>Price excl. GST</th>
                         <th>Total</th>
                         <th></th>
                       </tr>
@@ -402,9 +471,10 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260820x"></script>
-    <script src="billing.js?v=20260820x"></script>
-    <script src="customers.js?v=20260820x"></script>
-    <script src="jobs.js?v=20260820x"></script>
+    <script src="admin.js?v=20260820ai"></script>
+    <script src="dashboard.js?v=20260820ah"></script>
+    <script src="billing.js?v=20260820ag"></script>
+    <script src="customers.js?v=20260820aj"></script>
+    <script src="jobs.js?v=20260820ah"></script>
   </body>
 </html>

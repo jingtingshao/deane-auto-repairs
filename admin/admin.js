@@ -20,6 +20,9 @@ let pin = sessionStorage.getItem(PIN_KEY) || "";
 let current = null;
 let checklistMeta = null;
 let reportDocs = [];
+let reportCustomerDirectory = [];
+const reportCustomerSuggestEl = document.getElementById("report-customer-suggest");
+const reportRegoSuggestEl = document.getElementById("report-rego-suggest");
 
 async function api(path, options = {}) {
   const headers = {
@@ -47,11 +50,13 @@ function showApp() {
 }
 
 function setSection(name) {
+  const dashboardSection = document.getElementById("dashboard-section");
   const reportsSection = document.getElementById("reports-section");
   const billingSection = document.getElementById("billing-section");
   const customersSection = document.getElementById("customers-section");
   const jobsSection = document.getElementById("jobs-section");
   const btnNew = document.getElementById("btn-new");
+  if (dashboardSection) dashboardSection.hidden = name !== "dashboard";
   if (reportsSection) reportsSection.hidden = name !== "reports";
   if (billingSection) billingSection.hidden = name !== "billing";
   if (customersSection) customersSection.hidden = name !== "customers";
@@ -61,12 +66,17 @@ function setSection(name) {
     btnNew.textContent =
       name === "customers" ? "New customer" : name === "jobs" ? "New job" : "New report";
   }
+  document.getElementById("nav-dashboard")?.classList.toggle("is-active", name === "dashboard");
   document.getElementById("nav-reports")?.classList.toggle("is-active", name === "reports");
   document.getElementById("nav-billing")?.classList.toggle("is-active", name === "billing");
   document.getElementById("nav-customers")?.classList.toggle("is-active", name === "customers");
   document.getElementById("nav-jobs")?.classList.toggle("is-active", name === "jobs");
   if (name === "reports" && listView && !listView.hidden) {
     viewTitle.textContent = "Reports";
+  }
+  if (name === "dashboard") {
+    viewTitle.textContent = "Dashboard";
+    window.DeaneDashboard?.load?.();
   }
 }
 
@@ -132,7 +142,7 @@ loginForm.addEventListener("submit", async (e) => {
     pin = value;
     sessionStorage.setItem(PIN_KEY, pin);
     showApp();
-    setSection("reports");
+    setSection("dashboard");
     await loadList();
   } catch (err) {
     loginError.hidden = false;
@@ -149,6 +159,10 @@ loginForm.addEventListener("submit", async (e) => {
 });
 
 document.getElementById("btn-logout").addEventListener("click", showLogin);
+
+document.getElementById("nav-dashboard")?.addEventListener("click", () => {
+  setSection("dashboard");
+});
 
 document.getElementById("nav-reports").addEventListener("click", async () => {
   setSection("reports");
@@ -304,17 +318,137 @@ function normalizePkg(pkg) {
 }
 
 async function openReport(id) {
+  if (!reportCustomerDirectory.length) await loadReportCustomerDirectory();
   current = await api(`/api/reports/${id}`);
   listView.hidden = true;
   editView.hidden = false;
   viewTitle.textContent = current.jobNumber;
   fillForm(current);
+  hideReportSuggest(reportCustomerSuggestEl);
+  hideReportSuggest(reportRegoSuggestEl);
   await renderChecklist(current.servicePackage, current.checks);
   renderActions(current);
   updatePhoto(current.vehiclePhoto);
 }
 
 window.DeaneAdmin.openReport = openReport;
+
+function normalizePlateSearch(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[\s-]/g, "");
+}
+
+function customerPlates(row) {
+  if (Array.isArray(row.registrations) && row.registrations.length) {
+    return row.registrations.map((p) => String(p || "").trim()).filter(Boolean);
+  }
+  if (Array.isArray(row.vehicles) && row.vehicles.length) {
+    return row.vehicles.map((v) => String(v.registration || "").trim()).filter(Boolean);
+  }
+  return String(row.registration || "")
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+}
+
+async function loadReportCustomerDirectory() {
+  try {
+    reportCustomerDirectory = await api("/api/customers");
+  } catch {
+    reportCustomerDirectory = [];
+  }
+}
+
+function hideReportSuggest(el) {
+  if (!el) return;
+  el.hidden = true;
+  el.innerHTML = "";
+}
+
+function applyCustomerToReport(row, preferredPlate = "") {
+  if (!row || !reportForm) return;
+  const set = (name, value) => {
+    const el = reportForm.elements.namedItem(name);
+    if (!el) return;
+    const next = String(value || "").trim();
+    if (next) el.value = next;
+  };
+  set("customerName", row.customerName);
+  set("customerEmail", row.customerEmail);
+  set("customerPhone", row.customerPhone);
+
+  const vehicles = Array.isArray(row.vehicles) ? row.vehicles : [];
+  const want = normalizePlateSearch(preferredPlate);
+  let pick =
+    (want &&
+      vehicles.find((v) => normalizePlateSearch(v.registration) === want)) ||
+    vehicles[0] ||
+    null;
+  if (pick) {
+    set("registration", pick.registration);
+    if (pick.vehicle) set("vehicle", pick.vehicle);
+    else if (row.vehicle) set("vehicle", row.vehicle);
+  } else {
+    const plates = customerPlates(row);
+    if (plates.length) set("registration", plates[0]);
+    if (row.vehicle) set("vehicle", row.vehicle);
+  }
+  hideReportSuggest(reportCustomerSuggestEl);
+  hideReportSuggest(reportRegoSuggestEl);
+  showStatus("Customer details filled");
+}
+
+function matchReportCustomers(query, field) {
+  const q = String(query || "").trim().toLowerCase();
+  if (q.length < 2) return [];
+  const plateQuery = normalizePlateSearch(q);
+  const out = [];
+  for (const row of reportCustomerDirectory) {
+    if (field === "registration") {
+      for (const plate of customerPlates(row)) {
+        if (normalizePlateSearch(plate).includes(plateQuery)) {
+          out.push({
+            ...row,
+            _matchPlate: plate,
+            _matchVehicle:
+              (row.vehicles || []).find(
+                (v) => normalizePlateSearch(v.registration) === normalizePlateSearch(plate)
+              )?.vehicle || row.vehicle || "",
+          });
+        }
+      }
+    } else {
+      const name = String(row.customerName || "").toLowerCase();
+      if (name.includes(q)) out.push(row);
+    }
+    if (out.length >= 8) break;
+  }
+  return out.slice(0, 8);
+}
+
+function renderReportSuggest(el, matches, field) {
+  if (!el) return;
+  if (!matches.length) {
+    hideReportSuggest(el);
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML = matches
+    .map((row, index) => {
+      const plate = row._matchPlate || customerPlates(row).join(", ");
+      const line = [row.customerName, plate, row.customerPhone].filter(Boolean).join(" · ");
+      return `<button type="button" data-match="${index}">${escapeHtml(line || "Customer")}</button>`;
+    })
+    .join("");
+  el.querySelectorAll("[data-match]").forEach((btn) => {
+    btn.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      const row = matches[Number(btn.dataset.match)];
+      applyCustomerToReport(row, field === "registration" ? row._matchPlate : "");
+    });
+  });
+}
 
 function fillForm(r) {
   const set = (name, value) => {
@@ -526,6 +660,60 @@ document.getElementById("btn-save").addEventListener("click", async () => {
   } catch (err) {
     alert(err.message);
   }
+});
+
+document.getElementById("report-customer-name")?.addEventListener("input", () => {
+  renderReportSuggest(
+    reportCustomerSuggestEl,
+    matchReportCustomers(reportForm.elements.namedItem("customerName")?.value, "name"),
+    "name"
+  );
+});
+
+document.getElementById("report-customer-name")?.addEventListener("blur", () => {
+  const name = String(reportForm.elements.namedItem("customerName")?.value || "")
+    .trim()
+    .toLowerCase();
+  const exact = reportCustomerDirectory.filter(
+    (row) => String(row.customerName || "").trim().toLowerCase() === name
+  );
+  if (exact.length === 1) {
+    applyCustomerToReport(exact[0]);
+    return;
+  }
+  setTimeout(() => {
+    if (
+      reportCustomerSuggestEl &&
+      !reportCustomerSuggestEl.contains(document.activeElement)
+    ) {
+      hideReportSuggest(reportCustomerSuggestEl);
+    }
+  }, 150);
+});
+
+document.getElementById("report-registration")?.addEventListener("input", () => {
+  renderReportSuggest(
+    reportRegoSuggestEl,
+    matchReportCustomers(reportForm.elements.namedItem("registration")?.value, "registration"),
+    "registration"
+  );
+});
+
+document.getElementById("report-registration")?.addEventListener("blur", () => {
+  const plate = normalizePlateSearch(reportForm.elements.namedItem("registration")?.value);
+  const matches = matchReportCustomers(
+    reportForm.elements.namedItem("registration")?.value,
+    "registration"
+  );
+  const exact = matches.filter(
+    (row) => normalizePlateSearch(row._matchPlate || "") === plate
+  );
+  if (exact.length === 1) applyCustomerToReport(exact[0], exact[0]._matchPlate);
+  setTimeout(() => {
+    if (reportRegoSuggestEl && !reportRegoSuggestEl.contains(document.activeElement)) {
+      hideReportSuggest(reportRegoSuggestEl);
+    }
+  }, 150);
 });
 
 document.getElementById("servicePackage").addEventListener("change", async () => {

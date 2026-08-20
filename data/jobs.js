@@ -1,13 +1,16 @@
 /** Workshop job cards — internal only, not customer-facing. */
 
 const JOB_STATUSES = [
-  { id: "booked", label: "Booked" },
   { id: "waiting_parts", label: "Waiting parts" },
   { id: "in_progress", label: "In progress" },
-  { id: "waiting_customer", label: "Waiting customer" },
-  { id: "ready", label: "Ready" },
   { id: "completed", label: "Completed" },
 ];
+
+const LEGACY_STATUS_MAP = {
+  booked: "in_progress",
+  waiting_customer: "in_progress",
+  ready: "completed",
+};
 
 function isJobStatus(value) {
   return JOB_STATUSES.some((s) => s.id === value);
@@ -15,6 +18,14 @@ function isJobStatus(value) {
 
 function statusLabel(id) {
   return JOB_STATUSES.find((s) => s.id === id)?.label || id || "";
+}
+
+function normalizeJobStatus(status, parts) {
+  let next = String(status || "").trim();
+  if (LEGACY_STATUS_MAP[next]) next = LEGACY_STATUS_MAP[next];
+  if (!isJobStatus(next)) next = "in_progress";
+  if (next === "completed") return "completed";
+  return suggestStatusFromParts(next, parts);
 }
 
 function isServiceOrLabourLine(description) {
@@ -86,14 +97,31 @@ function partsSummary(parts) {
   };
 }
 
+/**
+ * Keep Waiting parts / In progress in sync with parts ticks.
+ * Does not change Completed.
+ * Any listed part not yet received → waiting_parts.
+ */
+function suggestStatusFromParts(currentStatus, parts) {
+  if (currentStatus === "completed") return "completed";
+
+  const rows = (parts || []).filter((p) => String(p.description || "").trim());
+  if (!rows.length) return "in_progress";
+
+  if (rows.some((p) => !p.received)) return "waiting_parts";
+  return "in_progress";
+}
+
 module.exports = {
   JOB_STATUSES,
   isJobStatus,
   statusLabel,
+  normalizeJobStatus,
   isServiceOrLabourLine,
   normalizePart,
   normalizeParts,
   partsFromQuoteLines,
   workRequestedFromQuote,
   partsSummary,
+  suggestStatusFromParts,
 };

@@ -664,20 +664,32 @@ label.check input {
   color: var(--attention);
 }
 
-.badge.booked,
+.badge.pay-unpaid {
+  background: #ffebee;
+  color: var(--attention);
+}
+
+.badge.pay-deposit {
+  background: #fff8e1;
+  color: var(--watch);
+}
+
+.badge.pay-paid {
+  background: #e8f5e9;
+  color: var(--ok);
+}
+
 .badge.in_progress {
   background: #e8f1fb;
   color: var(--blue);
 }
 
 .badge.waiting_parts,
-.badge.waiting_customer,
 .badge.parts-wait {
   background: #fff8e1;
   color: var(--watch);
 }
 
-.badge.ready,
 .badge.parts-ok {
   background: #e8f5e9;
   color: var(--ok);
@@ -707,6 +719,156 @@ label.check input {
 
 .parts-table .part-note {
   min-width: 8rem;
+}
+
+.billing-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.history-item {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: 0.75rem 1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--line, #d7e0ea);
+}
+
+.history-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.history-when {
+  color: var(--muted, #5b6777);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.history-summary {
+  margin: 0;
+  font-weight: 700;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  justify-content: space-between;
+}
+
+.history-amount {
+  font-weight: 700;
+  color: var(--ink, #1a2332);
+}
+
+.history-detail {
+  margin: 0.25rem 0 0;
+  color: var(--muted, #5b6777);
+  font-size: 0.92rem;
+}
+
+.vehicles-block {
+  margin-top: 0.75rem;
+}
+
+.vehicles-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.vehicles-label {
+  margin: 0;
+  font-weight: 700;
+}
+
+.vehicle-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.vehicle-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.65rem;
+  align-items: end;
+}
+
+.dashboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.dash-card {
+  background: #fff;
+  border: 1px solid var(--line, #d7e0ea);
+  border-radius: 14px;
+  padding: 1.1rem 1.2rem;
+}
+
+.dash-card h2 {
+  margin: 0 0 0.75rem;
+  font-family: "Barlow Condensed", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 1.45rem;
+}
+
+.dash-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 0.85rem;
+  border-left: 2px solid var(--line, #d7e0ea);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.dash-link,
+.dash-money-row {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 1rem;
+  border: none;
+  background: transparent;
+  padding: 0.35rem 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.dash-link:hover,
+.dash-money-row:hover {
+  color: var(--blue, #1565c0);
+}
+
+.dash-money {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.dash-money-row {
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line, #d7e0ea);
+}
+
+.dash-money-row:last-of-type {
+  border-bottom: none;
+}
+
+@media (max-width: 640px) {
+  .vehicle-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .badge.quote {

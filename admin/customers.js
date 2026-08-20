@@ -30,9 +30,17 @@ function matchesCustomerSearch(row, query) {
   const address = String(row.customerAddress || "").toLowerCase();
   const email = String(row.customerEmail || "").toLowerCase();
   const phone = String(row.customerPhone || "").toLowerCase().replace(/\s+/g, "");
-  const plate = String(row.registration || "")
-    .toLowerCase()
-    .replace(/[\s-]/g, "");
+  const plates = (
+    Array.isArray(row.registrations) && row.registrations.length
+      ? row.registrations
+      : String(row.registration || "").split(",")
+  )
+    .map((p) =>
+      String(p || "")
+        .toLowerCase()
+        .replace(/[\s-]/g, "")
+    )
+    .filter(Boolean);
   const plateQuery = q.replace(/[\s-]/g, "");
   const phoneQuery = q.replace(/\s+/g, "");
   return (
@@ -40,7 +48,7 @@ function matchesCustomerSearch(row, query) {
     address.includes(q) ||
     email.includes(q) ||
     phone.includes(phoneQuery) ||
-    plate.includes(plateQuery)
+    plates.some((p) => p.includes(plateQuery))
   );
 }
 
@@ -85,7 +93,11 @@ function renderCustomers() {
               (row, index) => `
             <tr class="customer-row" data-key="${Admin.escapeAttr(row.key)}">
               <td class="billing-number customer-index">${index + 1}</td>
-              <td>${Admin.escapeHtml(row.registration || "—")}</td>
+              <td>${Admin.escapeHtml(
+                (Array.isArray(row.registrations) && row.registrations.length
+                  ? row.registrations.join(", ")
+                  : row.registration) || "—"
+              )}</td>
               <td>${Admin.escapeHtml(row.customerName || "—")}</td>
               <td>${Admin.escapeHtml(row.customerAddress || "—")}</td>
               <td>
@@ -111,6 +123,11 @@ function renderCustomers() {
                 ${
                   row.lastReportId
                     ? `<button type="button" class="ghost" data-open-report="${Admin.escapeAttr(row.lastReportId)}">Report</button>`
+                    : ""
+                }
+                ${
+                  row.canDelete
+                    ? `<button type="button" class="danger" data-delete-id="${Admin.escapeAttr(row.customerId)}">Delete</button>`
                     : ""
                 }
                 <button type="button" class="primary" data-remind-key="${Admin.escapeAttr(row.key)}" ${
@@ -153,9 +170,36 @@ function renderCustomers() {
       sendReminder(btn.dataset.remindKey, btn);
     });
   });
+  customersList.querySelectorAll("[data-delete-id]").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteCustomerById(btn.dataset.deleteId, btn);
+    });
+  });
   customersList.querySelectorAll("a").forEach((link) => {
     link.addEventListener("click", (event) => event.stopPropagation());
   });
+}
+
+async function deleteCustomerById(id, btn) {
+  if (!id || !confirm("Delete this customer? Only customers with no reports or invoices can be deleted.")) {
+    return;
+  }
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Deleting…";
+    }
+    await Admin.api(`/api/customers/${id}`, { method: "DELETE" });
+    if (editingCustomerId === id) hideCustomerForm();
+    await loadCustomers();
+  } catch (err) {
+    alert(err.message);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Delete";
+    }
+  }
 }
 
 async function openCustomer(rowEl) {
@@ -178,15 +222,60 @@ function showCustomerForm(row = null) {
   const address = document.getElementById("customer-address");
   const phone = document.getElementById("customer-phone");
   const email = document.getElementById("customer-email");
-  const rego = document.getElementById("customer-rego");
   if (name) name.value = row?.customerName || "";
   if (address) address.value = row?.customerAddress || "";
   if (phone) phone.value = row?.customerPhone || "";
   if (email) email.value = row?.customerEmail || "";
-  if (rego) rego.value = row?.registration || "";
-  if (customerDeleteBtn) customerDeleteBtn.hidden = !editingCustomerId;
+  const vehicles =
+    Array.isArray(row?.vehicles) && row.vehicles.length
+      ? row.vehicles
+      : row?.registration
+        ? [{ registration: row.registration, vehicle: row.vehicle || "" }]
+        : [{ registration: "", vehicle: "" }];
+  renderVehicleRows(vehicles);
+  if (customerDeleteBtn) {
+    customerDeleteBtn.hidden = !(editingCustomerId && row?.canDelete);
+  }
   form.scrollIntoView({ block: "start", behavior: "smooth" });
   if (name) name.focus();
+}
+
+function renderVehicleRows(vehicles) {
+  const wrap = document.getElementById("customer-vehicles");
+  if (!wrap) return;
+  const rows = vehicles?.length ? vehicles : [{ registration: "", vehicle: "" }];
+  wrap.innerHTML = rows
+    .map(
+      (v, index) => `
+      <div class="vehicle-row" data-index="${index}">
+        <label>
+          Registration
+          <input class="vehicle-rego" value="${Admin.escapeAttr(v.registration || "")}" required />
+        </label>
+        <label>
+          Vehicle
+          <input class="vehicle-desc" value="${Admin.escapeAttr(v.vehicle || "")}" placeholder="e.g. Toyota Camry" />
+        </label>
+        <button type="button" class="ghost vehicle-remove" data-remove="${index}" ${rows.length <= 1 ? "hidden" : ""}>×</button>
+      </div>`
+    )
+    .join("");
+  wrap.querySelectorAll("[data-remove]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const next = collectVehiclesFromForm();
+      next.splice(Number(btn.dataset.remove), 1);
+      renderVehicleRows(next.length ? next : [{ registration: "", vehicle: "" }]);
+    });
+  });
+}
+
+function collectVehiclesFromForm() {
+  const wrap = document.getElementById("customer-vehicles");
+  if (!wrap) return [];
+  return [...wrap.querySelectorAll(".vehicle-row")].map((row) => ({
+    registration: String(row.querySelector(".vehicle-rego")?.value || "").trim(),
+    vehicle: String(row.querySelector(".vehicle-desc")?.value || "").trim(),
+  }));
 }
 
 function hideCustomerForm() {
@@ -194,6 +283,7 @@ function hideCustomerForm() {
   if (!form) return;
   form.reset();
   editingCustomerId = "";
+  renderVehicleRows([{ registration: "", vehicle: "" }]);
   if (customerDeleteBtn) customerDeleteBtn.hidden = true;
   const legend = document.getElementById("customer-form-legend");
   if (legend) legend.textContent = "New customer";
@@ -203,21 +293,22 @@ async function saveCustomer(event) {
   event?.preventDefault?.();
   const btn = document.getElementById("btn-customer-save");
   const status = document.getElementById("customer-save-status");
+  const vehicles = collectVehiclesFromForm().filter((v) => v.registration);
   const body = {
     customerName: (document.getElementById("customer-name")?.value || "").trim(),
     customerAddress: (document.getElementById("customer-address")?.value || "").trim(),
     customerPhone: (document.getElementById("customer-phone")?.value || "").trim(),
     customerEmail: (document.getElementById("customer-email")?.value || "").trim(),
-    registration: (document.getElementById("customer-rego")?.value || "").trim(),
+    vehicles,
   };
   if (!body.customerName) {
     alert("Enter the customer name.");
     document.getElementById("customer-name")?.focus();
     return;
   }
-  if (!body.registration) {
-    alert("Enter the registration / plate.");
-    document.getElementById("customer-rego")?.focus();
+  if (!vehicles.length) {
+    alert("Enter at least one registration / plate.");
+    document.querySelector(".vehicle-rego")?.focus();
     return;
   }
   if (status) {
@@ -248,7 +339,8 @@ async function saveCustomer(event) {
     if (hint && info?.dataDir) {
       hint.textContent = `Saving to ${info.dataDir} (${info.customersSaved || 0} saved).`;
     }
-    const msg = `Saved ${saved.customerName || body.customerName} · ${saved.registration || body.registration}`;
+    const plates = (saved.vehicles || vehicles).map((v) => v.registration).join(", ");
+    const msg = `Saved ${saved.customerName || body.customerName} · ${plates}`;
     if (status) status.textContent = msg;
     alert(msg);
   } catch (err) {
@@ -335,18 +427,22 @@ customersFilter?.querySelectorAll("[data-filter]").forEach((btn) => {
 
 document.getElementById("btn-customer-cancel")?.addEventListener("click", hideCustomerForm);
 
+document.getElementById("btn-add-vehicle")?.addEventListener("click", () => {
+  const next = collectVehiclesFromForm();
+  next.push({ registration: "", vehicle: "" });
+  renderVehicleRows(next);
+  const inputs = document.querySelectorAll(".vehicle-rego");
+  inputs[inputs.length - 1]?.focus();
+});
+
+renderVehicleRows([{ registration: "", vehicle: "" }]);
+
 customerForm?.addEventListener("submit", saveCustomer);
 document.getElementById("btn-customer-save")?.addEventListener("click", saveCustomer);
 
 customerDeleteBtn?.addEventListener("click", async () => {
-  if (!editingCustomerId || !confirm("Delete this saved customer?")) return;
-  try {
-    await Admin.api(`/api/customers/${editingCustomerId}`, { method: "DELETE" });
-    hideCustomerForm();
-    await loadCustomers();
-  } catch (err) {
-    alert(err.message);
-  }
+  if (!editingCustomerId) return;
+  await deleteCustomerById(editingCustomerId, customerDeleteBtn);
 });
 
 window.DeaneCustomers = {

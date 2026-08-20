@@ -68,6 +68,15 @@ a {
   opacity: 0.9;
 }
 
+.top .shop-line {
+  font-size: 0.92rem;
+  opacity: 0.88;
+}
+
+.top .shop-line a {
+  color: #fff;
+}
+
 main {
   padding: 1.4rem 0 2rem;
 }
@@ -223,6 +232,41 @@ button.primary {
   font-size: 0.92rem;
 }
 
+.letterhead {
+  display: none;
+}
+
+.letterhead-brand {
+  margin: 0 0 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: baseline;
+}
+
+.letterhead-brand .script {
+  font-size: 1.85rem;
+  text-shadow: none;
+  color: var(--red);
+}
+
+.letterhead-brand .sans {
+  color: var(--ink);
+  font-size: 1.25rem;
+}
+
+.letterhead-contact {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.letterhead-contact a {
+  color: inherit;
+  text-decoration: none;
+}
+
 @media (max-width: 640px) {
   .grid-2 {
     grid-template-columns: 1fr;
@@ -232,16 +276,38 @@ button.primary {
 @media print {
   body {
     background: #fff;
+    color: #000;
   }
 
   .top,
   .footer,
-  .no-print {
+  .no-print,
+  .banner {
     display: none !important;
+  }
+
+  .letterhead {
+    display: block;
+    margin: 0 0 1.25rem;
+    padding: 0 0 0.85rem;
+    border-bottom: 2px solid #1565c0;
+  }
+
+  .letterhead-brand .script {
+    color: #e53935;
+  }
+
+  .letterhead-contact {
+    color: #333;
   }
 
   .panel {
     border: none;
     padding: 0;
+    border-radius: 0;
+  }
+
+  .panel + .panel {
+    margin-top: 1rem;
   }
 }

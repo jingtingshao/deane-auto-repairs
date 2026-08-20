@@ -2,11 +2,8 @@
 var Admin = window.DeaneAdmin;
 
 const JOB_STATUSES = [
-  { id: "booked", label: "Booked" },
   { id: "waiting_parts", label: "Waiting parts" },
   { id: "in_progress", label: "In progress" },
-  { id: "waiting_customer", label: "Waiting customer" },
-  { id: "ready", label: "Ready" },
   { id: "completed", label: "Completed" },
 ];
 
@@ -137,6 +134,24 @@ function renderJobList() {
   });
 }
 
+function syncStatusFromParts() {
+  const statusEl = jobInput("status");
+  if (!statusEl) return;
+  const next = suggestStatusFromParts(statusEl.value || "in_progress", partRows);
+  if (next !== statusEl.value) {
+    fillStatusSelect(next);
+    statusEl.value = next;
+  }
+}
+
+function suggestStatusFromParts(currentStatus, parts) {
+  if (currentStatus === "completed") return "completed";
+  const rows = (parts || []).filter((p) => String(p.description || "").trim());
+  if (!rows.length) return "in_progress";
+  if (rows.some((p) => !p.received)) return "waiting_parts";
+  return "in_progress";
+}
+
 function renderParts() {
   if (!jobsPartsEl) return;
   if (!partRows.length) partRows = [newPart()];
@@ -165,6 +180,7 @@ function renderParts() {
           const ordered = row.querySelector('[data-field="ordered"]');
           if (ordered) ordered.checked = true;
         }
+        syncStatusFromParts();
         return;
       }
       partRows[index][field] = field === "qty" ? Number(input.value) || 0 : input.value;
@@ -177,6 +193,7 @@ function renderParts() {
       partRows.splice(Number(btn.dataset.remove), 1);
       if (!partRows.length) partRows = [newPart()];
       renderParts();
+      syncStatusFromParts();
     });
   });
 }
@@ -209,9 +226,9 @@ function fillForm(job) {
     if (!el) return;
     el.value = value ?? "";
   };
-  fillStatusSelect(job.status || "booked");
+  fillStatusSelect(job.status || "in_progress");
   set("jobNumber", job.number);
-  set("status", job.status || "booked");
+  set("status", job.status || "in_progress");
   set("technicianName", job.technicianName);
   set("customerName", job.customerName);
   set("customerEmail", job.customerEmail);
@@ -242,7 +259,7 @@ function fillForm(job) {
 function collectJob() {
   const value = (name) => String(jobInput(name)?.value || "").trim();
   return {
-    status: jobInput("status")?.value || "booked",
+    status: jobInput("status")?.value || "in_progress",
     technicianName: value("technicianName"),
     customerName: value("customerName"),
     customerEmail: value("customerEmail"),
@@ -286,7 +303,7 @@ async function openJob(id) {
 async function createJob() {
   const job = await Admin.api("/api/jobs", {
     method: "POST",
-    body: JSON.stringify({ status: "booked" }),
+    body: JSON.stringify({ status: "in_progress" }),
   });
   await openJob(job.id);
 }
@@ -348,5 +365,17 @@ document.getElementById("btn-jobs-delete")?.addEventListener("click", async () =
   }
 });
 
-window.DeaneJobs = { showList, openJob, createJob };
+window.DeaneJobs = {
+  showList,
+  openJob,
+  createJob,
+  filterBy(status) {
+    jobFilter = status || "all";
+    const filter = document.getElementById("jobs-filter");
+    filter?.querySelectorAll("[data-filter]").forEach((el) => {
+      el.classList.toggle("is-active", el.dataset.filter === jobFilter);
+    });
+    renderJobList();
+  },
+};
 })();

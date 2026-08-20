@@ -25,9 +25,10 @@ $env:ADMIN_PIN="your-pin"; npm start
 ## Workshop flow
 
 1. Sign in at `/admin/`
-2. **Reports** — digital service reports (checklist + photos)
-3. **Quotes & invoices** — WOF / Standard / Premium can go straight to invoice; repair work is a quote emailed to the customer, who must click Accept before work starts
-4. Customer quote/invoice link: `http://localhost:5173/b/<id>`
+2. **Jobs** — workshop job cards (status + parts ordered/received)
+3. **Reports** — digital service reports (checklist + photos)
+4. **Quotes & invoices** — WOF / Standard / Premium can go straight to invoice; repair work is a quote emailed to the customer, who must click Accept before work starts. After Accept, create a job card from the quote.
+5. Customer quote/invoice link: `http://localhost:5173/b/<id>`
 
 ## Business details
 
@@ -54,6 +55,7 @@ $env:ADMIN_PIN="your-pin"; npm start
 
 Reports are stored in `data/reports.json` on this computer (simple local MVP).
 Quotes and invoices are stored in `data/billing.json` (workshop only — no bank data).
+Job cards are stored in `data/jobs.json` (workshop only).
 
 ### Pre-purchase inspection (with photos)
 

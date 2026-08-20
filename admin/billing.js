@@ -14,10 +14,12 @@ const quickAddsEl = document.getElementById("quick-adds");
 let catalogMeta = null;
 let currentBill = null;
 let lineRows = [];
+let paymentRows = [];
 let billingDocs = [];
 let customerDirectory = [];
 const billingSearch = document.getElementById("billing-search");
 const customerSuggestEl = document.getElementById("billing-customer-suggest");
+const billingPaymentsEl = document.getElementById("billing-payments");
 
 function money(n) {
   return new Intl.NumberFormat("en-NZ", {
@@ -39,8 +41,33 @@ function newLine(partial = {}) {
   };
 }
 
-function isLocked(doc) {
-  return ["accepted", "invoiced", "void"].includes(doc?.status);
+function canEditLines(doc) {
+  if (!doc || doc.status === "void") return false;
+  if (doc.kind === "quote") return doc.status === "draft" || doc.status === "sent";
+  return doc.status === "draft";
+}
+
+function canEditCustomer(doc) {
+  if (!doc || doc.status === "void") return false;
+  if (doc.kind === "quote") return true;
+  return canEditLines(doc);
+}
+
+function setBillingFieldsEditable(editable) {
+  [
+    "customerName",
+    "customerEmail",
+    "customerPhone",
+    "registration",
+    "vehicle",
+    "notes",
+    "validUntil",
+  ].forEach((name) => {
+    const el = billingInput(name);
+    if (!el) return;
+    el.readOnly = !editable;
+    el.disabled = false;
+  });
 }
 
 function kindLabel(kind) {
@@ -107,6 +134,11 @@ function matchesBillingSearch(doc, query) {
   return name.includes(q) || plate.includes(plateQuery);
 }
 
+function paymentLabel(status) {
+  const map = { unpaid: "Unpaid", deposit: "Deposit", paid: "Paid" };
+  return map[status] || "";
+}
+
 function renderBillingList() {
   if (!billingDocs.length) {
     billingList.innerHTML =
@@ -123,17 +155,30 @@ function renderBillingList() {
   }
 
   billingList.innerHTML = docs
-    .map(
-      (d) => `
+    .map((d) => {
+      const payBadge =
+        d.kind === "invoice" && d.paymentStatus
+          ? `<span class="badge pay-${Admin.escapeAttr(d.paymentStatus)}">${Admin.escapeHtml(paymentLabel(d.paymentStatus))}</span>`
+          : "";
+      const payHint =
+        d.kind === "invoice" && d.paymentStatus && d.paymentStatus !== "paid"
+          ? ` · due ${money(d.balanceDue)}`
+          : d.kind === "invoice" && d.paymentStatus === "paid"
+            ? ` · paid ${money(d.amountPaid)}`
+            : "";
+      return `
       <article class="report-card billing-card" data-id="${d.id}">
         <div class="billing-number">${Admin.escapeHtml(d.number)}</div>
         <div>
           <h2>${Admin.escapeHtml(d.customerName || "Customer")}</h2>
-          <p class="muted">${Admin.escapeHtml(d.registration || "No plate")} · ${Admin.escapeHtml(kindLabel(d.kind))} · ${Admin.escapeHtml(d.vehicle || "")} · ${money(d.totalIncl)}</p>
+          <p class="muted">${Admin.escapeHtml(d.registration || "No plate")} · ${Admin.escapeHtml(kindLabel(d.kind))} · ${Admin.escapeHtml(d.vehicle || "")} · ${money(d.totalIncl)}${payHint}</p>
         </div>
-        <span class="badge ${d.status}">${Admin.escapeHtml(d.status)}</span>
-      </article>`
-    )
+        <div class="job-card-meta">
+          <span class="badge ${d.status}">${Admin.escapeHtml(d.status)}</span>
+          ${payBadge}
+        </div>
+      </article>`;
+    })
     .join("");
   billingList.querySelectorAll(".report-card").forEach((card) => {
     card.addEventListener("click", () => openDoc(card.dataset.id));
@@ -162,7 +207,7 @@ function hideCustomerSuggest() {
 }
 
 function applyCustomerToForm(row) {
-  if (!row || isLocked(currentBill)) return;
+  if (!row || !canEditCustomer(currentBill)) return;
   const setIf = (name, value) => {
     const el = billingInput(name);
     if (!el) return;
@@ -253,16 +298,109 @@ function fillForm(doc) {
   const validLabel = billingInput("validUntil")?.closest("label");
   if (validLabel) validLabel.hidden = doc.kind !== "quote";
 
+  const paymentFs = document.getElementById("billing-payment-fieldset");
+  if (paymentFs) {
+    paymentFs.hidden = doc.kind !== "invoice" || doc.status === "void";
+    if (doc.kind === "invoice") {
+      paymentRows = (doc.payments || []).map((p) => ({
+        id: p.id || crypto.randomUUID(),
+        amount: Number(p.amount) || 0,
+        paidAt: p.paidAt || "",
+        note: p.note || "",
+      }));
+      if (!paymentRows.length && Number(doc.amountPaid) > 0) {
+        paymentRows = [
+          {
+            id: crypto.randomUUID(),
+            amount: Number(doc.amountPaid) || 0,
+            paidAt: doc.paidAt || "",
+            note: doc.paymentNote || "",
+          },
+        ];
+      }
+      const dateEl = document.getElementById("billing-pay-date");
+      if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
+      renderPayments();
+    } else {
+      paymentRows = [];
+    }
+  }
+
+  // Customer details stay editable on quotes until void; lines only while draft/sent.
+  setBillingFieldsEditable(canEditCustomer(doc));
+
+  const hint = document.getElementById("billing-edit-hint");
+  if (hint) {
+    if (doc.kind === "quote" && (doc.status === "draft" || doc.status === "sent")) {
+      hint.hidden = false;
+      hint.textContent =
+        doc.status === "sent"
+          ? "You can change this quote, then click Save changes. Send email again if the customer needs the update."
+          : "Edit customer details and line items, then Save changes.";
+    } else if (doc.kind === "quote" && (doc.status === "accepted" || doc.status === "invoiced")) {
+      hint.hidden = false;
+      hint.textContent =
+        "This quote is locked after accept. Use Revise quote to make a new editable copy.";
+    } else {
+      hint.hidden = true;
+      hint.textContent = "";
+    }
+  }
+
   lineRows = (doc.lines || []).map((line) => newLine(line));
   if (!lineRows.length) lineRows = [newLine()];
   renderLines();
   renderQuickAdds();
+  renderHistory(doc);
   updateActionButtons();
+}
+
+function formatHistoryWhen(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return new Intl.DateTimeFormat("en-NZ", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(d);
+}
+
+function renderHistory(doc) {
+  const list = document.getElementById("billing-history");
+  const fs = document.getElementById("billing-history-fieldset");
+  if (!list) return;
+  if (fs) fs.hidden = doc.status === "void" && !(doc.history || []).length;
+  const rows = Array.isArray(doc.history) ? doc.history : [];
+  if (!rows.length) {
+    list.innerHTML = '<li class="muted">No history yet.</li>';
+    return;
+  }
+  list.innerHTML = rows
+    .map((ev) => {
+      const amount =
+        ev.amount != null && ev.amount !== ""
+          ? `<span class="history-amount">${money(ev.amount)}</span>`
+          : "";
+      const detail = ev.detail
+        ? `<p class="history-detail">${Admin.escapeHtml(ev.detail)}</p>`
+        : "";
+      return `<li class="history-item history-${Admin.escapeAttr(ev.type || "note")}">
+        <div class="history-when">${Admin.escapeHtml(formatHistoryWhen(ev.at))}</div>
+        <div class="history-body">
+          <p class="history-summary">${Admin.escapeHtml(ev.summary || ev.type || "Update")}${amount}</p>
+          ${detail}
+        </div>
+      </li>`;
+    })
+    .join("");
 }
 
 function renderQuickAdds() {
   const adds = catalogMeta?.quickAdds || [];
-  const locked = isLocked(currentBill);
+  const locked = !canEditLines(currentBill);
   quickAddsEl.innerHTML = locked
     ? ""
     : adds
@@ -282,7 +420,7 @@ function renderQuickAdds() {
 }
 
 function renderLines() {
-  const locked = isLocked(currentBill);
+  const locked = !canEditLines(currentBill);
   billingLinesEl.innerHTML = lineRows
     .map((line, index) => {
       const total = round2((Number(line.qty) || 0) * (Number(line.unitPriceIncl) || 0));
@@ -323,24 +461,24 @@ function renderLines() {
 }
 
 function renderTotals() {
-  const totalIncl = round2(
+  const net = round2(
     lineRows.reduce(
       (sum, line) => sum + (Number(line.qty) || 0) * (Number(line.unitPriceIncl) || 0),
       0
     )
   );
-  const net = round2(totalIncl / 1.15);
-  const gst = round2(totalIncl - net);
+  const gst = round2(net * 0.15);
+  const totalIncl = round2(net + gst);
   billingTotalsEl.innerHTML = `
     <p><span>Subtotal excl. GST</span><span>${money(net)}</span></p>
     <p><span>GST (15%)</span><span>${money(gst)}</span></p>
-    <p><span>Total incl. GST</span><span>${money(totalIncl)}</span></p>
+    <p><span>Total (plus GST)</span><span>${money(totalIncl)}</span></p>
   `;
 }
 
 function collectBill() {
   const value = (name) => String(billingInput(name)?.value || "").trim();
-  return {
+  const payload = {
     customerName: value("customerName"),
     customerEmail: value("customerEmail"),
     customerPhone: value("customerPhone"),
@@ -350,30 +488,136 @@ function collectBill() {
     validUntil: billingInput("validUntil")?.value || "",
     lines: lineRows.map((line) => ({ ...line })),
   };
+  if (currentBill?.kind === "invoice") {
+    payload.payments = paymentRows.map((p) => ({ ...p }));
+  }
+  return payload;
+}
+
+function invoiceTotalIncl() {
+  const net = round2(
+    lineRows.reduce(
+      (sum, line) => sum + (Number(line.qty) || 0) * (Number(line.unitPriceIncl) || 0),
+      0
+    )
+  );
+  return round2(net + round2(net * 0.15));
+}
+
+function paymentsTotal() {
+  return round2(paymentRows.reduce((sum, p) => sum + (Number(p.amount) || 0), 0));
+}
+
+function updatePaymentSummary() {
+  const el = document.getElementById("billing-payment-summary");
+  if (!el || currentBill?.kind !== "invoice") return;
+  const total = Number(currentBill.totals?.totalIncl) || invoiceTotalIncl();
+  const paid = paymentsTotal();
+  const due = round2(Math.max(0, total - paid));
+  const status =
+    paid <= 0 ? "Unpaid" : due <= 0 ? "Paid" : "Deposit / partial";
+  el.textContent = `Status: ${status} · Paid ${money(paid)} · Balance due ${money(due)} · Invoice ${money(total)}`;
+}
+
+function renderPayments() {
+  if (!billingPaymentsEl) return;
+  if (!paymentRows.length) {
+    billingPaymentsEl.innerHTML =
+      '<tr><td colspan="4" class="muted">No payments yet.</td></tr>';
+  } else {
+    billingPaymentsEl.innerHTML = paymentRows
+      .map(
+        (p, index) => `<tr data-index="${index}">
+          <td>${Admin.escapeHtml(p.paidAt || "—")}</td>
+          <td>${money(p.amount)}</td>
+          <td>${Admin.escapeHtml(p.note || "")}</td>
+          <td><button type="button" class="ghost" data-remove-pay="${index}">×</button></td>
+        </tr>`
+      )
+      .join("");
+    billingPaymentsEl.querySelectorAll("[data-remove-pay]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        paymentRows.splice(Number(btn.dataset.removePay), 1);
+        renderPayments();
+      });
+    });
+  }
+  updatePaymentSummary();
+}
+
+function addPaymentRow(amount, note) {
+  const amt = round2(Number(amount) || 0);
+  if (amt <= 0) {
+    alert("Enter a payment amount greater than zero.");
+    return false;
+  }
+  const dateEl = document.getElementById("billing-pay-date");
+  const noteEl = document.getElementById("billing-pay-note");
+  paymentRows.push({
+    id: crypto.randomUUID(),
+    amount: amt,
+    paidAt: dateEl?.value || new Date().toISOString().slice(0, 10),
+    note: String(note != null ? note : noteEl?.value || "").trim(),
+  });
+  if (noteEl) noteEl.value = "";
+  const amountEl = document.getElementById("billing-pay-amount");
+  if (amountEl) amountEl.value = "";
+  renderPayments();
+  return true;
 }
 
 async function saveBill() {
   if (!currentBill) return null;
+  if (currentBill.status === "void") {
+    throw new Error("This document has been voided.");
+  }
   currentBill = await Admin.api(`/api/billing/${currentBill.id}`, {
     method: "PUT",
     body: JSON.stringify(collectBill()),
   });
-  Admin.showBillingStatus("Saved");
+  fillForm(currentBill);
+  const msg =
+    currentBill.kind === "quote" && currentBill.status === "sent"
+      ? "Saved — send email again if the customer needs the update"
+      : "Saved";
+  Admin.showBillingStatus(msg);
   updateActionButtons();
   return currentBill;
 }
 
 function updateActionButtons() {
   const doc = currentBill;
+  const saveBtn = document.getElementById("btn-billing-save");
   const convertBtn = document.getElementById("btn-billing-convert");
   const openInvBtn = document.getElementById("btn-billing-open-invoice");
   const emailBtn = document.getElementById("btn-billing-email");
+  const reviseBtn = document.getElementById("btn-billing-revise");
   const voidBtn = document.getElementById("btn-billing-void");
   const deleteBtn = document.getElementById("btn-billing-delete");
   const addLineBtn = document.getElementById("btn-add-line");
 
+  const linesEditable = canEditLines(doc);
+  const quoteLocked =
+    doc.kind === "quote" && (doc.status === "accepted" || doc.status === "invoiced");
+
+  if (saveBtn) {
+    if (doc.kind === "quote") {
+      saveBtn.hidden = doc.status === "void";
+      saveBtn.textContent = "Save changes";
+      saveBtn.classList.toggle("primary", linesEditable);
+      saveBtn.classList.toggle("ghost", !linesEditable);
+    } else {
+      // Invoices: always allow Save for payment updates (even when lines are locked).
+      saveBtn.hidden = doc.status === "void";
+      saveBtn.textContent = "Save";
+      saveBtn.classList.add("primary");
+      saveBtn.classList.remove("ghost");
+    }
+  }
+
   convertBtn.hidden = !(doc.kind === "quote" && doc.status === "accepted");
   openInvBtn.hidden = !(doc.kind === "quote" && doc.status === "invoiced" && doc.invoiceId);
+  if (reviseBtn) reviseBtn.hidden = !quoteLocked;
   const jobBtn = document.getElementById("btn-billing-job");
   const canJob =
     (doc.kind === "quote" && (doc.status === "accepted" || doc.status === "invoiced")) ||
@@ -384,9 +628,11 @@ function updateActionButtons() {
   }
   emailBtn.textContent = "Send email";
   emailBtn.hidden = doc.status === "void" || doc.status === "invoiced";
+  emailBtn.classList.toggle("primary", !linesEditable || doc.status === "sent");
+  emailBtn.classList.toggle("ghost", linesEditable && doc.status === "draft");
   voidBtn.hidden = doc.status === "void" || doc.status === "invoiced" || doc.status === "draft";
   deleteBtn.hidden = doc.status !== "draft";
-  addLineBtn.hidden = isLocked(doc);
+  addLineBtn.hidden = !linesEditable;
 }
 
 async function showList() {
@@ -405,7 +651,7 @@ billingSearch?.addEventListener("input", renderBillingList);
 billingSearch?.addEventListener("search", renderBillingList);
 
 document.getElementById("billing-customer-name")?.addEventListener("input", () => {
-  if (isLocked(currentBill)) return;
+  if (!canEditCustomer(currentBill)) return;
   renderCustomerSuggest(matchCustomers(billingInput("customerName")?.value, "name"));
 });
 
@@ -414,7 +660,7 @@ document.getElementById("billing-customer-name")?.addEventListener("blur", () =>
   const exact = customerDirectory.filter(
     (row) => String(row.customerName || "").trim().toLowerCase() === name
   );
-  if (exact.length === 1 && !isLocked(currentBill)) {
+  if (exact.length === 1 && canEditCustomer(currentBill)) {
     applyCustomerToForm(exact[0]);
     return;
   }
@@ -426,7 +672,7 @@ document.getElementById("billing-customer-name")?.addEventListener("blur", () =>
 });
 
 document.getElementById("billing-registration")?.addEventListener("blur", () => {
-  if (isLocked(currentBill)) return;
+  if (!canEditCustomer(currentBill)) return;
   const matches = matchCustomers(billingInput("registration")?.value, "registration");
   const plate = normalizeSearch(billingInput("registration")?.value);
   const exact = matches.filter((row) => normalizeSearch(row.registration) === plate);
@@ -436,7 +682,7 @@ document.getElementById("billing-registration")?.addEventListener("blur", () => 
 document.getElementById("btn-billing-back").addEventListener("click", showList);
 
 document.getElementById("btn-add-line").addEventListener("click", () => {
-  if (isLocked(currentBill)) return;
+  if (!canEditLines(currentBill)) return;
   lineRows.push(newLine());
   renderLines();
 });
@@ -444,6 +690,27 @@ document.getElementById("btn-add-line").addEventListener("click", () => {
 document.getElementById("btn-billing-save").addEventListener("click", async () => {
   try {
     await saveBill();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+document.getElementById("btn-billing-revise")?.addEventListener("click", async () => {
+  if (!currentBill || currentBill.kind !== "quote") return;
+  if (
+    !confirm(
+      `Create a new draft quote from ${currentBill.number}? The original stays as-is; you can edit the new one and send it.`
+    )
+  ) {
+    return;
+  }
+  try {
+    const doc = await Admin.api(`/api/billing/${currentBill.id}/revise`, {
+      method: "POST",
+      body: "{}",
+    });
+    await openDoc(doc.id);
+    Admin.showBillingStatus(`${doc.number} created — edit and Save changes`);
   } catch (err) {
     alert(err.message);
   }
@@ -537,6 +804,29 @@ document.getElementById("btn-billing-delete").addEventListener("click", async ()
   } catch (err) {
     alert(err.message);
   }
+});
+
+document.getElementById("btn-add-payment")?.addEventListener("click", () => {
+  if (currentBill?.kind !== "invoice") return;
+  const amountEl = document.getElementById("billing-pay-amount");
+  addPaymentRow(amountEl?.value);
+});
+
+document.getElementById("btn-add-deposit-30")?.addEventListener("click", () => {
+  if (currentBill?.kind !== "invoice") return;
+  const total = Number(currentBill.totals?.totalIncl) || invoiceTotalIncl();
+  addPaymentRow(round2(total * 0.3), "30% deposit");
+});
+
+document.getElementById("btn-add-balance")?.addEventListener("click", () => {
+  if (currentBill?.kind !== "invoice") return;
+  const total = Number(currentBill.totals?.totalIncl) || invoiceTotalIncl();
+  const due = round2(Math.max(0, total - paymentsTotal()));
+  if (due <= 0) {
+    alert("Nothing left to pay.");
+    return;
+  }
+  addPaymentRow(due, "Balance");
 });
 
 window.DeaneBilling = { showList, openDoc };
