@@ -16,6 +16,7 @@ const {
 const business = require("./data/business");
 const catalog = require("./data/catalog");
 const jobsLib = require("./data/jobs");
+const { buildBillingPdf, safeFilename } = require("./data/billing-pdf");
 
 const PORT = Number(process.env.PORT) || 5173;
 const ADMIN_PIN = process.env.ADMIN_PIN || "deane123";
@@ -2073,6 +2074,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       `Here is your quote for ${vehicleBit}: ${doc.number}.\n` +
       `Total (plus GST): $${money}\n\n` +
       `Please review and accept this quote before we start work:\n${url}\n\n` +
+      `A PDF copy is attached for your records.\n\n` +
       (doc.validUntil ? `This quote is valid until ${doc.validUntil}.\n\n` : "") +
       `${business.paymentText()}\n\n` +
       `${business.fullAddress()}\n${business.phoneDisplay}\n${business.email}\n`;
@@ -2083,6 +2085,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       <p>Please review and accept this quote before we start work.</p>
       <p><a href="${escapeAttr(url)}" style="display:inline-block;background:#1565c0;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:700;">Review &amp; accept quote</a></p>
       <p>Or open this link:<br/><a href="${escapeAttr(url)}">${escapeHtml(url)}</a></p>
+      <p>A PDF copy is attached for your records.</p>
       ${doc.validUntil ? `<p>This quote is valid until ${escapeHtml(doc.validUntil)}.</p>` : ""}
       <p><strong>How to pay</strong><br/>
       Bank account number: <strong>${escapeHtml(business.bankAccount)}</strong><br/>
@@ -2104,6 +2107,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       `Here is your tax invoice for ${vehicleBit}: ${doc.number}.\n` +
       `Total (plus GST): $${money}\n\n` +
       `View / print your invoice:\n${url}\n\n` +
+      `A PDF copy is attached for your records.\n\n` +
       `${business.paymentText()}\n\n` +
       `${business.fullAddress()}\n${business.phoneDisplay}\n${business.email}\n`;
     html = `
@@ -2111,6 +2115,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       <p>Here is your tax invoice for <strong>${escapeHtml(vehicleBit)}</strong> — ${escapeHtml(doc.number)}.</p>
       <p>Total (plus GST): <strong>$${escapeHtml(money)}</strong></p>
       <p><a href="${escapeAttr(url)}">View / print your invoice</a></p>
+      <p>A PDF copy is attached for your records.</p>
       <p><strong>How to pay</strong><br/>
       Bank account number: <strong>${escapeHtml(business.bankAccount)}</strong><br/>
       ${escapeHtml(business.paymentDueNote)}<br/>
@@ -2126,6 +2131,21 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
     `;
   }
 
+  let pdfAttachment;
+  try {
+    const pdfBuffer = await buildBillingPdf(doc);
+    pdfAttachment = {
+      filename: safeFilename(doc.number, doc.kind),
+      content: pdfBuffer,
+      contentType: "application/pdf",
+    };
+  } catch (err) {
+    console.error("Billing PDF failed:", err);
+    return res.status(500).json({
+      error: "Could not create the PDF attachment. Email was not sent.",
+    });
+  }
+
   try {
     const mailer = createMailer();
     const info = await mailer.sendMail({
@@ -2135,6 +2155,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       subject,
       text,
       html,
+      attachments: [pdfAttachment],
     });
 
     doc.lastEmailedAt = new Date().toISOString();
