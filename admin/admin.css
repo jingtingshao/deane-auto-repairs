@@ -723,8 +723,12 @@ label.check input {
   width: auto;
 }
 
+.parts-table .part-supplier {
+  min-width: 7rem;
+}
+
 .parts-table .part-note {
-  min-width: 8rem;
+  min-width: 7rem;
 }
 
 .billing-history {

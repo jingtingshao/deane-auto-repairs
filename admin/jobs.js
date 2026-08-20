@@ -33,6 +33,7 @@ function newPart(partial = {}) {
     qty: partial.qty != null ? partial.qty : 1,
     ordered: Boolean(partial.ordered) || Boolean(partial.received),
     received: Boolean(partial.received),
+    supplier: partial.supplier || "",
     note: partial.note || "",
   };
 }
@@ -162,6 +163,7 @@ function renderParts() {
         <td><input class="qty" data-field="qty" type="number" min="0" step="1" value="${Admin.escapeAttr(String(part.qty))}" /></td>
         <td class="check-cell"><input data-field="ordered" type="checkbox" ${part.ordered ? "checked" : ""} /></td>
         <td class="check-cell"><input data-field="received" type="checkbox" ${part.received ? "checked" : ""} /></td>
+        <td><input class="part-supplier" data-field="supplier" value="${Admin.escapeAttr(part.supplier)}" placeholder="e.g. Repco" /></td>
         <td><input class="part-note" data-field="note" value="${Admin.escapeAttr(part.note)}" placeholder="ETA Friday" /></td>
         <td><button type="button" class="ghost" data-remove="${index}">×</button></td>
       </tr>`

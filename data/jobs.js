@@ -50,6 +50,7 @@ function normalizePart(part = {}, idFallback = "") {
     qty: Math.max(0, Number(part.qty) || 0) || (String(part.description || "").trim() ? 1 : 1),
     ordered: received ? true : Boolean(part.ordered),
     received,
+    supplier: String(part.supplier || "").trim(),
     note: String(part.note || "").trim(),
   };
 }
@@ -58,7 +59,7 @@ function normalizeParts(parts, newId) {
   if (!Array.isArray(parts)) return [];
   return parts
     .map((part) => normalizePart(part, newId ? newId() : part.id || ""))
-    .filter((part) => part.description || part.note);
+    .filter((part) => part.description || part.supplier || part.note);
 }
 
 function partsFromQuoteLines(lines, newId) {
@@ -71,6 +72,7 @@ function partsFromQuoteLines(lines, newId) {
           qty: line.qty,
           ordered: false,
           received: false,
+          supplier: "",
           note: "",
         },
         newId ? newId() : ""
