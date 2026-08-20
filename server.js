@@ -1547,6 +1547,21 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
     let invoicesOverdueTotal = 0;
     let invoicesOverdueCount = 0;
 
+    const monthBuckets = new Map();
+    const now = new Date();
+    for (let i = 5; i >= 0; i -= 1) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      monthBuckets.set(key, {
+        key,
+        label: d.toLocaleString("en-NZ", { month: "short" }),
+        year: d.getFullYear(),
+        sales: 0,
+        outstanding: 0,
+      });
+    }
+    const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
     for (const doc of readBilling()) {
       if (doc.status === "void") continue;
       const totals = catalog.computeTotals(doc.lines || []);
@@ -1573,8 +1588,43 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
             depositsOutstandingTotal + payment.balanceDue
           );
         }
+
+        if (doc.status !== "draft") {
+          const monthKey = String(billingAnchorDate(doc) || "").slice(0, 7);
+          const bucket = monthBuckets.get(monthKey);
+          if (bucket) {
+            bucket.sales = catalog.round2(bucket.sales + totals.totalIncl);
+            if (payment.balanceDue > 0) {
+              bucket.outstanding = catalog.round2(
+                bucket.outstanding + payment.balanceDue
+              );
+            }
+          }
+        }
       }
     }
+
+    let servicesThisMonth = 0;
+    let wofsThisMonth = 0;
+    for (const report of readReports()) {
+      if (report.status === "void") continue;
+      const day = String(report.serviceDate || report.createdAt || "").slice(0, 10);
+      if (!day.startsWith(thisMonthKey)) continue;
+      const jobType = String(report.jobType || "").toLowerCase();
+      const pkg = String(report.servicePackage || "").toLowerCase();
+      const isService =
+        /service/.test(jobType) || pkg === "standard" || pkg === "premium";
+      const isWof =
+        /wof/.test(jobType) || Boolean(report.wof && report.wof.performed);
+      if (isService) servicesThisMonth += 1;
+      if (isWof) wofsThisMonth += 1;
+    }
+
+    const monthly = [...monthBuckets.values()];
+    const thisMonthLabel = now.toLocaleString("en-NZ", {
+      month: "long",
+      year: "numeric",
+    });
 
     res.json({
       jobs: {
@@ -1598,6 +1648,13 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
       invoicesOverdue: {
         count: invoicesOverdueCount,
         totalIncl: invoicesOverdueTotal,
+      },
+      monthly,
+      thisMonth: {
+        key: thisMonthKey,
+        label: thisMonthLabel,
+        services: servicesThisMonth,
+        wofs: wofsThisMonth,
       },
     });
   } catch (err) {
