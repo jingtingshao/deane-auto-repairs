@@ -130,7 +130,6 @@ function render(doc) {
           <p class="meta">Vehicle</p>
           <p><strong>${escapeHtml(doc.registration || "—")}</strong></p>
           <p class="meta">${escapeHtml(doc.vehicle || "")}</p>
-          ${doc.odometer ? `<p class="meta">${escapeHtml(doc.odometer)} km</p>` : ""}
         </div>
       </div>
     </section>
@@ -153,6 +152,11 @@ function render(doc) {
         <p class="grand"><span>Total incl. GST</span><span>${money(totals.totalIncl)}</span></p>
       </div>
       ${doc.notes ? `<p class="note" style="margin-top:1rem">${escapeHtml(doc.notes)}</p>` : ""}
+      <div class="pay">
+        <h2>How to pay</h2>
+        <p>Bank account number: <strong>${escapeHtml(shop.bankAccount || "02-0216-0104554-002")}</strong></p>
+        <p class="meta">*${escapeHtml(shop.depositNote || "We may require a 30% deposit before commencing the repair work and/or ordering parts.")}</p>
+      </div>
       ${acceptBlock}
     </section>
   `;

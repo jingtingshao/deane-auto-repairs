@@ -670,6 +670,8 @@ function withBillingTotals(doc, isAdmin) {
       email: business.email,
       gstNumber: business.gstNumber || "",
       hoursShort: business.hoursShort,
+      bankAccount: business.bankAccount || "",
+      depositNote: business.depositNote || "",
     },
   };
   if (!isAdmin) delete payload.acceptToken;
@@ -1477,6 +1479,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       `Total (incl. GST): $${money}\n\n` +
       `Please review and accept this quote before we start work:\n${url}\n\n` +
       (doc.validUntil ? `This quote is valid until ${doc.validUntil}.\n\n` : "") +
+      `${business.paymentText()}\n\n` +
       `${business.fullAddress()}\n${business.phoneDisplay}\n${business.email}\n`;
     html = `
       <p>Hi ${escapeHtml(name)},</p>
@@ -1486,6 +1489,9 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       <p><a href="${escapeAttr(url)}" style="display:inline-block;background:#1565c0;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:700;">Review &amp; accept quote</a></p>
       <p>Or open this link:<br/><a href="${escapeAttr(url)}">${escapeHtml(url)}</a></p>
       ${doc.validUntil ? `<p>This quote is valid until ${escapeHtml(doc.validUntil)}.</p>` : ""}
+      <p><strong>How to pay</strong><br/>
+      Bank account number: <strong>${escapeHtml(business.bankAccount)}</strong><br/>
+      <span style="color:#5b6777;font-size:14px;">*${escapeHtml(business.depositNote)}</span></p>
       <p style="color:#5b6777;font-size:14px;">
         ${escapeHtml(business.name)}<br/>
         ${escapeHtml(business.addressLine2)}<br/>
@@ -1502,12 +1508,16 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       `Here is your tax invoice for ${vehicleBit}: ${doc.number}.\n` +
       `Total (incl. GST): $${money}\n\n` +
       `View / print your invoice:\n${url}\n\n` +
+      `${business.paymentText()}\n\n` +
       `${business.fullAddress()}\n${business.phoneDisplay}\n${business.email}\n`;
     html = `
       <p>Hi ${escapeHtml(name)},</p>
       <p>Here is your tax invoice for <strong>${escapeHtml(vehicleBit)}</strong> — ${escapeHtml(doc.number)}.</p>
       <p>Total (incl. GST): <strong>$${escapeHtml(money)}</strong></p>
       <p><a href="${escapeAttr(url)}">View / print your invoice</a></p>
+      <p><strong>How to pay</strong><br/>
+      Bank account number: <strong>${escapeHtml(business.bankAccount)}</strong><br/>
+      <span style="color:#5b6777;font-size:14px;">*${escapeHtml(business.depositNote)}</span></p>
       <p style="color:#5b6777;font-size:14px;">
         ${escapeHtml(business.name)}<br/>
         ${escapeHtml(business.addressLine2)}<br/>

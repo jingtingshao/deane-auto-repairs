@@ -12,11 +12,17 @@ module.exports = {
   hoursSunday: "Sunday closed",
   gstNumber: "",
   website: "https://www.deaneauto.co.nz",
+  bankAccount: "02-0216-0104554-002",
+  depositNote:
+    "We may require a 30% deposit before commencing the repair work and/or ordering parts.",
 
   fullAddress() {
     return `${this.name}\n${this.addressLine2}\n${this.street}\n${this.suburb}, ${this.city}`;
   },
   footerLine() {
     return `${this.name} · ${this.addressLine2} · ${this.street}, ${this.suburb} · ${this.phoneDisplay} · ${this.email}`;
+  },
+  paymentText() {
+    return `How to pay\nBank account number: ${this.bankAccount}\n*${this.depositNote}`;
   },
 };

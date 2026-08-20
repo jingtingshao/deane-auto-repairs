@@ -244,7 +244,6 @@ function fillForm(doc) {
   set("customerPhone", doc.customerPhone);
   set("registration", doc.registration);
   set("vehicle", doc.vehicle);
-  set("odometer", doc.odometer);
   set("notes", doc.notes);
   hideCustomerSuggest();
 
@@ -347,7 +346,6 @@ function collectBill() {
     customerPhone: value("customerPhone"),
     registration: value("registration"),
     vehicle: value("vehicle"),
-    odometer: value("odometer"),
     notes: String(billingInput("notes")?.value || "").trim(),
     validUntil: billingInput("validUntil")?.value || "",
     lines: lineRows.map((line) => ({ ...line })),

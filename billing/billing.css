@@ -203,6 +203,20 @@ button.primary {
   white-space: pre-wrap;
 }
 
+.pay {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.pay h2 {
+  margin: 0 0 0.45rem;
+}
+
+.pay p {
+  margin: 0.25rem 0;
+}
+
 .footer {
   padding: 0 0 2.5rem;
   color: var(--muted);
