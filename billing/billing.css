@@ -222,8 +222,22 @@ button.primary {
   margin: 0 0 0.45rem;
 }
 
+.pay h3 {
+  margin: 0.85rem 0 0.35rem;
+  font-size: 1rem;
+}
+
 .pay p {
   margin: 0.25rem 0;
+}
+
+.pay-terms {
+  margin: 0.25rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.pay-terms li {
+  margin: 0.35rem 0;
 }
 
 .footer {

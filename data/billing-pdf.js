@@ -226,16 +226,19 @@ function buildBillingPdf(doc) {
       }
 
       pdf.moveDown(1);
-      ensureSpace(70);
+      ensureSpace(110);
       pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(11).text("How to pay");
       pdf
         .fillColor("#1a2332")
         .font("Helvetica")
         .fontSize(10)
-        .text(`Bank account number: ${business.bankAccount}`)
-        .text(business.paymentDueNote || "Payments are due immediately.")
-        .fillColor("#5b6777")
-        .text(`*${business.depositNote}`);
+        .text(`Bank account number: ${business.bankAccount}`);
+      pdf.moveDown(0.4);
+      pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(10).text("Payment terms");
+      pdf.fillColor("#1a2332").font("Helvetica").fontSize(10);
+      for (const line of business.paymentTerms || []) {
+        pdf.text(`• ${line}`, { width: pageWidth });
+      }
 
       if (!isInvoice) {
         pdf.moveDown(0.8);

@@ -1052,8 +1052,9 @@ function withBillingTotals(doc, isAdmin) {
       gstNumber: business.gstNumber || "",
       hoursShort: business.hoursShort,
       bankAccount: business.bankAccount || "",
-      paymentDueNote: business.paymentDueNote || "",
-      depositNote: business.depositNote || "",
+      paymentTerms: Array.isArray(business.paymentTerms)
+        ? [...business.paymentTerms]
+        : [],
     },
   };
   if (payment) {
@@ -2088,9 +2089,13 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       <p>A PDF copy is attached for your records.</p>
       ${doc.validUntil ? `<p>This quote is valid until ${escapeHtml(doc.validUntil)}.</p>` : ""}
       <p><strong>How to pay</strong><br/>
-      Bank account number: <strong>${escapeHtml(business.bankAccount)}</strong><br/>
-      ${escapeHtml(business.paymentDueNote)}<br/>
-      <span style="color:#5b6777;font-size:14px;">*${escapeHtml(business.depositNote)}</span></p>
+      Bank account number: <strong>${escapeHtml(business.bankAccount)}</strong></p>
+      <p><strong>Payment terms</strong></p>
+      <ul style="margin:0.25rem 0 1rem;padding-left:1.2rem;color:#1a2332;font-size:14px;">
+        ${(business.paymentTerms || [])
+          .map((line) => `<li>${escapeHtml(line)}</li>`)
+          .join("")}
+      </ul>
       <p style="color:#5b6777;font-size:14px;">
         ${escapeHtml(business.name)}<br/>
         ${escapeHtml(business.addressLine2)}<br/>
@@ -2117,9 +2122,13 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       <p><a href="${escapeAttr(url)}">View / print your invoice</a></p>
       <p>A PDF copy is attached for your records.</p>
       <p><strong>How to pay</strong><br/>
-      Bank account number: <strong>${escapeHtml(business.bankAccount)}</strong><br/>
-      ${escapeHtml(business.paymentDueNote)}<br/>
-      <span style="color:#5b6777;font-size:14px;">*${escapeHtml(business.depositNote)}</span></p>
+      Bank account number: <strong>${escapeHtml(business.bankAccount)}</strong></p>
+      <p><strong>Payment terms</strong></p>
+      <ul style="margin:0.25rem 0 1rem;padding-left:1.2rem;color:#1a2332;font-size:14px;">
+        ${(business.paymentTerms || [])
+          .map((line) => `<li>${escapeHtml(line)}</li>`)
+          .join("")}
+      </ul>
       <p style="color:#5b6777;font-size:14px;">
         ${escapeHtml(business.name)}<br/>
         ${escapeHtml(business.addressLine2)}<br/>

@@ -177,8 +177,20 @@ function render(doc) {
       <div class="pay">
         <h2>How to pay</h2>
         <p>Bank account number: <strong>${escapeHtml(shop.bankAccount || "02-0216-0104554-002")}</strong></p>
-        <p>${escapeHtml(shop.paymentDueNote || "Payments are due immediately.")}</p>
-        <p class="meta">*${escapeHtml(shop.depositNote || "We may require a 30% deposit before commencing the repair work and/or ordering parts.")}</p>
+        <h3>Payment terms</h3>
+        <ul class="pay-terms">
+          ${(Array.isArray(shop.paymentTerms) && shop.paymentTerms.length
+            ? shop.paymentTerms
+            : [
+                "A 30% deposit may be required for repairs over $1,000.",
+                "Payment is due upon completion of the repair and before the vehicle is released.",
+                "Additional work will only be carried out with customer approval.",
+                "We may retain possession of the vehicle for unpaid amounts.",
+              ]
+          )
+            .map((line) => `<li>${escapeHtml(line)}</li>`)
+            .join("")}
+        </ul>
       </div>
       ${acceptBlock}
     </section>
