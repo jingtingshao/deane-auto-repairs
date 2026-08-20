@@ -255,6 +255,39 @@ function linkJobToBilling(docs, job, quote, invoice) {
   }
 }
 
+/** Create a job card from an accepted quote (or return the existing one). */
+function ensureJobFromAcceptedQuote(docs, quote, invoice) {
+  if (!quote && !invoice) return null;
+  const existingId = quote?.jobId || invoice?.jobId || "";
+  if (existingId) {
+    const existing = readJobs().find((j) => j.id === existingId);
+    if (existing) return { job: existing, created: false };
+  }
+
+  const source = quote || invoice;
+  const jobs = readJobs();
+  const now = new Date().toISOString();
+  const parts = jobsLib.partsFromQuoteLines(source.lines || quote?.lines || [], () =>
+    randomUUID()
+  );
+  const job = {
+    ...emptyJob(now),
+    number: nextJobCardNumber(jobs),
+    customerName: source.customerName || "",
+    customerEmail: source.customerEmail || "",
+    customerPhone: source.customerPhone || "",
+    registration: String(source.registration || "").toUpperCase(),
+    vehicle: source.vehicle || "",
+    odometer: source.odometer || "",
+    workRequested: jobsLib.workRequestedFromQuote(quote || source),
+    parts,
+  };
+  linkJobToBilling(docs, job, quote || null, invoice || null);
+  jobs.push(job);
+  writeJobs(jobs);
+  return { job, created: true };
+}
+
 function unlinkJobFromBilling(jobId) {
   const docs = readBilling();
   let changed = false;
@@ -1505,7 +1538,7 @@ function convertQuoteToInvoice(docs, quote) {
   return invoice;
 }
 
-async function notifyWorkshopQuoteAccepted(quote, invoice, req) {
+async function notifyWorkshopQuoteAccepted(quote, invoice, job, req) {
   if (!smtpConfigured()) {
     console.warn("Quote accepted but SMTP is not configured — workshop was not emailed.");
     return;
@@ -1518,19 +1551,22 @@ async function notifyWorkshopQuoteAccepted(quote, invoice, req) {
   const origin = publicOrigin(req, {});
   const quoteUrl = `${origin}/b/${quote.id}`;
   const invoiceNumber = invoice?.number || "";
+  const jobNumber = job?.number || "";
   const subject = `Quote ${quote.number} accepted — ${rego || vehicle} — ${business.name}`;
   const text =
     `${quote.customerName || "A customer"} accepted quote ${quote.number}.\n` +
     (invoiceNumber ? `Invoice created: ${invoiceNumber}\n` : "") +
+    (jobNumber ? `Job card created: ${jobNumber}\n` : "") +
     `\nVehicle: ${vehicleBit}\n` +
     `Total (incl. GST): $${money}\n` +
     (quote.customerEmail ? `Email: ${quote.customerEmail}\n` : "") +
     (quote.customerPhone ? `Phone: ${quote.customerPhone}\n` : "") +
     `\nView quote:\n${quoteUrl}\n` +
-    `\nNext: open Quotes & invoices in admin to email the invoice.\n`;
+    `\nNext: open Jobs in admin to start work, and Quotes & invoices to email the invoice.\n`;
   const html = `
     <p><strong>${escapeHtml(quote.customerName || "A customer")}</strong> accepted quote <strong>${escapeHtml(quote.number)}</strong>.</p>
     ${invoiceNumber ? `<p>Invoice created: <strong>${escapeHtml(invoiceNumber)}</strong></p>` : ""}
+    ${jobNumber ? `<p>Job card created: <strong>${escapeHtml(jobNumber)}</strong></p>` : ""}
     <p>
       Vehicle: ${escapeHtml(vehicleBit)}<br/>
       Total (incl. GST): <strong>$${escapeHtml(money)}</strong><br/>
@@ -1538,7 +1574,7 @@ async function notifyWorkshopQuoteAccepted(quote, invoice, req) {
       ${quote.customerPhone ? `Phone: ${escapeHtml(quote.customerPhone)}` : ""}
     </p>
     <p><a href="${escapeAttr(quoteUrl)}">View accepted quote</a></p>
-    <p>Next: open <strong>Quotes &amp; invoices</strong> in admin to email the invoice.</p>
+    <p>Next: open <strong>Jobs</strong> to start work, and <strong>Quotes &amp; invoices</strong> to email the invoice.</p>
   `;
   const mailer = createMailer();
   await mailer.sendMail({
@@ -1563,22 +1599,33 @@ app.post("/api/billing/:id/accept", async (req, res) => {
   if (doc.status === "void") {
     return res.status(400).json({ error: "This quote is no longer valid." });
   }
-  if (doc.status === "invoiced" || doc.status === "accepted") {
-    return res.json({
-      ok: true,
-      already: true,
-      doc: withBillingTotals(doc, false),
-    });
-  }
-  if (doc.status !== "sent" && doc.status !== "draft") {
-    return res.status(400).json({ error: "This quote is not ready to accept." });
-  }
-
   const token = String(req.body?.token || req.query.t || "");
   if (!doc.acceptToken || token !== doc.acceptToken) {
     return res.status(403).json({
       error: "Open the accept link from your email to confirm this quote.",
     });
+  }
+
+  if (doc.status === "invoiced" || doc.status === "accepted") {
+    const invoice =
+      (doc.invoiceId && docs.find((d) => d.id === doc.invoiceId)) || null;
+    let job = null;
+    try {
+      const ensured = ensureJobFromAcceptedQuote(docs, doc, invoice);
+      job = ensured?.job || null;
+      if (ensured?.created) writeBilling(docs);
+    } catch (err) {
+      console.error("Could not create job card for already-accepted quote:", err);
+    }
+    return res.json({
+      ok: true,
+      already: true,
+      doc: withBillingTotals(doc, false),
+      jobNumber: job?.number || "",
+    });
+  }
+  if (doc.status !== "sent" && doc.status !== "draft") {
+    return res.status(400).json({ error: "This quote is not ready to accept." });
   }
 
   if (doc.validUntil && todayIso() > doc.validUntil) {
@@ -1598,15 +1645,29 @@ app.post("/api/billing/:id/accept", async (req, res) => {
     writeBilling(docs);
     return res.status(err.status || 400).json({ error: err.message });
   }
+
+  let job = null;
+  try {
+    const ensured = ensureJobFromAcceptedQuote(docs, doc, invoice);
+    job = ensured?.job || null;
+  } catch (err) {
+    console.error("Quote accepted but job card failed:", err);
+  }
+
   writeBilling(docs);
 
   try {
-    await notifyWorkshopQuoteAccepted(doc, invoice, req);
+    await notifyWorkshopQuoteAccepted(doc, invoice, job, req);
   } catch (err) {
     console.error("Workshop accept-notify email failed:", err);
   }
 
-  res.json({ ok: true, already: false, doc: withBillingTotals(doc, false) });
+  res.json({
+    ok: true,
+    already: false,
+    doc: withBillingTotals(doc, false),
+    jobNumber: job?.number || "",
+  });
 });
 
 app.post("/api/billing/:id/convert", requireAdmin, (req, res) => {
@@ -1695,35 +1756,13 @@ app.post("/api/jobs/from-quote/:id", requireAdmin, (req, res) => {
       return res.status(found.status || 400).json({ error: found.error });
     }
 
-    const { quote, invoice, source } = found;
-    const existingId = quote?.jobId || invoice?.jobId || "";
-    if (existingId) {
-      const existing = readJobs().find((j) => j.id === existingId);
-      if (existing) return res.json(existing);
+    const { quote, invoice } = found;
+    const ensured = ensureJobFromAcceptedQuote(docs, quote, invoice);
+    if (!ensured?.job) {
+      return res.status(400).json({ error: "Could not create job card." });
     }
-
-    const jobs = readJobs();
-    const now = new Date().toISOString();
-    const parts = jobsLib.partsFromQuoteLines(source.lines || quote?.lines || [], () =>
-      randomUUID()
-    );
-    const job = {
-      ...emptyJob(now),
-      number: nextJobCardNumber(jobs),
-      customerName: source.customerName || "",
-      customerEmail: source.customerEmail || "",
-      customerPhone: source.customerPhone || "",
-      registration: String(source.registration || "").toUpperCase(),
-      vehicle: source.vehicle || "",
-      odometer: source.odometer || "",
-      workRequested: jobsLib.workRequestedFromQuote(quote || source),
-      parts,
-    };
-    linkJobToBilling(docs, job, quote, invoice);
-    jobs.push(job);
-    writeJobs(jobs);
-    writeBilling(docs);
-    res.status(201).json(job);
+    if (ensured.created) writeBilling(docs);
+    res.status(ensured.created ? 201 : 200).json(ensured.job);
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
   }
