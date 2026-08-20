@@ -926,6 +926,41 @@ function ensureHistory(doc) {
   });
 }
 
+/** Customer quote opens — cooldown avoids refresh spam in History. */
+const QUOTE_VIEW_COOLDOWN_MS = 30 * 60 * 1000;
+
+function recordCustomerQuoteView(doc) {
+  if (!doc || doc.kind !== "quote") return false;
+  if (doc.status === "void" || doc.status === "draft") return false;
+
+  ensureHistory(doc);
+  const now = Date.now();
+  const lastView = [...(doc.history || [])]
+    .reverse()
+    .find((h) => h.type === "viewed");
+  if (lastView?.at) {
+    const last = Date.parse(lastView.at);
+    if (Number.isFinite(last) && now - last < QUOTE_VIEW_COOLDOWN_MS) {
+      return false;
+    }
+  }
+
+  const iso = new Date().toISOString();
+  if (!doc.viewedAt) doc.viewedAt = iso;
+  doc.lastViewedAt = iso;
+  doc.viewCount = (Number(doc.viewCount) || 0) + 1;
+  appendHistory(doc, {
+    at: iso,
+    type: "viewed",
+    summary:
+      doc.viewCount === 1
+        ? "Customer opened quote"
+        : "Customer opened quote again",
+    detail: doc.viewCount > 1 ? `View #${doc.viewCount}` : "",
+  });
+  return true;
+}
+
 function describeLineChanges(beforeLines, afterLines) {
   const before = (beforeLines || []).filter((l) => String(l.description || "").trim());
   const after = (afterLines || []).filter((l) => String(l.description || "").trim());
@@ -1778,6 +1813,9 @@ app.get("/api/billing", requireAdmin, (_req, res) => {
         updatedAt: d.updatedAt,
         sentAt: d.sentAt,
         acceptedAt: d.acceptedAt,
+        viewedAt: d.viewedAt || "",
+        lastViewedAt: d.lastViewedAt || "",
+        viewCount: Number(d.viewCount) || 0,
         invoiceId: d.invoiceId || "",
         quoteId: d.quoteId || "",
         jobId: d.jobId || "",
@@ -1863,6 +1901,13 @@ app.get("/api/billing/:id", (req, res) => {
     const before = Array.isArray(doc.history) ? doc.history.length : 0;
     ensureHistory(doc);
     if ((doc.history || []).length > before) writeBilling(docs);
+  } else if (recordCustomerQuoteView(doc)) {
+    docs[index] = doc;
+    try {
+      writeBilling(docs);
+    } catch (err) {
+      console.error("Could not save quote view:", err);
+    }
   }
 
   res.json(withBillingTotals(doc, isAdmin));

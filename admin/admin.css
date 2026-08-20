@@ -649,6 +649,12 @@ label.check input {
   color: var(--blue);
 }
 
+.badge.viewed {
+  background: #eef6ff;
+  color: #245b96;
+  border: 1px solid #b7d0ef;
+}
+
 .badge.accepted {
   background: #e8f5e9;
   color: var(--ok);

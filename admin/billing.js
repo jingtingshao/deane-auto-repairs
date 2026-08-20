@@ -166,6 +166,12 @@ function renderBillingList() {
           : d.kind === "invoice" && d.paymentStatus === "paid"
             ? ` · paid ${money(d.amountPaid)}`
             : "";
+      const viewedBadge =
+        d.kind === "quote" && d.viewedAt
+          ? `<span class="badge viewed" title="${Admin.escapeAttr(
+              d.lastViewedAt || d.viewedAt
+            )}">Viewed</span>`
+          : "";
       return `
       <article class="report-card billing-card" data-id="${d.id}">
         <div class="billing-number">${Admin.escapeHtml(d.number)}</div>
@@ -175,6 +181,7 @@ function renderBillingList() {
         </div>
         <div class="job-card-meta">
           <span class="badge ${d.status}">${Admin.escapeHtml(d.status)}</span>
+          ${viewedBadge}
           ${payBadge}
         </div>
       </article>`;
@@ -333,10 +340,17 @@ function fillForm(doc) {
   if (hint) {
     if (doc.kind === "quote" && (doc.status === "draft" || doc.status === "sent")) {
       hint.hidden = false;
-      hint.textContent =
-        doc.status === "sent"
-          ? "You can change this quote, then click Save changes. Send email again if the customer needs the update."
-          : "Edit customer details and line items, then Save changes.";
+      if (doc.status === "sent" && doc.viewedAt) {
+        hint.textContent = `Customer has opened this quote${
+          doc.lastViewedAt ? ` (${formatHistoryWhen(doc.lastViewedAt)})` : ""
+        }. You can still change it, then Save and email again if needed.`;
+      } else if (doc.status === "sent") {
+        hint.textContent =
+          "You can change this quote, then click Save changes. Send email again if the customer needs the update.";
+      } else {
+        hint.textContent =
+          "Edit customer details and line items, then Save changes.";
+      }
     } else if (doc.kind === "quote" && (doc.status === "accepted" || doc.status === "invoiced")) {
       hint.hidden = false;
       hint.textContent =
