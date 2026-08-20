@@ -675,6 +675,11 @@ label.check input {
   color: var(--attention);
 }
 
+.badge.pay-overdue {
+  background: #c62828;
+  color: #fff;
+}
+
 .badge.pay-deposit {
   background: #fff8e1;
   color: var(--watch);

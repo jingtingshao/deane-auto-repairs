@@ -135,8 +135,19 @@ function matchesBillingSearch(doc, query) {
 }
 
 function paymentLabel(status) {
-  const map = { unpaid: "Unpaid", deposit: "Deposit", paid: "Paid" };
+  const map = { unpaid: "Unpaid", deposit: "Deposit", paid: "Paid", overdue: "Overdue" };
   return map[status] || "";
+}
+
+function formatListDate(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-NZ", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(d);
 }
 
 function renderBillingList() {
@@ -156,28 +167,32 @@ function renderBillingList() {
 
   billingList.innerHTML = docs
     .map((d) => {
+      const payStatus = d.overdue ? "overdue" : d.paymentStatus;
       const payBadge =
-        d.kind === "invoice" && d.paymentStatus
-          ? `<span class="badge pay-${Admin.escapeAttr(d.paymentStatus)}">${Admin.escapeHtml(paymentLabel(d.paymentStatus))}</span>`
+        d.kind === "invoice" && payStatus
+          ? `<span class="badge pay-${Admin.escapeAttr(payStatus)}">${Admin.escapeHtml(paymentLabel(payStatus))}</span>`
           : "";
       const payHint =
-        d.kind === "invoice" && d.paymentStatus && d.paymentStatus !== "paid"
-          ? ` · due ${money(d.balanceDue)}`
-          : d.kind === "invoice" && d.paymentStatus === "paid"
-            ? ` · paid ${money(d.amountPaid)}`
-            : "";
+        d.kind === "invoice" && d.overdue
+          ? ` · overdue ${money(d.balanceDue)}`
+          : d.kind === "invoice" && d.paymentStatus && d.paymentStatus !== "paid"
+            ? ` · due ${money(d.balanceDue)}`
+            : d.kind === "invoice" && d.paymentStatus === "paid"
+              ? ` · paid ${money(d.amountPaid)}`
+              : "";
       const viewedBadge =
         d.kind === "quote" && d.viewedAt
           ? `<span class="badge viewed" title="${Admin.escapeAttr(
               d.lastViewedAt || d.viewedAt
             )}">Viewed</span>`
           : "";
+      const when = formatListDate(d.sortAt || d.sentAt || d.createdAt || d.updatedAt);
       return `
       <article class="report-card billing-card" data-id="${d.id}">
         <div class="billing-number">${Admin.escapeHtml(d.number)}</div>
         <div>
           <h2>${Admin.escapeHtml(d.customerName || "Customer")}</h2>
-          <p class="muted">${Admin.escapeHtml(d.registration || "No plate")} · ${Admin.escapeHtml(kindLabel(d.kind))} · ${Admin.escapeHtml(d.vehicle || "")} · ${money(d.totalIncl)}${payHint}</p>
+          <p class="muted">${when ? `${Admin.escapeHtml(when)} · ` : ""}${Admin.escapeHtml(d.registration || "No plate")} · ${Admin.escapeHtml(kindLabel(d.kind))} · ${Admin.escapeHtml(d.vehicle || "")} · ${money(d.totalIncl)}${payHint}</p>
         </div>
         <div class="job-card-meta">
           <span class="badge ${d.status}">${Admin.escapeHtml(d.status)}</span>
@@ -528,8 +543,9 @@ function updatePaymentSummary() {
   const total = Number(currentBill.totals?.totalIncl) || invoiceTotalIncl();
   const paid = paymentsTotal();
   const due = round2(Math.max(0, total - paid));
-  const status =
+  let status =
     paid <= 0 ? "Unpaid" : due <= 0 ? "Paid" : "Deposit / partial";
+  if (due > 0 && currentBill.overdue) status = "Overdue";
   el.textContent = `Status: ${status} · Paid ${money(paid)} · Balance due ${money(due)} · Invoice ${money(total)}`;
 }
 

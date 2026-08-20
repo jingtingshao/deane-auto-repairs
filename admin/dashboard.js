@@ -18,6 +18,7 @@
       const quotes = data.quotesAwaitingAcceptance || {};
       const invoices = data.invoicesOutstanding || {};
       const deposits = data.depositsOutstanding || {};
+      const overdue = data.invoicesOverdue || {};
       root.innerHTML = `
         <section class="dash-card">
           <h2>${Number(jobs.total) || 0} Jobs</h2>
@@ -34,6 +35,10 @@
               <span>Quotes awaiting acceptance</span>
               <strong>${money(quotes.totalIncl)}</strong>
             </button>
+            <button type="button" class="dash-money-row" data-billing="overdue">
+              <span>Invoices overdue (7+ days)</span>
+              <strong>${money(overdue.totalIncl)}</strong>
+            </button>
             <button type="button" class="dash-money-row" data-billing="invoices">
               <span>Invoices outstanding</span>
               <strong>${money(invoices.totalIncl)}</strong>
@@ -43,7 +48,7 @@
               <strong>${money(deposits.totalIncl)}</strong>
             </button>
           </div>
-          <p class="muted small">Outstanding = unpaid invoices. Deposits outstanding = balance still due after a deposit.</p>
+          <p class="muted small">Overdue = sent invoice still unpaid after 7 days. Outstanding = unpaid invoices. Deposits outstanding = balance still due after a deposit.</p>
         </section>
       `;
       root.querySelectorAll("[data-jobs]").forEach((btn) => {

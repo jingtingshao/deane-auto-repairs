@@ -878,6 +878,27 @@ function derivePaymentStatus(amountPaid, totalIncl) {
   return "deposit";
 }
 
+function billingAnchorDate(doc) {
+  return String(doc?.sentAt || doc?.createdAt || doc?.updatedAt || "");
+}
+
+function daysSinceIso(iso) {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  return (Date.now() - t) / (24 * 60 * 60 * 1000);
+}
+
+/** Invoice sent/issued 7+ days ago with balance still due. */
+function isInvoiceOverdue(doc, payment) {
+  if (!doc || doc.kind !== "invoice") return false;
+  if (doc.status === "void" || doc.status === "draft") return false;
+  if (!payment || payment.paymentStatus === "paid" || !(payment.balanceDue > 0)) {
+    return false;
+  }
+  const days = daysSinceIso(billingAnchorDate(doc));
+  return days != null && days >= 7;
+}
+
 function normalizeInvoicePayment(doc, body = {}, totals) {
   const totalIncl =
     Number(totals?.totalIncl) || catalog.computeTotals(doc.lines || []).totalIncl;
@@ -1523,6 +1544,8 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
     let invoicesUnpaidCount = 0;
     let depositsOutstandingTotal = 0;
     let depositsOutstandingCount = 0;
+    let invoicesOverdueTotal = 0;
+    let invoicesOverdueCount = 0;
 
     for (const doc of readBilling()) {
       if (doc.status === "void") continue;
@@ -1533,6 +1556,12 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
       }
       if (doc.kind === "invoice") {
         const payment = normalizeInvoicePayment(doc, {}, totals);
+        if (isInvoiceOverdue(doc, payment)) {
+          invoicesOverdueCount += 1;
+          invoicesOverdueTotal = catalog.round2(
+            invoicesOverdueTotal + payment.balanceDue
+          );
+        }
         if (payment.paymentStatus === "unpaid" && payment.balanceDue > 0) {
           invoicesUnpaidCount += 1;
           invoicesUnpaidTotal = catalog.round2(
@@ -1565,6 +1594,10 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
       depositsOutstanding: {
         count: depositsOutstandingCount,
         totalIncl: depositsOutstandingTotal,
+      },
+      invoicesOverdue: {
+        count: invoicesOverdueCount,
+        totalIncl: invoicesOverdueTotal,
       },
     });
   } catch (err) {
@@ -1802,6 +1835,8 @@ app.get("/api/billing", requireAdmin, (_req, res) => {
       const totals = catalog.computeTotals(d.lines);
       const payment =
         d.kind === "invoice" ? normalizeInvoicePayment(d, {}, totals) : null;
+      const sortAt = billingAnchorDate(d);
+      const overdue = Boolean(payment && isInvoiceOverdue(d, payment));
       return {
         id: d.id,
         kind: d.kind,
@@ -1813,8 +1848,11 @@ app.get("/api/billing", requireAdmin, (_req, res) => {
         registration: d.registration,
         vehicle: d.vehicle,
         totalIncl: totals.totalIncl,
+        createdAt: d.createdAt || "",
         updatedAt: d.updatedAt,
         sentAt: d.sentAt,
+        sortAt,
+        overdue,
         acceptedAt: d.acceptedAt,
         viewedAt: d.viewedAt || "",
         lastViewedAt: d.lastViewedAt || "",
@@ -1827,7 +1865,11 @@ app.get("/api/billing", requireAdmin, (_req, res) => {
         balanceDue: payment?.balanceDue ?? null,
       };
     })
-    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    .sort((a, b) => {
+      // Overdue unpaid invoices first, then newest by issue/send date.
+      if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+      return String(b.sortAt || "").localeCompare(String(a.sortAt || ""));
+    });
   res.json(docs);
 });
 
