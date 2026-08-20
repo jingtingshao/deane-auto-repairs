@@ -1051,6 +1051,7 @@ function withBillingTotals(doc, isAdmin) {
       gstNumber: business.gstNumber || "",
       hoursShort: business.hoursShort,
       bankAccount: business.bankAccount || "",
+      paymentDueNote: business.paymentDueNote || "",
       depositNote: business.depositNote || "",
     },
   };
@@ -2085,6 +2086,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       ${doc.validUntil ? `<p>This quote is valid until ${escapeHtml(doc.validUntil)}.</p>` : ""}
       <p><strong>How to pay</strong><br/>
       Bank account number: <strong>${escapeHtml(business.bankAccount)}</strong><br/>
+      ${escapeHtml(business.paymentDueNote)}<br/>
       <span style="color:#5b6777;font-size:14px;">*${escapeHtml(business.depositNote)}</span></p>
       <p style="color:#5b6777;font-size:14px;">
         ${escapeHtml(business.name)}<br/>
@@ -2111,6 +2113,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       <p><a href="${escapeAttr(url)}">View / print your invoice</a></p>
       <p><strong>How to pay</strong><br/>
       Bank account number: <strong>${escapeHtml(business.bankAccount)}</strong><br/>
+      ${escapeHtml(business.paymentDueNote)}<br/>
       <span style="color:#5b6777;font-size:14px;">*${escapeHtml(business.depositNote)}</span></p>
       <p style="color:#5b6777;font-size:14px;">
         ${escapeHtml(business.name)}<br/>

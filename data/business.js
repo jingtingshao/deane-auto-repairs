@@ -13,6 +13,7 @@ module.exports = {
   gstNumber: "",
   website: "https://www.deaneauto.co.nz",
   bankAccount: "02-0216-0104554-002",
+  paymentDueNote: "Payments are due immediately.",
   depositNote:
     "We may require a 30% deposit before commencing the repair work and/or ordering parts.",
 
@@ -23,6 +24,6 @@ module.exports = {
     return `${this.name} · ${this.addressLine2} · ${this.street}, ${this.suburb} · ${this.phoneDisplay} · ${this.email}`;
   },
   paymentText() {
-    return `How to pay\nBank account number: ${this.bankAccount}\n*${this.depositNote}`;
+    return `How to pay\nBank account number: ${this.bankAccount}\n${this.paymentDueNote}\n*${this.depositNote}`;
   },
 };
