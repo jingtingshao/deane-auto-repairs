@@ -17,6 +17,10 @@ const business = require("./data/business");
 const catalog = require("./data/catalog");
 const jobsLib = require("./data/jobs");
 const { buildBillingPdf, safeFilename } = require("./data/billing-pdf");
+const { readJsonArray, writeJsonArray } = require("./data/json-store");
+const { blockedStaticPath, safeUploadPath, UPLOAD_EXTS } = require("./data/static-guard");
+const { todayIso, plusDays, nowIso, monthKey, shiftMonthKey, monthShortLabel, monthLongLabel } = require("./data/nz-time");
+const driveBackup = require("./data/drive-backup");
 
 const PORT = Number(process.env.PORT) || 5173;
 const ADMIN_PIN = process.env.ADMIN_PIN || "deane123";
@@ -114,63 +118,40 @@ function createMailer() {
 for (const dir of [DATA_DIR, UPLOADS_DIR]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
-if (!fs.existsSync(REPORTS_FILE)) {
-  fs.writeFileSync(REPORTS_FILE, "[]", "utf8");
-}
-if (!fs.existsSync(BILLING_FILE)) {
-  fs.writeFileSync(BILLING_FILE, "[]", "utf8");
-}
-if (!fs.existsSync(CUSTOMERS_FILE)) {
-  fs.writeFileSync(CUSTOMERS_FILE, "[]", "utf8");
-}
-if (!fs.existsSync(JOBS_FILE)) {
-  fs.writeFileSync(JOBS_FILE, "[]", "utf8");
+for (const file of [REPORTS_FILE, BILLING_FILE, CUSTOMERS_FILE, JOBS_FILE]) {
+  if (!fs.existsSync(file)) writeJsonArray(file, []);
 }
 
 function readReports() {
-  try {
-    return JSON.parse(fs.readFileSync(REPORTS_FILE, "utf8"));
-  } catch {
-    return [];
-  }
+  return readJsonArray(REPORTS_FILE, "reports");
 }
 
 function writeReports(reports) {
-  fs.writeFileSync(REPORTS_FILE, JSON.stringify(reports, null, 2), "utf8");
+  writeJsonArray(REPORTS_FILE, reports);
 }
 
 function readBilling() {
-  try {
-    return JSON.parse(fs.readFileSync(BILLING_FILE, "utf8"));
-  } catch {
-    return [];
+  const docs = readJsonArray(BILLING_FILE, "quotes and invoices");
+  if (repairLegacyConvertedBilling(docs)) {
+    try {
+      writeBilling(docs);
+    } catch (err) {
+      console.error("Could not unify quote/invoice numbers:", err);
+    }
   }
+  return docs;
 }
 
 function writeBilling(docs) {
-  fs.writeFileSync(BILLING_FILE, JSON.stringify(docs, null, 2), "utf8");
+  writeJsonArray(BILLING_FILE, docs);
 }
 
 function readSavedCustomers() {
-  try {
-    const rows = JSON.parse(fs.readFileSync(CUSTOMERS_FILE, "utf8"));
-    return Array.isArray(rows) ? rows : [];
-  } catch {
-    return [];
-  }
+  return readJsonArray(CUSTOMERS_FILE, "customers");
 }
 
 function readJobs() {
-  try {
-    const rows = JSON.parse(fs.readFileSync(JOBS_FILE, "utf8"));
-    const jobs = Array.isArray(rows) ? rows : [];
-    return ensureJobStatuses(jobs);
-  } catch {
-    return [];
-  }
-}
-
-function ensureJobStatuses(jobs) {
+  const jobs = readJsonArray(JOBS_FILE, "jobs");
   let changed = false;
   for (const job of jobs) {
     const next = jobsLib.normalizeJobStatus(job.status, job.parts);
@@ -179,32 +160,27 @@ function ensureJobStatuses(jobs) {
       changed = true;
     }
   }
+  if (alignLinkedJobNumbers(jobs)) changed = true;
   if (changed) {
     try {
       writeJobs(jobs);
     } catch (err) {
-      console.error("Could not migrate job statuses:", err);
+      console.error("Could not migrate jobs:", err);
     }
   }
   return jobs;
 }
 
+function ensureJobStatuses(jobs) {
+  return jobs;
+}
+
 function writeJobs(jobs) {
-  try {
-    fs.mkdirSync(path.dirname(JOBS_FILE), { recursive: true });
-    fs.writeFileSync(JOBS_FILE, JSON.stringify(jobs, null, 2), "utf8");
-  } catch (err) {
-    console.error("Could not write jobs file:", err);
-    const error = new Error(
-      "Could not save job. On Render attach a disk at /data, then set DATA_DIR=/data."
-    );
-    error.status = 500;
-    throw error;
-  }
+  writeJsonArray(JOBS_FILE, jobs);
 }
 
 function nextJobCardNumber(jobs) {
-  const year = new Date().getFullYear();
+  const year = todayIso().slice(0, 4);
   const prefix = `JC-${year}-`;
   const nums = jobs
     .map((j) => j.number)
@@ -213,6 +189,42 @@ function nextJobCardNumber(jobs) {
     .filter((n) => Number.isFinite(n));
   const next = (nums.length ? Math.max(...nums) : 0) + 1;
   return `${prefix}${String(next).padStart(4, "0")}`;
+}
+
+function jobNumberFromBilling(number) {
+  const parts = billingNumberParts(number);
+  if (!parts) return "";
+  return `JC-${parts.year}-${String(parts.seq).padStart(4, "0")}`;
+}
+
+function assignJobNumber(jobs, billingNumber) {
+  const preferred = jobNumberFromBilling(billingNumber);
+  if (preferred && !jobs.some((j) => j.number === preferred)) return preferred;
+  return nextJobCardNumber(jobs);
+}
+
+function alignLinkedJobNumbers(jobs) {
+  let docs;
+  try {
+    docs = readJsonArray(BILLING_FILE, "quotes and invoices");
+  } catch {
+    return false;
+  }
+  let changed = false;
+  for (const job of jobs) {
+    const bill =
+      (job.invoiceId && docs.find((d) => d.id === job.invoiceId)) ||
+      (job.quoteId && docs.find((d) => d.id === job.quoteId)) ||
+      null;
+    if (!bill) continue;
+    const preferred = jobNumberFromBilling(bill.quotedNumber || bill.number);
+    if (!preferred || job.number === preferred) continue;
+    if (jobs.some((row) => row.id !== job.id && row.number === preferred)) continue;
+    job.number = preferred;
+    job.updatedAt = nowIso();
+    changed = true;
+  }
+  return changed;
 }
 
 function summarizeJob(job) {
@@ -229,6 +241,7 @@ function summarizeJob(job) {
     quoteId: job.quoteId || "",
     quoteNumber: job.quoteNumber || "",
     invoiceId: job.invoiceId || "",
+    invoiceNumber: job.invoiceNumber || "",
     partsTotal: parts.total,
     partsReceived: parts.received,
     updatedAt: job.updatedAt,
@@ -240,14 +253,13 @@ function billingSourceForJob(docs, id) {
   const doc = docs.find((d) => d.id === id);
   if (!doc) return { error: "Quote not found", status: 404 };
   if (doc.kind === "invoice") {
-    if (!doc.quoteId) {
+    if (!doc.acceptedAt && doc.status !== "accepted") {
       return {
         error: "This invoice was not created from an accepted quote.",
         status: 400,
       };
     }
-    const quote = docs.find((d) => d.id === doc.quoteId) || null;
-    return { quote, invoice: doc, source: quote || doc };
+    return { quote: doc, invoice: doc, source: doc };
   }
   if (doc.kind !== "quote") {
     return { error: "Only quotes can become job cards.", status: 400 };
@@ -258,8 +270,7 @@ function billingSourceForJob(docs, id) {
       status: 400,
     };
   }
-  const invoice = doc.invoiceId ? docs.find((d) => d.id === doc.invoiceId) : null;
-  return { quote: doc, invoice: invoice || null, source: doc };
+  return { quote: doc, invoice: null, source: doc };
 }
 
 function linkJobToBilling(docs, job, quote, invoice) {
@@ -341,7 +352,7 @@ function customerFieldsForJob(source = {}) {
   return fields;
 }
 
-function applyCustomerFieldsToJob(job, fields) {
+function applyCustomerFieldsToJob(job, fields, overwrite = false) {
   let changed = false;
   for (const key of [
     "customerName",
@@ -352,12 +363,16 @@ function applyCustomerFieldsToJob(job, fields) {
     "odometer",
   ]) {
     const next = String(fields[key] || "").trim();
-    if (next && !String(job[key] || "").trim()) {
-      job[key] = key === "registration" ? next.toUpperCase() : next;
+    if (!next) continue;
+    const cur = String(job[key] || "").trim();
+    if (!overwrite && cur) continue;
+    const value = key === "registration" ? next.toUpperCase() : next;
+    if (value !== cur) {
+      job[key] = value;
       changed = true;
     }
   }
-  if (changed) job.updatedAt = new Date().toISOString();
+  if (changed) job.updatedAt = nowIso();
   return changed;
 }
 
@@ -372,7 +387,36 @@ function ensureJobFromAcceptedQuote(docs, quote, invoice) {
     const index = jobs.findIndex((j) => j.id === existingId);
     if (index >= 0) {
       const existing = jobs[index];
-      if (applyCustomerFieldsToJob(existing, fields)) {
+      let changed = applyCustomerFieldsToJob(existing, fields, true);
+      const preferred = jobNumberFromBilling(
+        invoice?.number || quote?.quotedNumber || quote?.number || source.number
+      );
+      if (
+        preferred &&
+        existing.number !== preferred &&
+        !jobs.some((j) => j.id !== existing.id && j.number === preferred)
+      ) {
+        existing.number = preferred;
+        changed = true;
+      }
+      const quoteParts = jobsLib.partsFromQuoteLines(
+        source.lines || quote?.lines || [],
+        () => randomUUID()
+      );
+      if (
+        quoteParts.length &&
+        !(existing.parts || []).some((p) => String(p.description || "").trim())
+      ) {
+        existing.parts = quoteParts;
+        changed = true;
+      }
+      if (!String(existing.workRequested || "").trim()) {
+        existing.workRequested = jobsLib.workRequestedFromQuote(quote || source);
+        if (existing.workRequested) changed = true;
+      }
+      existing.status = jobsLib.normalizeJobStatus(existing.status, existing.parts);
+      if (changed) {
+        existing.updatedAt = nowIso();
         jobs[index] = existing;
         writeJobs(jobs);
       }
@@ -381,16 +425,20 @@ function ensureJobFromAcceptedQuote(docs, quote, invoice) {
   }
 
   const jobs = readJobs();
-  const now = new Date().toISOString();
+  const now = nowIso();
   const parts = jobsLib.partsFromQuoteLines(source.lines || quote?.lines || [], () =>
     randomUUID()
   );
   const job = {
     ...emptyJob(now),
-    number: nextJobCardNumber(jobs),
+    number: assignJobNumber(
+      jobs,
+      invoice?.number || quote?.quotedNumber || quote?.number || source.number
+    ),
     ...fields,
     workRequested: jobsLib.workRequestedFromQuote(quote || source),
     parts,
+    status: jobsLib.normalizeJobStatus("in_progress", parts),
   };
   linkJobToBilling(docs, job, quote || null, invoice || null);
   jobs.push(job);
@@ -404,7 +452,7 @@ function unlinkJobFromBilling(jobId) {
   for (const doc of docs) {
     if (doc.jobId === jobId) {
       doc.jobId = "";
-      doc.updatedAt = new Date().toISOString();
+      doc.updatedAt = nowIso();
       changed = true;
     }
   }
@@ -480,22 +528,12 @@ function applyJobFields(job, body = {}) {
         : job.technicianName,
     notes: body.notes != null ? String(body.notes) : job.notes,
     parts,
-    updatedAt: new Date().toISOString(),
+    updatedAt: nowIso(),
   };
 }
 
 function writeSavedCustomers(rows) {
-  try {
-    fs.mkdirSync(path.dirname(CUSTOMERS_FILE), { recursive: true });
-    fs.writeFileSync(CUSTOMERS_FILE, JSON.stringify(rows, null, 2), "utf8");
-  } catch (err) {
-    console.error("Could not write customers file:", err);
-    const error = new Error(
-      "Could not save customer. On Render attach a disk at /data, then set DATA_DIR=/data."
-    );
-    error.status = 500;
-    throw error;
-  }
+  writeJsonArray(CUSTOMERS_FILE, rows);
 }
 
 function normalizeVehicles(body = {}, current = {}) {
@@ -780,36 +818,111 @@ function listCustomers() {
     });
 }
 
+function billingNumberParts(number) {
+  const match = String(number || "").match(/^(Q|INV)-(\d{4})-(\d+)$/i);
+  if (!match) return null;
+  return {
+    kind: match[1].toUpperCase() === "INV" ? "invoice" : "quote",
+    year: match[2],
+    seq: Number(match[3]),
+  };
+}
+
+function formatBillingNumber(kind, year, seq) {
+  const prefix = kind === "invoice" ? "INV" : "Q";
+  return `${prefix}-${year}-${String(seq).padStart(4, "0")}`;
+}
+
+function toInvoiceNumber(number) {
+  const parts = billingNumberParts(number);
+  if (!parts) return String(number || "").replace(/^Q-/i, "INV-");
+  return formatBillingNumber("invoice", parts.year, parts.seq);
+}
+
+function unifyInvoiceNumberFromQuote(docs, invoice, quote) {
+  if (!invoice || !quote) return false;
+  const unified = toInvoiceNumber(quote.number);
+  let changed = false;
+  if (!invoice.quotedNumber) {
+    invoice.quotedNumber = quote.number;
+    changed = true;
+  }
+  const clash = docs.find((d) => d.id !== invoice.id && d.number === unified);
+  if (!clash && invoice.number !== unified) {
+    invoice.number = unified;
+    changed = true;
+  }
+  if (invoice.quoteId !== quote.id) {
+    invoice.quoteId = quote.id;
+    changed = true;
+  }
+  return changed;
+}
+
+function repairLegacyConvertedBilling(docs) {
+  let changed = false;
+  for (const quote of docs) {
+    if (quote.kind !== "quote") continue;
+    if (!quote.invoiceId || quote.invoiceId === quote.id) continue;
+    const invoice = docs.find((d) => d.id === quote.invoiceId);
+    if (!invoice || invoice.kind !== "invoice") continue;
+    if (unifyInvoiceNumberFromQuote(docs, invoice, quote)) changed = true;
+  }
+  for (const invoice of docs) {
+    if (invoice.kind !== "invoice" || !invoice.quoteId) continue;
+    const quote = docs.find((d) => d.id === invoice.quoteId);
+    if (!quote || quote.kind !== "quote") continue;
+    if (unifyInvoiceNumberFromQuote(docs, invoice, quote)) changed = true;
+  }
+  return changed;
+}
+
 function nextBillingNumber(docs, kind) {
-  const year = new Date().getFullYear();
-  const prefix = kind === "invoice" ? `INV-${year}-` : `Q-${year}-`;
-  const nums = docs
-    .filter((d) => d.kind === kind)
-    .map((d) => d.number)
-    .filter((n) => typeof n === "string" && n.startsWith(prefix))
-    .map((n) => Number(n.slice(prefix.length)))
-    .filter((n) => Number.isFinite(n));
-  const next = (nums.length ? Math.max(...nums) : 0) + 1;
-  return `${prefix}${String(next).padStart(4, "0")}`;
+  const year = todayIso().slice(0, 4);
+  let max = 0;
+  for (const doc of docs) {
+    const parts = billingNumberParts(doc.number);
+    if (parts && parts.year === year && parts.seq > max) max = parts.seq;
+  }
+  return formatBillingNumber(kind === "invoice" ? "invoice" : "quote", year, max + 1);
+}
+
+function requireCustomerSnapshot(body) {
+  const customerId = String(body?.customerId || "").trim();
+  const vehicleId = String(body?.vehicleId || "").trim();
+  if (!customerId) {
+    const err = new Error("Select a customer from the Customers list first.");
+    err.status = 400;
+    throw err;
+  }
+  const saved = readSavedCustomers().find((c) => c.id === customerId);
+  if (!saved) {
+    const err = new Error("That customer is not in the Customers list.");
+    err.status = 400;
+    throw err;
+  }
+  const vehicles = normalizeVehicles(saved, saved);
+  const vehicle =
+    (vehicleId && vehicles.find((v) => v.id === vehicleId)) ||
+    (vehicles.length === 1 ? vehicles[0] : null);
+  if (!vehicle) {
+    const err = new Error("Select a vehicle for this customer.");
+    err.status = 400;
+    throw err;
+  }
+  return {
+    customerId: saved.id,
+    vehicleId: vehicle.id,
+    customerName: saved.customerName,
+    customerEmail: saved.customerEmail || "",
+    customerPhone: saved.customerPhone || "",
+    registration: vehicle.registration,
+    vehicle: vehicle.vehicle || "",
+  };
 }
 
 function newAcceptToken() {
   return randomBytes(24).toString("hex");
-}
-
-function plusDays(isoDate, days) {
-  const d = new Date(`${isoDate}T12:00:00`);
-  if (Number.isNaN(d.getTime())) {
-    const now = new Date();
-    now.setDate(now.getDate() + days);
-    return now.toISOString().slice(0, 10);
-  }
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
 }
 
 function normalizeLines(lines) {
@@ -923,7 +1036,7 @@ function appendHistory(doc, entry = {}) {
   if (!Array.isArray(doc.history)) doc.history = [];
   doc.history.push({
     id: randomUUID(),
-    at: entry.at || new Date().toISOString(),
+    at: entry.at || nowIso(),
     type: String(entry.type || "note"),
     summary: String(entry.summary || "").trim(),
     detail: String(entry.detail || "").trim(),
@@ -941,7 +1054,7 @@ function ensureHistory(doc) {
   doc.history = [];
   const totals = catalog.computeTotals(doc.lines || []);
   appendHistory(doc, {
-    at: doc.createdAt || new Date().toISOString(),
+    at: doc.createdAt || nowIso(),
     type: "created",
     summary: doc.kind === "invoice" ? "Invoice created" : "Quote created",
     amount: totals.totalIncl,
@@ -967,7 +1080,7 @@ function recordCustomerQuoteView(doc) {
     }
   }
 
-  const iso = new Date().toISOString();
+  const iso = nowIso();
   if (!doc.viewedAt) doc.viewedAt = iso;
   doc.lastViewedAt = iso;
   doc.viewCount = (Number(doc.viewCount) || 0) + 1;
@@ -1126,6 +1239,11 @@ function issueBillingDoc(doc, req, body) {
     throw err;
   }
   const lines = billableLines(doc.lines);
+  if (!doc.customerId) {
+    const err = new Error("Select a customer from the Customers list first.");
+    err.status = 400;
+    throw err;
+  }
   if (!lines.length) {
     const err = new Error("Add at least one priced line before sending.");
     err.status = 400;
@@ -1137,9 +1255,9 @@ function issueBillingDoc(doc, req, body) {
   }
   if (doc.status === "draft") {
     doc.status = "sent";
-    doc.sentAt = new Date().toISOString();
+    doc.sentAt = nowIso();
   }
-  doc.updatedAt = new Date().toISOString();
+  doc.updatedAt = nowIso();
   return billingPublicUrl(req, body, doc);
 }
 
@@ -1163,36 +1281,79 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+const UPLOAD_MIME_EXT = {
+  "image/jpeg": ".jpg",
+  "image/jpg": ".jpg",
+  "image/png": ".png",
+  "image/gif": ".gif",
+  "image/webp": ".webp",
+};
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname || "").slice(0, 8) || ".jpg";
+    const ext = UPLOAD_MIME_EXT[file.mimetype] || ".jpg";
     cb(null, `${Date.now()}-${randomUUID().slice(0, 8)}${ext}`);
   },
 });
 const upload = multer({
   storage,
   limits: { fileSize: 6 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const mimeOk = Boolean(UPLOAD_MIME_EXT[file.mimetype]);
+    const extOk = UPLOAD_EXTS.has(path.extname(file.originalname || "").toLowerCase());
+    if (!mimeOk || !extOk) {
+      const err = new Error("Please upload a JPEG, PNG, GIF, or WebP photo.");
+      err.status = 400;
+      return cb(err);
+    }
+    cb(null, true);
+  },
 });
 
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: false }));
-app.use("/uploads", express.static(UPLOADS_DIR));
+app.get("/uploads/:filename", (req, res) => {
+  const filePath = safeUploadPath(UPLOADS_DIR, req.params.filename);
+  if (!filePath || !fs.existsSync(filePath)) {
+    return res.status(404).end();
+  }
+  res.sendFile(
+    filePath,
+    {
+      dotfiles: "deny",
+      headers: {
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, max-age=86400",
+      },
+    },
+    (err) => {
+      if (err && !res.headersSent) res.status(404).end();
+    }
+  );
+});
+app.use((req, res, next) => {
+  if (blockedStaticPath(req.path)) {
+    return res.status(404).end();
+  }
+  next();
+});
 app.use(
   "/admin",
   express.static(path.join(ROOT, "admin"), {
     etag: false,
     lastModified: false,
+    dotfiles: "deny",
     setHeaders(res) {
       res.setHeader("Cache-Control", "no-store");
     },
   })
 );
-app.use("/report", express.static(path.join(ROOT, "report")));
-app.use("/billing", express.static(path.join(ROOT, "billing")));
-app.use(express.static(ROOT, { index: "index.html" }));
+app.use("/report", express.static(path.join(ROOT, "report"), { dotfiles: "deny" }));
+app.use("/billing", express.static(path.join(ROOT, "billing"), { dotfiles: "deny" }));
+app.use(express.static(ROOT, { index: "index.html", dotfiles: "deny" }));
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -1312,7 +1473,7 @@ app.post("/api/customers", requireAdmin, (req, res) => {
       const vehicles = normalizeVehicles(c, c);
       return vehicles.some((v) => plates.has(plateKey(v.registration)));
     });
-    const now = new Date().toISOString();
+    const now = nowIso();
     if (existing) {
       Object.assign(existing, fields, { updatedAt: now });
       writeSavedCustomers(rows);
@@ -1343,7 +1504,7 @@ app.put("/api/customers/:id", requireAdmin, (req, res) => {
       ...fields,
       id: rows[index].id,
       createdAt: rows[index].createdAt,
-      updatedAt: new Date().toISOString(),
+      updatedAt: nowIso(),
     };
     writeSavedCustomers(rows);
     res.json(rows[index]);
@@ -1409,7 +1570,7 @@ app.get("/api/reports/:id", (req, res) => {
 
 app.post("/api/reports", requireAdmin, (req, res) => {
   const reports = readReports();
-  const now = new Date().toISOString();
+  const now = nowIso();
   const servicePackage = normalizePackage(req.body.servicePackage);
   let jobType = req.body.jobType || "standard_service";
   if (jobType === "full_service") jobType = "premium_service";
@@ -1423,11 +1584,13 @@ app.post("/api/reports", requireAdmin, (req, res) => {
     updatedAt: now,
     serviceDate: req.body.serviceDate || now.slice(0, 10),
     technicianName: req.body.technicianName || "",
-    customerName: req.body.customerName || "",
-    customerEmail: req.body.customerEmail || "",
-    customerPhone: req.body.customerPhone || "",
-    registration: (req.body.registration || "").toUpperCase(),
-    vehicle: req.body.vehicle || "",
+    customerId: "",
+    vehicleId: "",
+    customerName: "",
+    customerEmail: "",
+    customerPhone: "",
+    registration: "",
+    vehicle: "",
     odometer: req.body.odometer || "",
     vin: req.body.vin || "",
     jobType,
@@ -1479,16 +1642,23 @@ app.put("/api/reports/:id", requireAdmin, (req, res) => {
     checks = fresh;
   }
 
+  let snapshot;
+  try {
+    snapshot = requireCustomerSnapshot(body.customerId ? body : current);
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
+  }
+
   reports[index] = {
     ...current,
     ...body,
+    ...snapshot,
     id: current.id,
     jobNumber: current.jobNumber,
     createdAt: current.createdAt,
     servicePackage: nextPackage,
     checks,
-    registration: (body.registration ?? current.registration).toUpperCase(),
-    updatedAt: new Date().toISOString(),
+    updatedAt: nowIso(),
   };
 
   writeReports(reports);
@@ -1501,7 +1671,7 @@ app.post("/api/reports/:id/publish", requireAdmin, (req, res) => {
   if (index < 0) return res.status(404).json({ error: "Report not found" });
 
   reports[index].status = "published";
-  reports[index].publishedAt = new Date().toISOString();
+  reports[index].publishedAt = nowIso();
   reports[index].updatedAt = reports[index].publishedAt;
   writeReports(reports);
   res.json(reports[index]);
@@ -1523,6 +1693,24 @@ app.get("/api/admin/email-status", requireAdmin, (_req, res) => {
   });
 });
 
+app.get("/api/admin/backup-status", requireAdmin, (_req, res) => {
+  res.json(driveBackup.publicStatus(DATA_DIR));
+});
+
+app.post("/api/admin/backup", requireAdmin, async (_req, res) => {
+  try {
+    const result = await driveBackup.runBackup({
+      dataDir: DATA_DIR,
+      uploadsDir: UPLOADS_DIR,
+      reason: "manual",
+    });
+    res.json(result);
+  } catch (err) {
+    console.error("Manual backup failed:", err);
+    res.status(err.status || 502).json({ error: err.message || "Backup failed" });
+  }
+});
+
 app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
   try {
     const jobs = readJobs();
@@ -1542,25 +1730,21 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
     let quotesAwaitingTotal = 0;
     let invoicesUnpaidTotal = 0;
     let invoicesUnpaidCount = 0;
-    let depositsOutstandingTotal = 0;
-    let depositsOutstandingCount = 0;
     let invoicesOverdueTotal = 0;
     let invoicesOverdueCount = 0;
 
     const monthBuckets = new Map();
-    const now = new Date();
+    const thisMonthKey = monthKey();
     for (let i = 5; i >= 0; i -= 1) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const key = shiftMonthKey(thisMonthKey, -i);
       monthBuckets.set(key, {
         key,
-        label: d.toLocaleString("en-NZ", { month: "short" }),
-        year: d.getFullYear(),
+        label: monthShortLabel(key),
+        year: Number(key.slice(0, 4)),
         sales: 0,
         outstanding: 0,
       });
     }
-    const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
     for (const doc of readBilling()) {
       if (doc.status === "void") continue;
@@ -1577,28 +1761,25 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
             invoicesOverdueTotal + payment.balanceDue
           );
         }
-        if (payment.paymentStatus === "unpaid" && payment.balanceDue > 0) {
+        if (
+          (payment.paymentStatus === "unpaid" || payment.paymentStatus === "deposit") &&
+          payment.balanceDue > 0
+        ) {
           invoicesUnpaidCount += 1;
           invoicesUnpaidTotal = catalog.round2(
             invoicesUnpaidTotal + payment.balanceDue
           );
-        } else if (payment.paymentStatus === "deposit" && payment.balanceDue > 0) {
-          depositsOutstandingCount += 1;
-          depositsOutstandingTotal = catalog.round2(
-            depositsOutstandingTotal + payment.balanceDue
-          );
         }
 
-        if (doc.status !== "draft") {
-          const monthKey = String(billingAnchorDate(doc) || "").slice(0, 7);
-          const bucket = monthBuckets.get(monthKey);
-          if (bucket) {
-            bucket.sales = catalog.round2(bucket.sales + totals.totalIncl);
-            if (payment.balanceDue > 0) {
-              bucket.outstanding = catalog.round2(
-                bucket.outstanding + payment.balanceDue
-              );
-            }
+        const anchor = billingAnchorDate(doc);
+        const docMonthKey = anchor ? monthKey(new Date(anchor)) : "";
+        const bucket = monthBuckets.get(docMonthKey);
+        if (bucket) {
+          bucket.sales = catalog.round2(bucket.sales + totals.totalIncl);
+          if (payment.balanceDue > 0) {
+            bucket.outstanding = catalog.round2(
+              bucket.outstanding + payment.balanceDue
+            );
           }
         }
       }
@@ -1621,10 +1802,7 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
     }
 
     const monthly = [...monthBuckets.values()];
-    const thisMonthLabel = now.toLocaleString("en-NZ", {
-      month: "long",
-      year: "numeric",
-    });
+    const thisMonthLabel = monthLongLabel(thisMonthKey);
 
     res.json({
       jobs: {
@@ -1640,10 +1818,6 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
       invoicesOutstanding: {
         count: invoicesUnpaidCount,
         totalIncl: invoicesUnpaidTotal,
-      },
-      depositsOutstanding: {
-        count: depositsOutstandingCount,
-        totalIncl: depositsOutstandingTotal,
       },
       invoicesOverdue: {
         count: invoicesOverdueCount,
@@ -1751,7 +1925,7 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
 
   if (report.status !== "published") {
     report.status = "published";
-    report.publishedAt = new Date().toISOString();
+    report.publishedAt = nowIso();
     report.updatedAt = report.publishedAt;
     writeReports(reports);
   }
@@ -1802,7 +1976,7 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
       html,
     });
 
-    report.lastEmailedAt = new Date().toISOString();
+    report.lastEmailedAt = nowIso();
     report.lastEmailedTo = to;
     report.updatedAt = report.lastEmailedAt;
     writeReports(reports);
@@ -1841,7 +2015,7 @@ app.post("/api/reports/:id/unpublish", requireAdmin, (req, res) => {
   if (index < 0) return res.status(404).json({ error: "Report not found" });
 
   reports[index].status = "draft";
-  reports[index].updatedAt = new Date().toISOString();
+  reports[index].updatedAt = nowIso();
   writeReports(reports);
   res.json(reports[index]);
 });
@@ -1857,7 +2031,7 @@ app.post(
     if (!req.file) return res.status(400).json({ error: "No photo uploaded" });
 
     reports[index].vehiclePhoto = `/uploads/${req.file.filename}`;
-    reports[index].updatedAt = new Date().toISOString();
+    reports[index].updatedAt = nowIso();
     writeReports(reports);
     res.json(reports[index]);
   }
@@ -1898,6 +2072,7 @@ app.get("/api/billing", requireAdmin, (_req, res) => {
         id: d.id,
         kind: d.kind,
         number: d.number,
+        quotedNumber: d.quotedNumber || "",
         status: d.status,
         preset: d.preset,
         customerName: d.customerName,
@@ -1937,7 +2112,7 @@ app.post("/api/billing", requireAdmin, (req, res) => {
   }
 
   const docs = readBilling();
-  const now = new Date().toISOString();
+  const now = nowIso();
   const today = todayIso();
   const doc = {
     id: randomUUID(),
@@ -1950,11 +2125,13 @@ app.post("/api/billing", requireAdmin, (req, res) => {
     sentAt: "",
     acceptedAt: "",
     validUntil: preset.kind === "quote" ? plusDays(today, catalog.QUOTE_VALID_DAYS) : "",
-    customerName: req.body?.customerName || "",
-    customerEmail: req.body?.customerEmail || "",
-    customerPhone: req.body?.customerPhone || "",
-    registration: String(req.body?.registration || "").toUpperCase(),
-    vehicle: req.body?.vehicle || "",
+    customerId: "",
+    vehicleId: "",
+    customerName: "",
+    customerEmail: "",
+    customerPhone: "",
+    registration: "",
+    vehicle: "",
     odometer: req.body?.odometer || "",
     notes: req.body?.notes || "",
     lines: catalog.cloneLines(preset.lines).map((line) => ({
@@ -1989,8 +2166,7 @@ app.get("/api/billing/:id", (req, res) => {
 
   const isAdmin = (req.headers["x-admin-pin"] || req.query.pin) === ADMIN_PIN;
   const token = String(req.query.t || "");
-  const tokenOk =
-    doc.kind === "quote" && doc.acceptToken && token && token === doc.acceptToken;
+  const tokenOk = Boolean(doc.acceptToken && token && token === doc.acceptToken);
 
   if (!isAdmin) {
     if (doc.status === "void") return res.status(404).json({ error: "Not found" });
@@ -2034,6 +2210,14 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
   }
 
   const body = req.body || {};
+  let snapshot;
+  try {
+    snapshot = requireCustomerSnapshot(
+      body.customerId || current.customerId ? { ...current, ...body } : body
+    );
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
+  }
   const locked = isLockedBilling(current);
   const nextLines = locked
     ? current.lines
@@ -2041,11 +2225,7 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
 
   const next = {
     ...current,
-    customerName: body.customerName != null ? String(body.customerName).trim() : current.customerName,
-    customerEmail: body.customerEmail != null ? String(body.customerEmail).trim() : current.customerEmail,
-    customerPhone: body.customerPhone != null ? String(body.customerPhone).trim() : current.customerPhone,
-    registration: String(body.registration != null ? body.registration : current.registration).toUpperCase(),
-    vehicle: body.vehicle != null ? String(body.vehicle).trim() : current.vehicle,
+    ...snapshot,
     odometer: body.odometer != null ? String(body.odometer).trim() : current.odometer,
     notes: body.notes != null ? String(body.notes) : current.notes,
     validUntil:
@@ -2053,7 +2233,7 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
         ? String(body.validUntil)
         : current.validUntil,
     lines: nextLines,
-    updatedAt: new Date().toISOString(),
+    updatedAt: nowIso(),
   };
 
   if (current.kind === "invoice") {
@@ -2172,7 +2352,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
     text =
       `Hi ${name},\n\n` +
       `Here is your quote for ${vehicleBit}: ${doc.number}.\n` +
-      `Total (plus GST): $${money}\n\n` +
+      `Total incl. GST: $${money}\n\n` +
       `Please review and accept this quote before we start work:\n${url}\n\n` +
       `A PDF copy is attached for your records.\n\n` +
       (doc.validUntil ? `This quote is valid until ${doc.validUntil}.\n\n` : "") +
@@ -2181,7 +2361,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
     html = `
       <p>Hi ${escapeHtml(name)},</p>
       <p>Here is your quote for <strong>${escapeHtml(vehicleBit)}</strong> — ${escapeHtml(doc.number)}.</p>
-      <p>Total (plus GST): <strong>$${escapeHtml(money)}</strong></p>
+      <p>Total incl. GST: <strong>$${escapeHtml(money)}</strong></p>
       <p>Please review and accept this quote before we start work.</p>
       <p><a href="${escapeAttr(url)}" style="display:inline-block;background:#1565c0;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:700;">Review &amp; accept quote</a></p>
       <p>Or open this link:<br/><a href="${escapeAttr(url)}">${escapeHtml(url)}</a></p>
@@ -2209,7 +2389,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
     text =
       `Hi ${name},\n\n` +
       `Here is your tax invoice for ${vehicleBit}: ${doc.number}.\n` +
-      `Total (plus GST): $${money}\n\n` +
+      `Total incl. GST: $${money}\n\n` +
       `View / print your invoice:\n${url}\n\n` +
       `A PDF copy is attached for your records.\n\n` +
       `${business.paymentText()}\n\n` +
@@ -2217,7 +2397,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
     html = `
       <p>Hi ${escapeHtml(name)},</p>
       <p>Here is your tax invoice for <strong>${escapeHtml(vehicleBit)}</strong> — ${escapeHtml(doc.number)}.</p>
-      <p>Total (plus GST): <strong>$${escapeHtml(money)}</strong></p>
+      <p>Total incl. GST: <strong>$${escapeHtml(money)}</strong></p>
       <p><a href="${escapeAttr(url)}">View / print your invoice</a></p>
       <p>A PDF copy is attached for your records.</p>
       <p><strong>How to pay</strong><br/>
@@ -2266,7 +2446,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       attachments: [pdfAttachment],
     });
 
-    doc.lastEmailedAt = new Date().toISOString();
+    doc.lastEmailedAt = nowIso();
     doc.lastEmailedTo = to;
     doc.updatedAt = doc.lastEmailedAt;
     ensureHistory(doc);
@@ -2301,16 +2481,19 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
 });
 
 function convertQuoteToInvoice(docs, quote) {
+  if (quote.kind === "invoice") return quote;
   if (quote.kind !== "quote") {
     const err = new Error("Only quotes convert to invoices.");
     err.status = 400;
     throw err;
   }
-  if (quote.status === "invoiced" && quote.invoiceId) {
-    return docs.find((d) => d.id === quote.invoiceId) || null;
-  }
   if (quote.status === "void") {
     const err = new Error("This quote is no longer valid.");
+    err.status = 400;
+    throw err;
+  }
+  if (quote.status !== "accepted" && quote.status !== "invoiced") {
+    const err = new Error("Customer must accept the quote first.");
     err.status = 400;
     throw err;
   }
@@ -2322,54 +2505,56 @@ function convertQuoteToInvoice(docs, quote) {
     throw err;
   }
 
-  const now = new Date().toISOString();
-  const invoice = {
-    id: randomUUID(),
-    kind: "invoice",
-    number: nextBillingNumber(docs, "invoice"),
-    status: "draft",
-    preset: quote.preset,
-    createdAt: now,
-    updatedAt: now,
-    sentAt: "",
-    acceptedAt: quote.acceptedAt || now,
-    validUntil: "",
-    customerName: quote.customerName,
-    customerEmail: quote.customerEmail,
-    customerPhone: quote.customerPhone,
-    registration: quote.registration,
-    vehicle: quote.vehicle,
-    odometer: quote.odometer,
-    notes: quote.notes,
-    lines: lines.map((line) => ({ ...line, id: randomUUID() })),
-    acceptToken: "",
-    quoteId: quote.id,
-    invoiceId: "",
-    jobId: quote.jobId || "",
-    lastEmailedAt: "",
-    lastEmailedTo: "",
-    history: [],
-    ...emptyPaymentFields(),
-  };
-  appendHistory(invoice, {
-    type: "created",
-    summary: "Invoice created",
-    detail: `From ${quote.number}`,
-    amount: catalog.computeTotals(invoice.lines).totalIncl,
-  });
+  if (quote.invoiceId && quote.invoiceId !== quote.id) {
+    const existing = docs.find((d) => d.id === quote.invoiceId);
+    if (existing && existing.kind === "invoice") {
+      unifyInvoiceNumberFromQuote(docs, existing, quote);
+      return existing;
+    }
+  }
+
+  const now = nowIso();
+  const previousNumber = quote.number;
+  quote.kind = "invoice";
+  quote.quotedNumber = quote.quotedNumber || previousNumber;
+  quote.number = toInvoiceNumber(previousNumber);
+  quote.lines = lines;
+  quote.validUntil = "";
+  quote.quoteId = quote.id;
+  quote.invoiceId = quote.id;
+  quote.updatedAt = now;
+  if (!Array.isArray(quote.payments)) {
+    Object.assign(quote, emptyPaymentFields());
+  }
   ensureHistory(quote);
   appendHistory(quote, {
     type: "invoiced",
     summary: "Converted to invoice",
-    detail: invoice.number,
-    amount: catalog.computeTotals(invoice.lines).totalIncl,
+    detail: `${previousNumber} → ${quote.number}`,
+    amount: catalog.computeTotals(quote.lines).totalIncl,
   });
 
-  quote.status = "invoiced";
-  quote.invoiceId = invoice.id;
-  quote.updatedAt = now;
-  docs.push(invoice);
-  return invoice;
+  if (quote.jobId) {
+    const jobs = readJobs();
+    const job = jobs.find((j) => j.id === quote.jobId);
+    if (job) {
+      job.invoiceId = quote.id;
+      job.invoiceNumber = quote.number;
+      job.quoteId = quote.id;
+      job.quoteNumber = quote.quotedNumber || previousNumber;
+      const preferred = jobNumberFromBilling(quote.number);
+      if (
+        preferred &&
+        job.number !== preferred &&
+        !jobs.some((row) => row.id !== job.id && row.number === preferred)
+      ) {
+        job.number = preferred;
+      }
+      job.updatedAt = now;
+      writeJobs(jobs);
+    }
+  }
+  return quote;
 }
 
 async function notifyWorkshopQuoteAccepted(quote, invoice, job, req) {
@@ -2392,7 +2577,7 @@ async function notifyWorkshopQuoteAccepted(quote, invoice, job, req) {
     (invoiceNumber ? `Invoice created: ${invoiceNumber}\n` : "") +
     (jobNumber ? `Job card created: ${jobNumber}\n` : "") +
     `\nVehicle: ${vehicleBit}\n` +
-    `Total (plus GST): $${money}\n` +
+    `Total incl. GST: $${money}\n` +
     (quote.customerEmail ? `Email: ${quote.customerEmail}\n` : "") +
     (quote.customerPhone ? `Phone: ${quote.customerPhone}\n` : "") +
     `\nView quote:\n${quoteUrl}\n` +
@@ -2403,7 +2588,7 @@ async function notifyWorkshopQuoteAccepted(quote, invoice, job, req) {
     ${jobNumber ? `<p>Job card created: <strong>${escapeHtml(jobNumber)}</strong></p>` : ""}
     <p>
       Vehicle: ${escapeHtml(vehicleBit)}<br/>
-      Total (plus GST): <strong>$${escapeHtml(money)}</strong><br/>
+      Total incl. GST: <strong>$${escapeHtml(money)}</strong><br/>
       ${quote.customerEmail ? `Email: ${escapeHtml(quote.customerEmail)}<br/>` : ""}
       ${quote.customerPhone ? `Phone: ${escapeHtml(quote.customerPhone)}` : ""}
     </p>
@@ -2469,7 +2654,7 @@ app.post("/api/billing/:id/accept", async (req, res) => {
   }
 
   doc.status = "accepted";
-  doc.acceptedAt = new Date().toISOString();
+  doc.acceptedAt = nowIso();
   doc.updatedAt = doc.acceptedAt;
   ensureHistory(doc);
   appendHistory(doc, {
@@ -2488,7 +2673,7 @@ app.post("/api/billing/:id/accept", async (req, res) => {
 
   let job = null;
   try {
-    const ensured = ensureJobFromAcceptedQuote(docs, doc, invoice);
+    const ensured = ensureJobFromAcceptedQuote(docs, invoice || doc, invoice);
     job = ensured?.job || null;
   } catch (err) {
     console.error("Quote accepted but job card failed:", err);
@@ -2522,12 +2707,12 @@ app.post("/api/billing/:id/convert", requireAdmin, (req, res) => {
   if (quote.status !== "accepted" && quote.status !== "invoiced") {
     return res.status(400).json({ error: "Customer must accept the quote first." });
   }
-
   try {
+    requireCustomerSnapshot(quote);
     const invoice = convertQuoteToInvoice(docs, quote);
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
     writeBilling(docs);
-    res.status(quote.status === "invoiced" ? 200 : 201).json(withBillingTotals(invoice, true));
+    res.json(withBillingTotals(invoice, true));
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
   }
@@ -2546,7 +2731,7 @@ app.post("/api/billing/:id/revise", requireAdmin, (req, res) => {
     });
   }
 
-  const now = new Date().toISOString();
+  const now = nowIso();
   const today = todayIso();
   const revisedNote = `Revised from ${source.number}`;
   const notes = String(source.notes || "").trim();
@@ -2561,6 +2746,8 @@ app.post("/api/billing/:id/revise", requireAdmin, (req, res) => {
     sentAt: "",
     acceptedAt: "",
     validUntil: plusDays(today, catalog.QUOTE_VALID_DAYS),
+    customerId: source.customerId || "",
+    vehicleId: source.vehicleId || "",
     customerName: source.customerName || "",
     customerEmail: source.customerEmail || "",
     customerPhone: source.customerPhone || "",
@@ -2608,7 +2795,7 @@ app.post("/api/billing/:id/void", requireAdmin, (req, res) => {
     return res.status(400).json({ error: "This quote already has an invoice." });
   }
   docs[index].status = "void";
-  docs[index].voidedAt = new Date().toISOString();
+  docs[index].voidedAt = nowIso();
   docs[index].updatedAt = docs[index].voidedAt;
   ensureHistory(docs[index]);
   appendHistory(docs[index], {
@@ -2641,23 +2828,10 @@ app.get("/api/jobs", requireAdmin, (_req, res) => {
   res.json(jobs);
 });
 
-app.post("/api/jobs", requireAdmin, (req, res) => {
-  try {
-    const jobs = readJobs();
-    const now = new Date().toISOString();
-    const job = applyJobFields(
-      {
-        ...emptyJob(now),
-        number: nextJobCardNumber(jobs),
-      },
-      req.body || {}
-    );
-    jobs.push(job);
-    writeJobs(jobs);
-    res.status(201).json(job);
-  } catch (err) {
-    res.status(err.status || 400).json({ error: err.message });
-  }
+app.post("/api/jobs", requireAdmin, (_req, res) => {
+  res.status(400).json({
+    error: "Create a job card from an accepted quote or invoice. Direct job cards are not used.",
+  });
 });
 
 app.post("/api/jobs/from-quote/:id", requireAdmin, (req, res) => {
@@ -2691,7 +2865,7 @@ app.get("/api/jobs/:id", requireAdmin, (req, res) => {
     const quote = job.quoteId ? docs.find((d) => d.id === job.quoteId) : null;
     const invoice = job.invoiceId ? docs.find((d) => d.id === job.invoiceId) : null;
     const fields = customerFieldsForJob(quote || invoice || {});
-    if (applyCustomerFieldsToJob(job, fields)) {
+    if (applyCustomerFieldsToJob(job, fields, true)) {
       jobs[index] = job;
       writeJobs(jobs);
     }
@@ -2743,6 +2917,16 @@ app.get("/b/:id", (_req, res) => {
   res.sendFile(path.join(ROOT, "billing", "index.html"));
 });
 
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  if (err.code === "LIMIT_FILE_SIZE") {
+    return res.status(400).json({ error: "Photo is too large (max 6 MB)." });
+  }
+  const status = Number(err.status) >= 400 ? Number(err.status) : 500;
+  if (status >= 500) console.error(err);
+  res.status(status).json({ error: err.message || "Server error" });
+});
+
 function lanIPv4s() {
   try {
     const os = require("os");
@@ -2787,4 +2971,5 @@ app.listen(PORT, "0.0.0.0", () => {
       ? `Email: SMTP ready (from ${MAIL_FROM})`
       : "Email: not configured — copy .env.example to .env and add Gmail App Password"
   );
+  driveBackup.startBackupScheduler({ dataDir: DATA_DIR, uploadsDir: UPLOADS_DIR });
 });

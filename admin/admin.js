@@ -21,8 +21,8 @@ let current = null;
 let checklistMeta = null;
 let reportDocs = [];
 let reportCustomerDirectory = [];
-const reportCustomerSuggestEl = document.getElementById("report-customer-suggest");
-const reportRegoSuggestEl = document.getElementById("report-rego-suggest");
+const reportCustomerSelect = document.getElementById("report-customer-id");
+const reportVehicleSelect = document.getElementById("report-vehicle-id");
 
 async function api(path, options = {}) {
   const headers = {
@@ -50,25 +50,27 @@ function showApp() {
 }
 
 function setSection(name) {
+  if (name === "billing") name = "quotes";
   const dashboardSection = document.getElementById("dashboard-section");
   const reportsSection = document.getElementById("reports-section");
   const billingSection = document.getElementById("billing-section");
   const customersSection = document.getElementById("customers-section");
   const jobsSection = document.getElementById("jobs-section");
   const btnNew = document.getElementById("btn-new");
+  const billingOpen = name === "quotes" || name === "invoices";
   if (dashboardSection) dashboardSection.hidden = name !== "dashboard";
   if (reportsSection) reportsSection.hidden = name !== "reports";
-  if (billingSection) billingSection.hidden = name !== "billing";
+  if (billingSection) billingSection.hidden = !billingOpen;
   if (customersSection) customersSection.hidden = name !== "customers";
   if (jobsSection) jobsSection.hidden = name !== "jobs";
   if (btnNew) {
-    btnNew.hidden = name !== "reports" && name !== "customers" && name !== "jobs";
-    btnNew.textContent =
-      name === "customers" ? "New customer" : name === "jobs" ? "New job" : "New report";
+    btnNew.hidden = name !== "reports" && name !== "customers";
+    btnNew.textContent = name === "customers" ? "New customer" : "New report";
   }
   document.getElementById("nav-dashboard")?.classList.toggle("is-active", name === "dashboard");
   document.getElementById("nav-reports")?.classList.toggle("is-active", name === "reports");
-  document.getElementById("nav-billing")?.classList.toggle("is-active", name === "billing");
+  document.getElementById("nav-quotes")?.classList.toggle("is-active", name === "quotes");
+  document.getElementById("nav-invoices")?.classList.toggle("is-active", name === "invoices");
   document.getElementById("nav-customers")?.classList.toggle("is-active", name === "customers");
   document.getElementById("nav-jobs")?.classList.toggle("is-active", name === "jobs");
   if (name === "reports" && listView && !listView.hidden) {
@@ -78,6 +80,8 @@ function setSection(name) {
     viewTitle.textContent = "Dashboard";
     window.DeaneDashboard?.load?.();
   }
+  if (name === "quotes") viewTitle.textContent = "Quotes";
+  if (name === "invoices") viewTitle.textContent = "Invoices";
 }
 
 function confirmPublicCustomerLink(kind) {
@@ -97,6 +101,175 @@ window.DeaneAdmin = {
   escapeAttr,
   setSection,
   confirmPublicCustomerLink,
+  NZ_TZ: "Pacific/Auckland",
+  todayIso() {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Pacific/Auckland",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  },
+  createAutosave({ delay = 2500, isReady, save, onSaving, onError }) {
+    let timer = null;
+    let inflight = null;
+    let queued = false;
+
+    async function run() {
+      timer = null;
+      if (!isReady()) return;
+      if (inflight) {
+        queued = true;
+        return;
+      }
+      onSaving?.("Saving…");
+      inflight = Promise.resolve()
+        .then(() => save())
+        .finally(() => {
+          inflight = null;
+          if (queued) {
+            queued = false;
+            if (isReady()) schedule();
+          }
+        });
+      try {
+        await inflight;
+      } catch (err) {
+        onError?.(err);
+      }
+    }
+
+    function schedule() {
+      if (!isReady()) return;
+      clearTimeout(timer);
+      timer = setTimeout(run, delay);
+    }
+
+    async function flush() {
+      clearTimeout(timer);
+      timer = null;
+      if (!isReady()) return;
+      if (inflight) await inflight;
+      else await run();
+    }
+
+    function cancel() {
+      clearTimeout(timer);
+      timer = null;
+      queued = false;
+    }
+
+    return { schedule, flush, cancel };
+  },
+  customerVehicles(row) {
+    if (Array.isArray(row?.vehicles) && row.vehicles.length) return row.vehicles;
+    if (Array.isArray(row?.registrations) && row.registrations.length) {
+      return row.registrations.map((p) => ({
+        id: "",
+        registration: String(p || "").trim(),
+        vehicle: row.vehicle || "",
+      }));
+    }
+    const plate = String(row?.registration || "").trim();
+    return plate ? [{ id: "", registration: plate, vehicle: row?.vehicle || "" }] : [];
+  },
+  matchCustomer(directory, doc) {
+    const list = directory || [];
+    if (!doc) return null;
+    const id = String(doc.customerId || "").trim();
+    if (id) {
+      const byId = list.find((row) => row.customerId === id);
+      if (byId) return byId;
+    }
+    const email = String(doc.customerEmail || "").trim().toLowerCase();
+    if (email) {
+      const byEmail = list.find(
+        (row) => String(row.customerEmail || "").trim().toLowerCase() === email
+      );
+      if (byEmail) return byEmail;
+    }
+    const plate = String(doc.registration || "")
+      .toUpperCase()
+      .replace(/[\s-]/g, "");
+    if (plate) {
+      const byPlate = list.find((row) =>
+        this.customerVehicles(row).some(
+          (v) =>
+            String(v.registration || "")
+              .toUpperCase()
+              .replace(/[\s-]/g, "") === plate
+        )
+      );
+      if (byPlate) return byPlate;
+    }
+    const name = String(doc.customerName || "").trim().toLowerCase();
+    if (name) {
+      const matches = list.filter(
+        (row) => String(row.customerName || "").trim().toLowerCase() === name
+      );
+      if (matches.length === 1) return matches[0];
+    }
+    return null;
+  },
+  fillCustomerSelect(selectEl, directory, selectedId = "") {
+    if (!selectEl) return;
+    const saved = (directory || []).filter((row) => row.customerId);
+    const current = selectedId || selectEl.value || "";
+    const options = saved
+      .slice()
+      .sort((a, b) =>
+        String(a.customerName || "").localeCompare(String(b.customerName || ""))
+      )
+      .map((row) => {
+        const plates = this.customerVehicles(row)
+          .map((v) => v.registration)
+          .filter(Boolean)
+          .join(", ");
+        const label = [row.customerName, plates].filter(Boolean).join(" · ");
+        const sel = row.customerId === current ? " selected" : "";
+        return `<option value="${escapeAttr(row.customerId)}"${sel}>${escapeHtml(
+          label || "Customer"
+        )}</option>`;
+      })
+      .join("");
+    selectEl.innerHTML = `<option value="">Select customer…</option>${options}`;
+    if (current) selectEl.value = current;
+  },
+  fillVehicleSelect(selectEl, row, selectedId = "") {
+    if (!selectEl) return;
+    const vehicles = this.customerVehicles(row);
+    const current = selectedId || selectEl.value || "";
+    const options = vehicles
+      .map((v) => {
+        const id = v.id || v.registration;
+        const label = [v.registration, v.vehicle].filter(Boolean).join(" · ");
+        const sel = id === current || v.registration === current ? " selected" : "";
+        return `<option value="${escapeAttr(id)}"${sel}>${escapeHtml(label || "Vehicle")}</option>`;
+      })
+      .join("");
+    selectEl.innerHTML = `<option value="">Select vehicle…</option>${options}`;
+    if (vehicles.length === 1 && !current) {
+      selectEl.value = vehicles[0].id || vehicles[0].registration;
+    } else if (current) {
+      selectEl.value = current;
+    }
+  },
+  applyPartyToForm(form, row, vehicle) {
+    if (!form || !row || !(row.customerId || row.customerName)) return;
+    const set = (name, value) => {
+      const el = form.elements.namedItem(name);
+      if (el) el.value = String(value || "");
+    };
+    set("customerId", row.customerId || row.id || "");
+    set("customerName", row.customerName);
+    set("customerEmail", row.customerEmail);
+    set("customerPhone", row.customerPhone);
+    if (vehicle) {
+      set("vehicleId", vehicle.id || "");
+      set("registration", vehicle.registration);
+      set("vehicle", vehicle.vehicle);
+    }
+  },
   setViewTitle(text) {
     viewTitle.textContent = text;
   },
@@ -179,9 +352,14 @@ document.getElementById("nav-jobs")?.addEventListener("click", () => {
   window.DeaneJobs?.showList();
 });
 
-document.getElementById("nav-billing").addEventListener("click", () => {
-  setSection("billing");
-  window.DeaneBilling?.showList();
+document.getElementById("nav-quotes")?.addEventListener("click", () => {
+  setSection("quotes");
+  window.DeaneBilling?.showList({ kind: "quote", filter: "all" });
+});
+
+document.getElementById("nav-invoices")?.addEventListener("click", () => {
+  setSection("invoices");
+  window.DeaneBilling?.showList({ kind: "invoice", filter: "all" });
 });
 
 document.getElementById("nav-customers")?.addEventListener("click", () => {
@@ -193,6 +371,12 @@ document.getElementById("nav-customers")?.addEventListener("click", () => {
 });
 
 document.getElementById("btn-back").addEventListener("click", async () => {
+  try {
+    await reportAutosave.flush();
+  } catch {
+    /* still leave the editor */
+  }
+  reportAutosave.cancel();
   current = null;
   editView.hidden = true;
   listView.hidden = false;
@@ -202,7 +386,6 @@ document.getElementById("btn-back").addEventListener("click", async () => {
 
 document.getElementById("btn-new").addEventListener("click", async () => {
   const customersOpen = !document.getElementById("customers-section")?.hidden;
-  const jobsOpen = !document.getElementById("jobs-section")?.hidden;
   if (customersOpen) {
     if (window.DeaneCustomers?.newCustomer) {
       window.DeaneCustomers.newCustomer();
@@ -216,19 +399,11 @@ document.getElementById("btn-new").addEventListener("click", async () => {
     }
     return;
   }
-  if (jobsOpen) {
-    try {
-      await window.DeaneJobs.createJob();
-    } catch (err) {
-      alert(err.message);
-    }
-    return;
-  }
   try {
     const report = await api("/api/reports", {
       method: "POST",
       body: JSON.stringify({
-        serviceDate: new Date().toISOString().slice(0, 10),
+        serviceDate: window.DeaneAdmin.todayIso(),
         jobType: "standard_service",
         servicePackage: "standard",
       }),
@@ -324,8 +499,6 @@ async function openReport(id) {
   editView.hidden = false;
   viewTitle.textContent = current.jobNumber;
   fillForm(current);
-  hideReportSuggest(reportCustomerSuggestEl);
-  hideReportSuggest(reportRegoSuggestEl);
   await renderChecklist(current.servicePackage, current.checks);
   renderActions(current);
   updatePhoto(current.vehiclePhoto);
@@ -339,17 +512,50 @@ function normalizePlateSearch(value) {
     .replace(/[\s-]/g, "");
 }
 
-function customerPlates(row) {
-  if (Array.isArray(row.registrations) && row.registrations.length) {
-    return row.registrations.map((p) => String(p || "").trim()).filter(Boolean);
+function selectedReportCustomer() {
+  const id = reportCustomerSelect?.value || "";
+  return reportCustomerDirectory.find((row) => row.customerId === id) || null;
+}
+
+function selectedReportVehicle(row) {
+  const id = reportVehicleSelect?.value || "";
+  const vehicles = window.DeaneAdmin.customerVehicles(row);
+  return (
+    vehicles.find((v) => v.id === id || v.registration === id) ||
+    (vehicles.length === 1 ? vehicles[0] : null)
+  );
+}
+
+function syncReportPartyFields() {
+  const row = selectedReportCustomer();
+  const vehicle = selectedReportVehicle(row);
+  window.DeaneAdmin.applyPartyToForm(reportForm, row || {}, vehicle);
+}
+
+function refreshReportPartySelects(doc = current) {
+  window.DeaneAdmin.fillCustomerSelect(
+    reportCustomerSelect,
+    reportCustomerDirectory,
+    doc?.customerId || ""
+  );
+  const row = selectedReportCustomer();
+  window.DeaneAdmin.fillVehicleSelect(
+    reportVehicleSelect,
+    row,
+    doc?.vehicleId || doc?.registration || ""
+  );
+  syncReportPartyFields();
+  if (!doc?.customerId && reportForm) {
+    const set = (name, value) => {
+      const el = reportForm.elements.namedItem(name);
+      if (el && value) el.value = value;
+    };
+    set("customerName", doc?.customerName);
+    set("customerEmail", doc?.customerEmail);
+    set("customerPhone", doc?.customerPhone);
+    set("registration", doc?.registration);
+    set("vehicle", doc?.vehicle);
   }
-  if (Array.isArray(row.vehicles) && row.vehicles.length) {
-    return row.vehicles.map((v) => String(v.registration || "").trim()).filter(Boolean);
-  }
-  return String(row.registration || "")
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
 }
 
 async function loadReportCustomerDirectory() {
@@ -358,96 +564,6 @@ async function loadReportCustomerDirectory() {
   } catch {
     reportCustomerDirectory = [];
   }
-}
-
-function hideReportSuggest(el) {
-  if (!el) return;
-  el.hidden = true;
-  el.innerHTML = "";
-}
-
-function applyCustomerToReport(row, preferredPlate = "") {
-  if (!row || !reportForm) return;
-  const set = (name, value) => {
-    const el = reportForm.elements.namedItem(name);
-    if (!el) return;
-    const next = String(value || "").trim();
-    if (next) el.value = next;
-  };
-  set("customerName", row.customerName);
-  set("customerEmail", row.customerEmail);
-  set("customerPhone", row.customerPhone);
-
-  const vehicles = Array.isArray(row.vehicles) ? row.vehicles : [];
-  const want = normalizePlateSearch(preferredPlate);
-  let pick =
-    (want &&
-      vehicles.find((v) => normalizePlateSearch(v.registration) === want)) ||
-    vehicles[0] ||
-    null;
-  if (pick) {
-    set("registration", pick.registration);
-    if (pick.vehicle) set("vehicle", pick.vehicle);
-    else if (row.vehicle) set("vehicle", row.vehicle);
-  } else {
-    const plates = customerPlates(row);
-    if (plates.length) set("registration", plates[0]);
-    if (row.vehicle) set("vehicle", row.vehicle);
-  }
-  hideReportSuggest(reportCustomerSuggestEl);
-  hideReportSuggest(reportRegoSuggestEl);
-  showStatus("Customer details filled");
-}
-
-function matchReportCustomers(query, field) {
-  const q = String(query || "").trim().toLowerCase();
-  if (q.length < 2) return [];
-  const plateQuery = normalizePlateSearch(q);
-  const out = [];
-  for (const row of reportCustomerDirectory) {
-    if (field === "registration") {
-      for (const plate of customerPlates(row)) {
-        if (normalizePlateSearch(plate).includes(plateQuery)) {
-          out.push({
-            ...row,
-            _matchPlate: plate,
-            _matchVehicle:
-              (row.vehicles || []).find(
-                (v) => normalizePlateSearch(v.registration) === normalizePlateSearch(plate)
-              )?.vehicle || row.vehicle || "",
-          });
-        }
-      }
-    } else {
-      const name = String(row.customerName || "").toLowerCase();
-      if (name.includes(q)) out.push(row);
-    }
-    if (out.length >= 8) break;
-  }
-  return out.slice(0, 8);
-}
-
-function renderReportSuggest(el, matches, field) {
-  if (!el) return;
-  if (!matches.length) {
-    hideReportSuggest(el);
-    return;
-  }
-  el.hidden = false;
-  el.innerHTML = matches
-    .map((row, index) => {
-      const plate = row._matchPlate || customerPlates(row).join(", ");
-      const line = [row.customerName, plate, row.customerPhone].filter(Boolean).join(" · ");
-      return `<button type="button" data-match="${index}">${escapeHtml(line || "Customer")}</button>`;
-    })
-    .join("");
-  el.querySelectorAll("[data-match]").forEach((btn) => {
-    btn.addEventListener("mousedown", (event) => {
-      event.preventDefault();
-      const row = matches[Number(btn.dataset.match)];
-      applyCustomerToReport(row, field === "registration" ? row._matchPlate : "");
-    });
-  });
 }
 
 function fillForm(r) {
@@ -470,11 +586,6 @@ function fillForm(r) {
         : r.jobType
   );
   set("servicePackage", normalizePkg(r.servicePackage));
-  set("customerName", r.customerName);
-  set("customerEmail", r.customerEmail);
-  set("customerPhone", r.customerPhone);
-  set("registration", r.registration);
-  set("vehicle", r.vehicle);
   set("odometer", r.odometer);
   set("vin", r.vin);
   set("customerConcern", r.customerConcern);
@@ -491,6 +602,7 @@ function fillForm(r) {
   set("wofFailNotes", r.wof?.failNotes || "");
   set("wofRepairs", r.wof?.repairsForPass || "");
   set("wofRecheck", r.wof?.recheckRequired);
+  refreshReportPartySelects(r);
 }
 
 async function renderChecklist(pkg, checks) {
@@ -523,7 +635,11 @@ async function renderChecklist(pkg, checks) {
   checklistEl.querySelectorAll("[data-status]").forEach((sel) => {
     sel.addEventListener("change", () => {
       sel.className = `status-select status-${sel.value}`;
+      scheduleReportAutosave();
     });
+  });
+  checklistEl.querySelectorAll("[data-note]").forEach((input) => {
+    input.addEventListener("input", scheduleReportAutosave);
   });
 }
 
@@ -609,6 +725,8 @@ function collectPayload() {
     technicianName: f.technicianName.value.trim(),
     jobType: f.jobType.value,
     servicePackage: f.servicePackage.value,
+    customerId: f.customerId?.value || "",
+    vehicleId: f.vehicleId?.value || "",
     customerName: f.customerName.value.trim(),
     customerEmail: f.customerEmail.value.trim(),
     customerPhone: f.customerPhone.value.trim(),
@@ -637,7 +755,7 @@ function collectPayload() {
   };
 }
 
-async function saveReport() {
+async function saveReport(opts = {}) {
   if (!current) return null;
   const payload = collectPayload();
   current = await api(`/api/reports/${current.id}`, {
@@ -645,8 +763,22 @@ async function saveReport() {
     body: JSON.stringify(payload),
   });
   reportForm.elements.namedItem("status").value = current.status;
-  showStatus("Saved");
+  showStatus(opts.autosave ? "Autosaved" : "Saved");
   return current;
+}
+
+const reportAutosave = window.DeaneAdmin.createAutosave({
+  isReady: () =>
+    Boolean(current && !editView.hidden && reportCustomerSelect?.value && reportVehicleSelect?.value),
+  save: () => saveReport({ autosave: true }),
+  onSaving: (msg) => {
+    if (msg) showStatus(msg);
+  },
+  onError: (err) => showStatus(err.message || "Save failed"),
+});
+
+function scheduleReportAutosave() {
+  reportAutosave.schedule();
 }
 
 document.getElementById("btn-save").addEventListener("click", async () => {
@@ -662,58 +794,14 @@ document.getElementById("btn-save").addEventListener("click", async () => {
   }
 });
 
-document.getElementById("report-customer-name")?.addEventListener("input", () => {
-  renderReportSuggest(
-    reportCustomerSuggestEl,
-    matchReportCustomers(reportForm.elements.namedItem("customerName")?.value, "name"),
-    "name"
-  );
+reportCustomerSelect?.addEventListener("change", () => {
+  window.DeaneAdmin.fillVehicleSelect(reportVehicleSelect, selectedReportCustomer(), "");
+  syncReportPartyFields();
+  scheduleReportAutosave();
 });
-
-document.getElementById("report-customer-name")?.addEventListener("blur", () => {
-  const name = String(reportForm.elements.namedItem("customerName")?.value || "")
-    .trim()
-    .toLowerCase();
-  const exact = reportCustomerDirectory.filter(
-    (row) => String(row.customerName || "").trim().toLowerCase() === name
-  );
-  if (exact.length === 1) {
-    applyCustomerToReport(exact[0]);
-    return;
-  }
-  setTimeout(() => {
-    if (
-      reportCustomerSuggestEl &&
-      !reportCustomerSuggestEl.contains(document.activeElement)
-    ) {
-      hideReportSuggest(reportCustomerSuggestEl);
-    }
-  }, 150);
-});
-
-document.getElementById("report-registration")?.addEventListener("input", () => {
-  renderReportSuggest(
-    reportRegoSuggestEl,
-    matchReportCustomers(reportForm.elements.namedItem("registration")?.value, "registration"),
-    "registration"
-  );
-});
-
-document.getElementById("report-registration")?.addEventListener("blur", () => {
-  const plate = normalizePlateSearch(reportForm.elements.namedItem("registration")?.value);
-  const matches = matchReportCustomers(
-    reportForm.elements.namedItem("registration")?.value,
-    "registration"
-  );
-  const exact = matches.filter(
-    (row) => normalizePlateSearch(row._matchPlate || "") === plate
-  );
-  if (exact.length === 1) applyCustomerToReport(exact[0], exact[0]._matchPlate);
-  setTimeout(() => {
-    if (reportRegoSuggestEl && !reportRegoSuggestEl.contains(document.activeElement)) {
-      hideReportSuggest(reportRegoSuggestEl);
-    }
-  }, 150);
+reportVehicleSelect?.addEventListener("change", () => {
+  syncReportPartyFields();
+  scheduleReportAutosave();
 });
 
 document.getElementById("servicePackage").addEventListener("change", async () => {
@@ -746,7 +834,15 @@ document.querySelectorAll("[data-bulk]").forEach((btn) => {
       sel.value = status;
       sel.className = `status-select status-${status}`;
     });
+    scheduleReportAutosave();
   });
+});
+
+reportForm.addEventListener("input", scheduleReportAutosave);
+reportForm.addEventListener("change", scheduleReportAutosave);
+actionsEl.addEventListener("change", scheduleReportAutosave);
+window.addEventListener("beforeunload", () => {
+  reportAutosave.flush();
 });
 
 document.getElementById("btn-publish").addEventListener("click", async () => {
@@ -791,6 +887,7 @@ document.getElementById("btn-email").addEventListener("click", async () => {
 
 document.getElementById("btn-delete").addEventListener("click", async () => {
   if (!current || !confirm("Delete this report permanently?")) return;
+  reportAutosave.cancel();
   try {
     await api(`/api/reports/${current.id}`, { method: "DELETE" });
     current = null;
@@ -850,8 +947,8 @@ function escapeAttr(str) {
   try {
     await api("/api/reports");
     showApp();
-    setSection("reports");
-    await loadList();
+    setSection("dashboard");
+    await window.DeaneDashboard?.load?.();
   } catch {
     showLogin();
   }

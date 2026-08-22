@@ -54,7 +54,7 @@
         <span><i class="swatch outstanding"></i> Still outstanding</span>
       </div>
       <div class="dash-chart">${bars}</div>
-      <p class="muted small">Sales = invoices issued that month (incl. GST). Outstanding = unpaid balance still left on those invoices.</p>
+      <p class="muted small">Sales = every invoice (including drafts). Quotes are not sales. Outstanding = unpaid balance on those invoices.</p>
     `;
   }
 
@@ -67,7 +67,6 @@
       const jobs = data.jobs || {};
       const quotes = data.quotesAwaitingAcceptance || {};
       const invoices = data.invoicesOutstanding || {};
-      const deposits = data.depositsOutstanding || {};
       const overdue = data.invoicesOverdue || {};
       const thisMonth = data.thisMonth || {};
       root.innerHTML = `
@@ -94,12 +93,8 @@
               <span>Invoices outstanding</span>
               <strong>${money(invoices.totalIncl)}</strong>
             </button>
-            <button type="button" class="dash-money-row" data-billing="deposits">
-              <span>Deposits outstanding</span>
-              <strong>${money(deposits.totalIncl)}</strong>
-            </button>
           </div>
-          <p class="muted small">Overdue = sent invoice still unpaid after 7 days. Outstanding = unpaid invoices. Deposits outstanding = balance still due after a deposit.</p>
+          <p class="muted small">Overdue = sent invoice still unpaid after 7 days. Outstanding = unpaid invoices.</p>
         </section>
         <section class="dash-card">
           <h2>${Admin.escapeHtml(thisMonth.label || "This month")}</h2>
@@ -119,23 +114,115 @@
           <h2>Last 6 months</h2>
           ${renderMonthlyChart(data.monthly)}
         </section>
+        <section class="dash-backup-bar" id="dash-backup-card">
+          <div class="dash-backup-copy">
+            <strong>Backup</strong>
+            <span class="muted small" id="dash-backup-status">Checking Google Drive backup…</span>
+          </div>
+          <button type="button" class="ghost" id="btn-backup-now">Backup now</button>
+        </section>
       `;
       root.querySelectorAll("[data-jobs]").forEach((btn) => {
         btn.addEventListener("click", () => {
           Admin.setSection("jobs");
-          window.DeaneJobs?.showList?.();
-          window.DeaneJobs?.filterBy?.(btn.dataset.jobs);
+          window.DeaneJobs?.showList?.({ filter: btn.dataset.jobs });
         });
       });
       root.querySelectorAll("[data-billing]").forEach((btn) => {
         btn.addEventListener("click", () => {
-          Admin.setSection("billing");
-          window.DeaneBilling?.showList?.();
+          const key = btn.dataset.billing;
+          if (key === "quotes") {
+            Admin.setSection("quotes");
+            window.DeaneBilling?.showList?.({ kind: "quote", filter: "awaiting" });
+            return;
+          }
+          const filter = key === "overdue" ? "overdue" : "outstanding";
+          Admin.setSection("invoices");
+          window.DeaneBilling?.showList?.({ kind: "invoice", filter });
         });
       });
+      wireBackupCard();
     } catch (err) {
       root.innerHTML = `<p class="error">${Admin.escapeHtml(err.message)}</p>`;
     }
+  }
+
+  function formatBackupWhen(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return new Intl.DateTimeFormat("en-NZ", {
+      timeZone: "Pacific/Auckland",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }).format(d);
+  }
+
+  async function wireBackupCard() {
+    const statusEl = document.getElementById("dash-backup-status");
+    const btn = document.getElementById("btn-backup-now");
+    if (!statusEl || !btn) return;
+
+    const renderStatus = async () => {
+      try {
+        const data = await Admin.api("/api/admin/backup-status");
+        if (!data.configured) {
+          statusEl.textContent =
+            "Not configured yet. Add OAuth client ID/secret to .env, then run: npm run backup:auth";
+          btn.disabled = true;
+          return;
+        }
+        btn.disabled = false;
+        const last = data.last;
+        if (!last) {
+          statusEl.textContent = `Ready. Auto backup daily from ${data.hourNz}:00 Auckland time. No backup yet.`;
+          return;
+        }
+        if (last.ok) {
+          statusEl.textContent = `Last backup OK: ${last.fileName || "zip"} · ${formatBackupWhen(
+            last.finishedAt || last.at
+          )}`;
+        } else {
+          statusEl.textContent = `Last backup failed: ${last.error || "unknown error"} · ${formatBackupWhen(
+            last.finishedAt || last.at
+          )}`;
+        }
+      } catch (err) {
+        const msg = err.message || "Could not load backup status.";
+        statusEl.textContent = /Failed to fetch|NetworkError|Load failed/i.test(msg)
+          ? "Cannot reach server. In the project folder run: npm start — then refresh this page."
+          : msg;
+      }
+    };
+
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "Backing up…";
+      statusEl.textContent = "Uploading zip to Google Drive…";
+      try {
+        const result = await Admin.api("/api/admin/backup", {
+          method: "POST",
+          body: "{}",
+        });
+        statusEl.textContent = `Backup OK: ${result.fileName || "zip"} · ${formatBackupWhen(
+          result.finishedAt || result.at
+        )}`;
+        Admin.showStatus?.("Backup uploaded to Google Drive");
+      } catch (err) {
+        statusEl.textContent = err.message || "Backup failed.";
+        alert(err.message || "Backup failed.");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Backup now";
+        await renderStatus();
+      }
+    });
+
+    await renderStatus();
   }
 
   window.DeaneDashboard = { load };

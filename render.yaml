@@ -34,3 +34,15 @@ services:
         sync: false
       - key: SMTP_PASS
         sync: false
+      - key: GOOGLE_DRIVE_FOLDER_ID
+        value: 1WPsTY1EGx5HadxUmY3V4Om60yZ4HpeL1
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_OAUTH_REFRESH_TOKEN
+        sync: false
+      - key: BACKUP_HOUR_NZ
+        value: "2"
+      - key: BACKUP_KEEP_COUNT
+        value: "14"

@@ -10,7 +10,7 @@ module.exports = {
   email: "deaneautonz@gmail.com",
   hoursShort: "Mon–Sat 8:30am – 5:30pm",
   hoursSunday: "Sunday closed",
-  gstNumber: "",
+  gstNumber: "96-650-434",
   website: "https://www.deaneauto.co.nz",
   bankAccount: "02-0216-0104554-002",
   paymentTerms: [

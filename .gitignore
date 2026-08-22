@@ -3,10 +3,16 @@ data/reports.json
 data/billing.json
 data/customers.json
 data/jobs.json
+data/backup-status.json
+data/*.bak
+data/*.tmp
 uploads/*
 !uploads/.gitkeep
 .DS_Store
 .env
+*-credentials.json
+*service-account*.json
+google-service-account.json
 
 # Local customer export PDFs (PII)
 exports/DAR-*.pdf

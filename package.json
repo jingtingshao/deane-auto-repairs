@@ -5,14 +5,17 @@
   "description": "Website + digital service report admin for Deane Auto Repairs",
   "scripts": {
     "start": "node server.js",
-    "site": "npx --yes serve -l 5173 ."
+    "site": "npx --yes serve -l 5173 .",
+    "backup:auth": "node scripts/google-drive-auth.js"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
+    "archiver": "^7.0.1",
     "dotenv": "^17.4.2",
     "express": "^4.21.2",
+    "googleapis": "^176.0.0",
     "multer": "^2.2.0",
     "nodemailer": "^9.0.5",
     "pdfkit": "^0.19.1"

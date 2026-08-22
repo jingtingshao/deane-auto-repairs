@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Cache-Control" content="no-store" />
     <title>Admin · Deane Auto Repairs</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -10,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260820ah" />
+    <link rel="stylesheet" href="admin.css?v=20260823dash" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -36,7 +37,8 @@
             <button type="button" id="nav-dashboard" class="nav-tab is-active">Dashboard</button>
             <button type="button" id="nav-reports" class="nav-tab">Reports</button>
             <button type="button" id="nav-jobs" class="nav-tab">Jobs</button>
-            <button type="button" id="nav-billing" class="nav-tab">Quotes &amp; invoices</button>
+            <button type="button" id="nav-quotes" class="nav-tab">Quotes</button>
+            <button type="button" id="nav-invoices" class="nav-tab">Invoices</button>
             <button type="button" id="nav-customers" class="nav-tab">Customers</button>
           </nav>
           <a href="/" target="_blank" rel="noopener">Website</a>
@@ -109,20 +111,28 @@
 
             <fieldset>
               <legend>Customer &amp; vehicle</legend>
+              <p class="muted small">
+                Choose a saved customer. Add or change name, phone, plate or vehicle under
+                <strong>Customers</strong>.
+              </p>
               <div class="grid-3">
-                <label class="suggest-wrap">
-                  Customer name
-                  <input name="customerName" id="report-customer-name" autocomplete="off" required />
-                  <div id="report-customer-suggest" class="suggest-list" hidden></div>
+                <label>
+                  Customer
+                  <select name="customerId" id="report-customer-id" required>
+                    <option value="">Select customer…</option>
+                  </select>
                 </label>
-                <label>Email<input name="customerEmail" type="email" /></label>
-                <label>Phone<input name="customerPhone" type="tel" /></label>
-                <label class="suggest-wrap">
-                  Registration
-                  <input name="registration" id="report-registration" autocomplete="off" required />
-                  <div id="report-rego-suggest" class="suggest-list" hidden></div>
+                <label>
+                  Vehicle
+                  <select name="vehicleId" id="report-vehicle-id" required>
+                    <option value="">Select vehicle…</option>
+                  </select>
                 </label>
-                <label>Vehicle (make/model/year)<input name="vehicle" required /></label>
+                <label>Email<input name="customerEmail" type="email" readonly /></label>
+                <label>Phone<input name="customerPhone" type="tel" readonly /></label>
+                <label>Registration<input name="registration" readonly required /></label>
+                <label>Vehicle (make/model/year)<input name="vehicle" readonly required /></label>
+                <input type="hidden" name="customerName" />
                 <label>Odometer (km)<input name="odometer" /></label>
                 <label>VIN<input name="vin" /></label>
               </div>
@@ -194,7 +204,7 @@
 
         <section id="jobs-section" hidden>
           <section id="jobs-list-view">
-            <p class="muted small">Workshop job cards. Status: Waiting parts / In progress / Completed. Tick Ordered or Received to move between Waiting parts and In progress; set Completed by hand when done.</p>
+            <p class="muted small">Job cards are created from an accepted quote or invoice. Status: Waiting parts / In progress / Completed. Tick Ordered or Received for parts; set Completed by hand when done.</p>
             <label class="list-search">
               Search jobs
               <input
@@ -283,7 +293,7 @@
         </section>
 
         <section id="customers-section" hidden>
-          <p class="muted small">Fill in the customer below, then click Save customer. WOF expiry still comes from the service report. <span id="customer-storage-hint"></span></p>
+          <p class="muted small">This is the only place to type customer and vehicle details. Reports and quotes pick from this list. WOF expiry still comes from the service report. <span id="customer-storage-hint"></span></p>
           <form id="customer-form" class="report-form customer-editor" novalidate>
             <fieldset>
               <legend id="customer-form-legend">Customer details</legend>
@@ -328,12 +338,14 @@
 
         <section id="billing-section" hidden>
           <section id="billing-list-view">
-            <div class="preset-panel">
+            <div id="invoice-preset-panel" class="preset-panel" hidden>
               <div>
                 <h2>Invoice now</h2>
                 <p class="muted small">Fixed website prices — no customer accept needed.</p>
                 <div id="invoice-presets" class="preset-row"></div>
               </div>
+            </div>
+            <div id="quote-preset-panel" class="preset-panel">
               <div>
                 <h2>Quote first</h2>
                 <p class="muted small">Email the customer. We start work after they accept.</p>
@@ -341,20 +353,21 @@
               </div>
             </div>
             <label class="list-search">
-              Search quotes &amp; invoices
+              <span id="billing-search-label">Search quotes</span>
               <input
                 id="billing-search"
                 type="search"
-                placeholder="Customer name or plate"
+                placeholder="Customer name, plate or number"
                 autocomplete="off"
               />
             </label>
+            <div id="billing-filter" class="filter-row"></div>
             <div id="billing-list" class="report-list"></div>
           </section>
 
           <section id="billing-edit-view" hidden>
             <div class="edit-toolbar">
-              <button type="button" id="btn-billing-back" class="ghost">← All quotes &amp; invoices</button>
+              <button type="button" id="btn-billing-back" class="ghost">← All quotes</button>
               <div class="edit-actions">
                 <button type="button" id="btn-billing-save" class="primary">Save changes</button>
                 <button type="button" id="btn-billing-email" class="ghost">Send email</button>
@@ -380,16 +393,27 @@
 
               <fieldset>
                 <legend>Customer &amp; vehicle</legend>
+                <p class="muted small">
+                  Choose a saved customer. Add or change details under <strong>Customers</strong>.
+                </p>
                 <div class="grid-3">
-                  <label class="suggest-wrap">
-                    Customer name
-                    <input name="customerName" id="billing-customer-name" autocomplete="off" required />
-                    <div id="billing-customer-suggest" class="suggest-list" hidden></div>
+                  <label>
+                    Customer
+                    <select name="customerId" id="billing-customer-id" required>
+                      <option value="">Select customer…</option>
+                    </select>
                   </label>
-                  <label>Email<input name="customerEmail" type="email" /></label>
-                  <label>Phone<input name="customerPhone" type="tel" /></label>
-                  <label>Registration<input name="registration" id="billing-registration" autocomplete="off" /></label>
-                  <label>Vehicle<input name="vehicle" /></label>
+                  <label>Name<input name="customerName" readonly /></label>
+                  <label>
+                    Vehicle
+                    <select name="vehicleId" id="billing-vehicle-id" required>
+                      <option value="">Select vehicle…</option>
+                    </select>
+                  </label>
+                  <label>Email<input name="customerEmail" type="email" readonly /></label>
+                  <label>Phone<input name="customerPhone" type="tel" readonly /></label>
+                  <label>Registration<input name="registration" readonly /></label>
+                  <label>Vehicle<input name="vehicle" readonly /></label>
                 </div>
                 <label>Notes for customer<textarea name="notes" rows="2"></textarea></label>
                 <p class="muted small">
@@ -473,10 +497,10 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260820ai"></script>
-    <script src="dashboard.js?v=20260821chart"></script>
-    <script src="billing.js?v=20260820ag"></script>
+    <script src="admin.js?v=20260823name"></script>
+    <script src="dashboard.js?v=20260823sales"></script>
+    <script src="billing.js?v=20260823name"></script>
     <script src="customers.js?v=20260820aj"></script>
-    <script src="jobs.js?v=20260820ah"></script>
+    <script src="jobs.js?v=20260823noj"></script>
   </body>
 </html>

@@ -47,24 +47,27 @@ function partsLabel(job) {
 }
 
 function renderFilters() {
-  if (!jobsFilter || jobsFilter.dataset.ready) return;
-  jobsFilter.innerHTML = [
-    `<button type="button" class="ghost is-active" data-filter="all">All</button>`,
-    ...JOB_STATUSES.map(
-      (s) =>
-        `<button type="button" class="ghost" data-filter="${Admin.escapeAttr(s.id)}">${Admin.escapeHtml(s.label)}</button>`
-    ),
-  ].join("");
-  jobsFilter.querySelectorAll("[data-filter]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      jobFilter = btn.dataset.filter;
-      jobsFilter.querySelectorAll("[data-filter]").forEach((el) => {
-        el.classList.toggle("is-active", el === btn);
+  if (!jobsFilter) return;
+  if (!jobsFilter.dataset.ready) {
+    jobsFilter.innerHTML = [
+      `<button type="button" class="ghost" data-filter="all">All</button>`,
+      ...JOB_STATUSES.map(
+        (s) =>
+          `<button type="button" class="ghost" data-filter="${Admin.escapeAttr(s.id)}">${Admin.escapeHtml(s.label)}</button>`
+      ),
+    ].join("");
+    jobsFilter.querySelectorAll("[data-filter]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        jobFilter = btn.dataset.filter;
+        renderFilters();
+        renderJobList();
       });
-      renderJobList();
     });
+    jobsFilter.dataset.ready = "1";
+  }
+  jobsFilter.querySelectorAll("[data-filter]").forEach((el) => {
+    el.classList.toggle("is-active", el.dataset.filter === jobFilter);
   });
-  jobsFilter.dataset.ready = "1";
 }
 
 function fillStatusSelect(selected) {
@@ -98,7 +101,7 @@ function renderJobList() {
   if (!jobsList) return;
   if (!jobRows.length) {
     jobsList.innerHTML =
-      '<div class="empty">No job cards yet. Click <strong>New job</strong>, or open an accepted quote and create one from there.</div>';
+      '<div class="empty">No job cards yet. They appear when a customer accepts a quote — open the invoice and click <strong>Open job card</strong> if needed.</div>';
     return;
   }
 
@@ -108,19 +111,32 @@ function renderJobList() {
     return matchesJobSearch(job, query);
   });
   if (!jobs.length) {
-    jobsList.innerHTML = '<div class="empty">No matching jobs.</div>';
+    const label =
+      jobFilter === "waiting_parts"
+        ? "waiting for parts"
+        : jobFilter === "in_progress"
+          ? "in progress"
+          : jobFilter === "completed"
+            ? "ready to collect"
+            : "matching";
+    jobsList.innerHTML = `<div class="empty">No vehicles ${Admin.escapeHtml(label)}.</div>`;
     return;
   }
 
   jobsList.innerHTML = jobs
     .map((job) => {
       const parts = partsLabel(job);
+      const waiting = Math.max(0, (Number(job.partsTotal) || 0) - (Number(job.partsReceived) || 0));
+      const waitHint =
+        job.status === "waiting_parts" && waiting
+          ? ` · ${waiting} part${waiting === 1 ? "" : "s"} to arrive`
+          : "";
       return `
       <article class="report-card billing-card" data-id="${job.id}">
         <div class="billing-number">${Admin.escapeHtml(job.number)}</div>
         <div>
           <h2>${Admin.escapeHtml(job.customerName || "Customer")}</h2>
-          <p class="muted">${Admin.escapeHtml(job.registration || "No plate")} · ${Admin.escapeHtml(job.vehicle || "")}${job.quoteNumber ? ` · ${Admin.escapeHtml(job.quoteNumber)}` : ""}</p>
+          <p class="muted">${Admin.escapeHtml(job.registration || "No plate")} · ${Admin.escapeHtml(job.vehicle || "No vehicle")}${job.quoteNumber ? ` · ${Admin.escapeHtml(job.quoteNumber)}` : ""}${job.invoiceNumber ? ` · ${Admin.escapeHtml(job.invoiceNumber)}` : ""}${waitHint}</p>
         </div>
         <div class="job-card-meta">
           <span class="badge ${Admin.escapeAttr(job.status)}">${Admin.escapeHtml(statusLabel(job.status))}</span>
@@ -183,9 +199,11 @@ function renderParts() {
           if (ordered) ordered.checked = true;
         }
         syncStatusFromParts();
+        scheduleJobAutosave();
         return;
       }
       partRows[index][field] = field === "qty" ? Number(input.value) || 0 : input.value;
+      scheduleJobAutosave();
     };
     input.addEventListener("input", apply);
     input.addEventListener("change", apply);
@@ -196,6 +214,7 @@ function renderParts() {
       if (!partRows.length) partRows = [newPart()];
       renderParts();
       syncStatusFromParts();
+      scheduleJobAutosave();
     });
   });
 }
@@ -245,6 +264,15 @@ function fillForm(job) {
   if (!partRows.length) partRows = [newPart()];
   renderParts();
 
+  const linked = Boolean(job.quoteId || job.invoiceId);
+  ["customerName", "customerEmail", "customerPhone", "registration", "vehicle"].forEach(
+    (name) => {
+      const el = jobInput(name);
+      if (el) el.readOnly = linked;
+    }
+  );
+  const workEl = jobInput("workRequested");
+  if (workEl) workEl.readOnly = linked;
   const hasQuote = Boolean(job.quoteId);
   if (openQuoteBtn) openQuoteBtn.hidden = !hasQuote;
   if (jobsQuoteLink) {
@@ -275,7 +303,7 @@ function collectJob() {
   };
 }
 
-async function saveJob() {
+async function saveJob(opts = {}) {
   if (!currentJob) return null;
   currentJob = await Admin.api(`/api/jobs/${currentJob.id}`, {
     method: "PUT",
@@ -286,12 +314,34 @@ async function saveJob() {
   const el = document.getElementById("jobs-save-status");
   if (el) {
     el.hidden = false;
-    el.textContent = "Saved";
+    el.textContent = opts.autosave ? "Autosaved" : "Saved";
     setTimeout(() => {
       el.hidden = true;
     }, 2500);
   }
   return currentJob;
+}
+
+const jobAutosave = Admin.createAutosave({
+  isReady: () => Boolean(currentJob && jobsEditView && !jobsEditView.hidden),
+  save: () => saveJob({ autosave: true }),
+  onSaving: (msg) => {
+    const el = document.getElementById("jobs-save-status");
+    if (!el || !msg) return;
+    el.hidden = false;
+    el.textContent = msg;
+  },
+  onError: (err) => {
+    const el = document.getElementById("jobs-save-status");
+    if (el) {
+      el.hidden = false;
+      el.textContent = err.message || "Save failed";
+    }
+  },
+});
+
+function scheduleJobAutosave() {
+  jobAutosave.schedule();
 }
 
 async function openJob(id) {
@@ -316,11 +366,27 @@ async function loadJobList() {
   renderJobList();
 }
 
-async function showList() {
+async function showList(opts = {}) {
+  try {
+    await jobAutosave.flush();
+  } catch {
+    /* still leave the editor */
+  }
+  jobAutosave.cancel();
   currentJob = null;
+  if (opts.filter) jobFilter = opts.filter;
+  else jobFilter = "all";
   jobsEditView.hidden = true;
   jobsListView.hidden = false;
-  Admin.setViewTitle("Jobs");
+  Admin.setViewTitle(
+    jobFilter === "waiting_parts"
+      ? "Waiting parts"
+      : jobFilter === "in_progress"
+        ? "Jobs in progress"
+        : jobFilter === "completed"
+          ? "Ready to collect"
+          : "Jobs"
+  );
   try {
     await loadJobList();
   } catch (err) {
@@ -336,6 +402,7 @@ document.getElementById("btn-jobs-back")?.addEventListener("click", showList);
 document.getElementById("btn-add-part")?.addEventListener("click", () => {
   partRows.push(newPart());
   renderParts();
+  scheduleJobAutosave();
 });
 
 document.getElementById("btn-jobs-save")?.addEventListener("click", async () => {
@@ -353,18 +420,26 @@ openQuoteBtn?.addEventListener("click", async () => {
   } catch {
     /* still try to open the quote */
   }
-  Admin.setSection("billing");
+  Admin.setSection(currentJob.invoiceNumber ? "invoices" : "quotes");
   await window.DeaneBilling?.openDoc(currentJob.quoteId);
 });
 
 document.getElementById("btn-jobs-delete")?.addEventListener("click", async () => {
   if (!currentJob || !confirm("Delete this job card?")) return;
+  jobAutosave.cancel();
   try {
     await Admin.api(`/api/jobs/${currentJob.id}`, { method: "DELETE" });
+    currentJob = null;
     await showList();
   } catch (err) {
     alert(err.message);
   }
+});
+
+jobsForm?.addEventListener("input", scheduleJobAutosave);
+jobsForm?.addEventListener("change", scheduleJobAutosave);
+window.addEventListener("beforeunload", () => {
+  jobAutosave.flush();
 });
 
 window.DeaneJobs = {

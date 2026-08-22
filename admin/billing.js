@@ -17,8 +17,14 @@ let lineRows = [];
 let paymentRows = [];
 let billingDocs = [];
 let customerDirectory = [];
+let listKind = "quote";
+let listFilter = "all";
 const billingSearch = document.getElementById("billing-search");
-const customerSuggestEl = document.getElementById("billing-customer-suggest");
+const billingFilterEl = document.getElementById("billing-filter");
+const quotePresetPanel = document.getElementById("quote-preset-panel");
+const invoicePresetPanel = document.getElementById("invoice-preset-panel");
+const billingCustomerSelect = document.getElementById("billing-customer-id");
+const billingVehicleSelect = document.getElementById("billing-vehicle-id");
 const billingPaymentsEl = document.getElementById("billing-payments");
 
 function money(n) {
@@ -54,20 +60,14 @@ function canEditCustomer(doc) {
 }
 
 function setBillingFieldsEditable(editable) {
-  [
-    "customerName",
-    "customerEmail",
-    "customerPhone",
-    "registration",
-    "vehicle",
-    "notes",
-    "validUntil",
-  ].forEach((name) => {
+  ["notes", "validUntil"].forEach((name) => {
     const el = billingInput(name);
     if (!el) return;
     el.readOnly = !editable;
     el.disabled = false;
   });
+  if (billingCustomerSelect) billingCustomerSelect.disabled = !editable;
+  if (billingVehicleSelect) billingVehicleSelect.disabled = !editable;
 }
 
 function kindLabel(kind) {
@@ -129,9 +129,16 @@ function matchesBillingSearch(doc, query) {
   const q = String(query || "").trim().toLowerCase();
   if (!q) return true;
   const name = String(doc.customerName || "").toLowerCase();
+  const number = String(doc.number || "").toLowerCase();
+  const quoted = String(doc.quotedNumber || "").toLowerCase();
   const plate = normalizeSearch(doc.registration);
   const plateQuery = q.replace(/[\s-]/g, "");
-  return name.includes(q) || plate.includes(plateQuery);
+  return (
+    name.includes(q) ||
+    number.includes(q) ||
+    quoted.includes(q) ||
+    plate.includes(plateQuery)
+  );
 }
 
 function paymentLabel(status) {
@@ -144,24 +151,98 @@ function formatListDate(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return new Intl.DateTimeFormat("en-NZ", {
+    timeZone: "Pacific/Auckland",
     day: "numeric",
     month: "short",
     year: "numeric",
   }).format(d);
 }
 
+function quoteFilters() {
+  return [
+    { id: "all", label: "All quotes" },
+    { id: "awaiting", label: "Awaiting acceptance" },
+    { id: "accepted", label: "Accepted" },
+    { id: "draft", label: "Drafts" },
+  ];
+}
+
+function invoiceFilters() {
+  return [
+    { id: "all", label: "All invoices" },
+    { id: "outstanding", label: "Outstanding" },
+    { id: "overdue", label: "Overdue" },
+    { id: "paid", label: "Paid" },
+  ];
+}
+
+function matchesListFilter(d) {
+  if (d.kind !== listKind) return false;
+  if (listKind === "quote") {
+    if (listFilter === "all") return d.status !== "void" && d.status !== "invoiced";
+    if (listFilter === "awaiting") return d.status === "sent";
+    if (listFilter === "accepted") return d.status === "accepted";
+    if (listFilter === "draft") return d.status === "draft";
+  }
+  if (listKind === "invoice") {
+    if (d.status === "void") return false;
+    if (listFilter === "all") return true;
+    if (listFilter === "outstanding") {
+      return d.paymentStatus === "unpaid" || d.paymentStatus === "deposit";
+    }
+    if (listFilter === "overdue") return Boolean(d.overdue);
+    if (listFilter === "paid") return d.paymentStatus === "paid";
+  }
+  return false;
+}
+
+function updateListChrome() {
+  const isInvoice = listKind === "invoice";
+  if (quotePresetPanel) quotePresetPanel.hidden = isInvoice;
+  if (invoicePresetPanel) invoicePresetPanel.hidden = !isInvoice;
+  const searchLabel = document.getElementById("billing-search-label");
+  if (searchLabel) searchLabel.textContent = isInvoice ? "Search invoices" : "Search quotes";
+  const back = document.getElementById("btn-billing-back");
+  if (back) back.textContent = isInvoice ? "← All invoices" : "← All quotes";
+  renderBillingFilters();
+}
+
+function renderBillingFilters() {
+  if (!billingFilterEl) return;
+  const filters = listKind === "invoice" ? invoiceFilters() : quoteFilters();
+  if (!filters.some((f) => f.id === listFilter)) listFilter = "all";
+  billingFilterEl.innerHTML = filters
+    .map(
+      (f) =>
+        `<button type="button" class="ghost${f.id === listFilter ? " is-active" : ""}" data-filter="${Admin.escapeAttr(f.id)}">${Admin.escapeHtml(f.label)}</button>`
+    )
+    .join("");
+  billingFilterEl.querySelectorAll("[data-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      listFilter = btn.dataset.filter;
+      renderBillingFilters();
+      renderBillingList();
+    });
+  });
+}
+
 function renderBillingList() {
-  if (!billingDocs.length) {
+  const kindDocs = billingDocs.filter((d) => matchesListFilter(d));
+  if (!billingDocs.filter((d) => d.kind === listKind && d.status !== "void").length) {
     billingList.innerHTML =
-      '<div class="empty">No quotes or invoices yet. Use the buttons above to start.</div>';
+      listKind === "invoice"
+        ? '<div class="empty">No invoices yet. Convert an accepted quote, or use Invoice now above.</div>'
+        : '<div class="empty">No quotes yet. Use the buttons above to start.</div>';
     return;
   }
 
   const query = billingSearch?.value || "";
-  const docs = billingDocs.filter((d) => matchesBillingSearch(d, query));
+  const docs = kindDocs.filter((d) => matchesBillingSearch(d, query));
   if (!docs.length) {
     billingList.innerHTML =
-      '<div class="empty">No matching customer name or plate.</div>';
+      listKind === "invoice"
+        ? '<div class="empty">No matching invoices.</div>'
+        : '<div class="empty">No matching quotes.</div>';
     return;
   }
 
@@ -222,68 +303,61 @@ async function loadCustomerDirectory() {
   }
 }
 
-function hideCustomerSuggest() {
-  if (!customerSuggestEl) return;
-  customerSuggestEl.hidden = true;
-  customerSuggestEl.innerHTML = "";
+function selectedBillingCustomer() {
+  const id = billingCustomerSelect?.value || "";
+  return customerDirectory.find((row) => row.customerId === id) || null;
 }
 
-function applyCustomerToForm(row) {
-  if (!row || !canEditCustomer(currentBill)) return;
-  const setIf = (name, value) => {
-    const el = billingInput(name);
-    if (!el) return;
-    const next = String(value || "").trim();
-    if (next) el.value = next;
-  };
-  setIf("customerName", row.customerName);
-  setIf("customerEmail", row.customerEmail);
-  setIf("customerPhone", row.customerPhone);
-  setIf("registration", row.registration);
-  setIf("vehicle", row.vehicle);
-  hideCustomerSuggest();
-  Admin.showBillingStatus("Customer details filled");
+function selectedBillingVehicle(row) {
+  const id = billingVehicleSelect?.value || "";
+  const vehicles = Admin.customerVehicles(row);
+  return (
+    vehicles.find((v) => v.id === id || v.registration === id) ||
+    (vehicles.length === 1 ? vehicles[0] : null)
+  );
 }
 
-function matchCustomers(query, field) {
-  const q = String(query || "").trim().toLowerCase();
-  if (q.length < 2) return [];
-  const plateQuery = q.replace(/[\s-]/g, "");
-  return customerDirectory
-    .filter((row) => {
-      if (field === "registration") {
-        return normalizeSearch(row.registration).includes(plateQuery);
-      }
-      const name = String(row.customerName || "").toLowerCase();
-      return name.includes(q);
-    })
-    .slice(0, 8);
+function syncBillingPartyFields() {
+  const row = selectedBillingCustomer();
+  const vehicle = selectedBillingVehicle(row);
+  Admin.applyPartyToForm(billingForm, row || {}, vehicle);
 }
 
-function renderCustomerSuggest(matches) {
-  if (!customerSuggestEl) return;
-  if (!matches.length) {
-    hideCustomerSuggest();
-    return;
+function refreshBillingPartySelects(doc = currentBill) {
+  const matched = Admin.matchCustomer(customerDirectory, doc);
+  Admin.fillCustomerSelect(
+    billingCustomerSelect,
+    customerDirectory,
+    matched?.customerId || doc?.customerId || ""
+  );
+  Admin.fillVehicleSelect(
+    billingVehicleSelect,
+    selectedBillingCustomer() || matched,
+    doc?.vehicleId || doc?.registration || ""
+  );
+  const row = selectedBillingCustomer();
+  if (row) {
+    Admin.applyPartyToForm(billingForm, row, selectedBillingVehicle(row));
   }
-  customerSuggestEl.hidden = false;
-  customerSuggestEl.innerHTML = matches
-    .map((row, index) => {
-      const line = [row.customerName, row.registration, row.customerPhone].filter(Boolean).join(" · ");
-      return `<button type="button" data-match="${index}">${Admin.escapeHtml(line || "Customer")}</button>`;
-    })
-    .join("");
-  customerSuggestEl.querySelectorAll("[data-match]").forEach((btn) => {
-    btn.addEventListener("mousedown", (event) => {
-      event.preventDefault();
-      applyCustomerToForm(matches[Number(btn.dataset.match)]);
-    });
-  });
+  if (billingForm && doc) {
+    const set = (name, value) => {
+      const el = billingInput(name);
+      if (el && value) el.value = value;
+    };
+    set("customerName", doc.customerName);
+    set("customerEmail", doc.customerEmail);
+    set("customerPhone", doc.customerPhone);
+    set("registration", doc.registration);
+    set("vehicle", doc.vehicle);
+  }
 }
 
 async function openDoc(id) {
   if (!customerDirectory.length) await loadCustomerDirectory();
   currentBill = await Admin.api(`/api/billing/${id}`);
+  listKind = currentBill.kind === "invoice" ? "invoice" : "quote";
+  Admin.setSection(listKind === "invoice" ? "invoices" : "quotes");
+  updateListChrome();
   billingListView.hidden = true;
   billingEditView.hidden = false;
   Admin.setViewTitle(currentBill.number);
@@ -306,13 +380,8 @@ function fillForm(doc) {
   };
   set("number", doc.number);
   set("validUntil", doc.validUntil || "");
-  set("customerName", doc.customerName);
-  set("customerEmail", doc.customerEmail);
-  set("customerPhone", doc.customerPhone);
-  set("registration", doc.registration);
-  set("vehicle", doc.vehicle);
   set("notes", doc.notes);
-  hideCustomerSuggest();
+  refreshBillingPartySelects(doc);
 
   document.getElementById("billing-legend").textContent =
     doc.kind === "invoice" ? "Tax invoice" : "Quote";
@@ -341,7 +410,7 @@ function fillForm(doc) {
         ];
       }
       const dateEl = document.getElementById("billing-pay-date");
-      if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
+      if (dateEl && !dateEl.value) dateEl.value = Admin.todayIso();
       renderPayments();
     } else {
       paymentRows = [];
@@ -389,6 +458,7 @@ function formatHistoryWhen(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
   return new Intl.DateTimeFormat("en-NZ", {
+    timeZone: "Pacific/Auckland",
     day: "numeric",
     month: "short",
     hour: "numeric",
@@ -444,6 +514,7 @@ function renderQuickAdds() {
       if (!item) return;
       lineRows.push(newLine(item));
       renderLines();
+      scheduleBillAutosave();
     });
   });
 }
@@ -476,6 +547,7 @@ function renderLines() {
       );
       row.querySelector(".total").textContent = money(total);
       renderTotals();
+      scheduleBillAutosave();
     });
   });
   billingLinesEl.querySelectorAll("[data-remove]").forEach((btn) => {
@@ -484,30 +556,63 @@ function renderLines() {
       lineRows.splice(index, 1);
       if (!lineRows.length) lineRows = [newLine()];
       renderLines();
+      scheduleBillAutosave();
     });
   });
   renderTotals();
 }
 
+function advertisedInclFromExcl(excl) {
+  const n = Number(excl);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  for (const incl of [79, 199, 279, 125]) {
+    const exact = incl / 1.15;
+    if (Math.abs(n - exact) < 0.0005 || round2(n) === round2(exact)) return incl;
+  }
+  return null;
+}
+
+function computeTotals(lines) {
+  let net = 0;
+  let gst = 0;
+  let totalIncl = 0;
+  for (const line of lines || []) {
+    const qty = Number(line.qty) || 0;
+    const unit = Number(line.unitPriceIncl) || 0;
+    const advertised = advertisedInclFromExcl(unit);
+    let lineNet;
+    let lineGst;
+    let lineIncl;
+    if (advertised != null) {
+      lineIncl = round2(qty * advertised);
+      lineGst = round2(lineIncl * (3 / 23));
+      lineNet = round2(lineIncl - lineGst);
+    } else {
+      lineNet = round2(qty * unit);
+      lineIncl = round2(lineNet * 1.15);
+      lineGst = round2(lineIncl - lineNet);
+    }
+    net = round2(net + lineNet);
+    gst = round2(gst + lineGst);
+    totalIncl = round2(totalIncl + lineIncl);
+  }
+  return { net, gst, totalIncl };
+}
+
 function renderTotals() {
-  const net = round2(
-    lineRows.reduce(
-      (sum, line) => sum + (Number(line.qty) || 0) * (Number(line.unitPriceIncl) || 0),
-      0
-    )
-  );
-  const gst = round2(net * 0.15);
-  const totalIncl = round2(net + gst);
+  const { net, gst, totalIncl } = computeTotals(lineRows);
   billingTotalsEl.innerHTML = `
     <p><span>Subtotal excl. GST</span><span>${money(net)}</span></p>
     <p><span>GST (15%)</span><span>${money(gst)}</span></p>
-    <p><span>Total (plus GST)</span><span>${money(totalIncl)}</span></p>
+    <p><span>Total incl. GST</span><span>${money(totalIncl)}</span></p>
   `;
 }
 
 function collectBill() {
   const value = (name) => String(billingInput(name)?.value || "").trim();
   const payload = {
+    customerId: value("customerId"),
+    vehicleId: value("vehicleId"),
     customerName: value("customerName"),
     customerEmail: value("customerEmail"),
     customerPhone: value("customerPhone"),
@@ -524,13 +629,7 @@ function collectBill() {
 }
 
 function invoiceTotalIncl() {
-  const net = round2(
-    lineRows.reduce(
-      (sum, line) => sum + (Number(line.qty) || 0) * (Number(line.unitPriceIncl) || 0),
-      0
-    )
-  );
-  return round2(net + round2(net * 0.15));
+  return computeTotals(lineRows).totalIncl;
 }
 
 function paymentsTotal() {
@@ -569,6 +668,7 @@ function renderPayments() {
       btn.addEventListener("click", () => {
         paymentRows.splice(Number(btn.dataset.removePay), 1);
         renderPayments();
+        scheduleBillAutosave();
       });
     });
   }
@@ -586,17 +686,18 @@ function addPaymentRow(amount, note) {
   paymentRows.push({
     id: crypto.randomUUID(),
     amount: amt,
-    paidAt: dateEl?.value || new Date().toISOString().slice(0, 10),
+    paidAt: dateEl?.value || Admin.todayIso(),
     note: String(note != null ? note : noteEl?.value || "").trim(),
   });
   if (noteEl) noteEl.value = "";
   const amountEl = document.getElementById("billing-pay-amount");
   if (amountEl) amountEl.value = "";
   renderPayments();
+  scheduleBillAutosave();
   return true;
 }
 
-async function saveBill() {
+async function saveBill(opts = {}) {
   if (!currentBill) return null;
   if (currentBill.status === "void") {
     throw new Error("This document has been voided.");
@@ -605,14 +706,37 @@ async function saveBill() {
     method: "PUT",
     body: JSON.stringify(collectBill()),
   });
-  fillForm(currentBill);
+  if (opts.refresh !== false) fillForm(currentBill);
   const msg =
-    currentBill.kind === "quote" && currentBill.status === "sent"
-      ? "Saved — send email again if the customer needs the update"
-      : "Saved";
+    opts.autosave
+      ? "Autosaved"
+      : currentBill.kind === "quote" && currentBill.status === "sent"
+        ? "Saved — send email again if the customer needs the update"
+        : "Saved";
   Admin.showBillingStatus(msg);
-  updateActionButtons();
+  if (opts.refresh !== false) updateActionButtons();
   return currentBill;
+}
+
+const billAutosave = Admin.createAutosave({
+  isReady: () =>
+    Boolean(
+      currentBill &&
+        billingEditView &&
+        !billingEditView.hidden &&
+        currentBill.status !== "void" &&
+        billingCustomerSelect?.value &&
+        billingVehicleSelect?.value
+    ),
+  save: () => saveBill({ autosave: true, refresh: false }),
+  onSaving: (msg) => {
+    if (msg) Admin.showBillingStatus(msg);
+  },
+  onError: (err) => Admin.showBillingStatus(err.message || "Save failed"),
+});
+
+function scheduleBillAutosave() {
+  billAutosave.schedule();
 }
 
 function updateActionButtons() {
@@ -646,18 +770,20 @@ function updateActionButtons() {
   }
 
   convertBtn.hidden = !(doc.kind === "quote" && doc.status === "accepted");
-  openInvBtn.hidden = !(doc.kind === "quote" && doc.status === "invoiced" && doc.invoiceId);
+  if (openInvBtn) openInvBtn.hidden = true;
   if (reviseBtn) reviseBtn.hidden = !quoteLocked;
   const jobBtn = document.getElementById("btn-billing-job");
   const canJob =
     (doc.kind === "quote" && (doc.status === "accepted" || doc.status === "invoiced")) ||
-    (doc.kind === "invoice" && doc.quoteId);
+    (doc.kind === "invoice" && Boolean(doc.acceptedAt));
   if (jobBtn) {
     jobBtn.hidden = !canJob;
     jobBtn.textContent = doc.jobId ? "Open job card" : "Create job card";
   }
   emailBtn.textContent = "Send email";
-  emailBtn.hidden = doc.status === "void" || doc.status === "invoiced";
+  emailBtn.hidden =
+    doc.status === "void" ||
+    (doc.kind === "quote" && (doc.status === "accepted" || doc.status === "invoiced"));
   emailBtn.classList.toggle("primary", !linesEditable || doc.status === "sent");
   emailBtn.classList.toggle("ghost", linesEditable && doc.status === "draft");
   voidBtn.hidden = doc.status === "void" || doc.status === "invoiced" || doc.status === "draft";
@@ -665,11 +791,22 @@ function updateActionButtons() {
   addLineBtn.hidden = !linesEditable;
 }
 
-async function showList() {
+async function showList(opts = {}) {
+  try {
+    await billAutosave.flush();
+  } catch {
+    /* still leave the editor */
+  }
+  billAutosave.cancel();
   currentBill = null;
+  if (opts.kind === "invoice" || opts.kind === "quote") listKind = opts.kind;
+  if (opts.filter) listFilter = opts.filter;
+  else if (opts.kind) listFilter = "all";
   billingEditView.hidden = true;
   billingListView.hidden = false;
-  Admin.setViewTitle("Quotes & invoices");
+  Admin.setSection(listKind === "invoice" ? "invoices" : "quotes");
+  updateListChrome();
+  Admin.setViewTitle(listKind === "invoice" ? "Invoices" : "Quotes");
   try {
     await loadBillingList();
   } catch (err) {
@@ -680,41 +817,25 @@ async function showList() {
 billingSearch?.addEventListener("input", renderBillingList);
 billingSearch?.addEventListener("search", renderBillingList);
 
-document.getElementById("billing-customer-name")?.addEventListener("input", () => {
+billingCustomerSelect?.addEventListener("change", () => {
   if (!canEditCustomer(currentBill)) return;
-  renderCustomerSuggest(matchCustomers(billingInput("customerName")?.value, "name"));
+  Admin.fillVehicleSelect(billingVehicleSelect, selectedBillingCustomer(), "");
+  syncBillingPartyFields();
+  scheduleBillAutosave();
 });
-
-document.getElementById("billing-customer-name")?.addEventListener("blur", () => {
-  const name = String(billingInput("customerName")?.value || "").trim().toLowerCase();
-  const exact = customerDirectory.filter(
-    (row) => String(row.customerName || "").trim().toLowerCase() === name
-  );
-  if (exact.length === 1 && canEditCustomer(currentBill)) {
-    applyCustomerToForm(exact[0]);
-    return;
-  }
-  setTimeout(() => {
-    if (customerSuggestEl && !customerSuggestEl.contains(document.activeElement)) {
-      hideCustomerSuggest();
-    }
-  }, 150);
-});
-
-document.getElementById("billing-registration")?.addEventListener("blur", () => {
+billingVehicleSelect?.addEventListener("change", () => {
   if (!canEditCustomer(currentBill)) return;
-  const matches = matchCustomers(billingInput("registration")?.value, "registration");
-  const plate = normalizeSearch(billingInput("registration")?.value);
-  const exact = matches.filter((row) => normalizeSearch(row.registration) === plate);
-  if (exact.length === 1) applyCustomerToForm(exact[0]);
+  syncBillingPartyFields();
+  scheduleBillAutosave();
 });
 
-document.getElementById("btn-billing-back").addEventListener("click", showList);
+document.getElementById("btn-billing-back").addEventListener("click", () => showList());
 
 document.getElementById("btn-add-line").addEventListener("click", () => {
   if (!canEditLines(currentBill)) return;
   lineRows.push(newLine());
   renderLines();
+  scheduleBillAutosave();
 });
 
 document.getElementById("btn-billing-save").addEventListener("click", async () => {
@@ -779,7 +900,7 @@ document.getElementById("btn-billing-convert").addEventListener("click", async (
       body: "{}",
     });
     await openDoc(invoice.id);
-    Admin.showBillingStatus("Invoice created");
+    Admin.showBillingStatus(`${invoice.number} is now the invoice`);
   } catch (err) {
     alert(err.message);
   }
@@ -792,6 +913,7 @@ document.getElementById("btn-billing-open-invoice").addEventListener("click", as
 document.getElementById("btn-billing-job")?.addEventListener("click", async () => {
   if (!currentBill) return;
   try {
+    await billAutosave.flush();
     if (currentBill.jobId) {
       Admin.setSection("jobs");
       await window.DeaneJobs.openJob(currentBill.jobId);
@@ -814,6 +936,7 @@ document.getElementById("btn-billing-void").addEventListener("click", async () =
   if (!currentBill || !confirm("Void this document? It will stay in the list but cannot be used.")) {
     return;
   }
+  billAutosave.cancel();
   try {
     currentBill = await Admin.api(`/api/billing/${currentBill.id}/void`, {
       method: "POST",
@@ -828,8 +951,10 @@ document.getElementById("btn-billing-void").addEventListener("click", async () =
 
 document.getElementById("btn-billing-delete").addEventListener("click", async () => {
   if (!currentBill || !confirm("Delete this draft permanently?")) return;
+  billAutosave.cancel();
   try {
     await Admin.api(`/api/billing/${currentBill.id}`, { method: "DELETE" });
+    currentBill = null;
     await showList();
   } catch (err) {
     alert(err.message);
@@ -858,6 +983,12 @@ document.getElementById("btn-add-balance")?.addEventListener("click", () => {
   }
   addPaymentRow(due, "Balance");
 });
+
+window.addEventListener("beforeunload", () => {
+  billAutosave.flush();
+});
+billingForm?.addEventListener("input", scheduleBillAutosave);
+billingForm?.addEventListener("change", scheduleBillAutosave);
 
 window.DeaneBilling = { showList, openDoc };
 })();

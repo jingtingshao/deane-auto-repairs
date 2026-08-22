@@ -212,7 +212,7 @@ function buildBillingPdf(doc) {
       };
       row("Subtotal excl. GST", money(totals.net));
       row("GST (15%)", money(totals.gst));
-      row("Total (plus GST)", money(totals.totalIncl), true);
+      row("Total incl. GST", money(totals.totalIncl), true);
 
       if (doc.notes) {
         pdf.moveDown(0.8);

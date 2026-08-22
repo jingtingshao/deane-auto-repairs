@@ -52,3 +52,11 @@ When the user says Render is live, quotes/reports work on a phone, or asks about
 - **Supabase** — database + photo storage
 
 This is a rewrite, not a hosting switch. Do not start it unless they ask. Do not push it during the current Render setup.
+
+## Backup reminder (end of build / go-live)
+Google Drive auto-backup was started 22 Aug 2026 (folder on bpauckland@gmail.com). When the user says the workshop system is **做好了**, finished, ready for real use, **正式上线**, or wrapping the current MVP: **remind once** to also keep an occasional **USB stick copy** as an offline third copy.
+
+Keep it brief:
+- Primary automated backup: Google Drive (service account).
+- USB is optional offline copy, not the only backup.
+- Do not nag during normal feature work.
