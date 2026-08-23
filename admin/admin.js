@@ -64,8 +64,8 @@ function setSection(name) {
   if (customersSection) customersSection.hidden = name !== "customers";
   if (jobsSection) jobsSection.hidden = name !== "jobs";
   if (btnNew) {
-    btnNew.hidden = name !== "reports" && name !== "customers";
-    btnNew.textContent = name === "customers" ? "New customer" : "New report";
+    btnNew.hidden = name !== "customers";
+    btnNew.textContent = "New customer";
   }
   document.getElementById("nav-dashboard")?.classList.toggle("is-active", name === "dashboard");
   document.getElementById("nav-reports")?.classList.toggle("is-active", name === "reports");
@@ -402,19 +402,7 @@ document.getElementById("btn-new").addEventListener("click", async () => {
     }
     return;
   }
-  try {
-    const report = await api("/api/reports", {
-      method: "POST",
-      body: JSON.stringify({
-        serviceDate: window.DeaneAdmin.todayIso(),
-        jobType: "standard_service",
-        servicePackage: "standard",
-      }),
-    });
-    await openReport(report.id);
-  } catch (err) {
-    alert(err.message);
-  }
+  alert("Create a report from an invoice. Open the invoice and click Create report.");
 });
 
 function normalizeSearch(value) {
@@ -429,13 +417,13 @@ function matchesReportSearch(report, query) {
   const name = String(report.customerName || "").toLowerCase();
   const plate = normalizeSearch(report.registration);
   const plateQuery = q.replace(/[\s-]/g, "");
-  return name.includes(q) || plate.includes(plateQuery);
+  return name.includes(q) || plate.includes(plateQuery) || String(report.jobNumber || "").toLowerCase().includes(q);
 }
 
 function renderReportList() {
   if (!reportDocs.length) {
     reportList.innerHTML =
-      '<div class="empty">No reports yet. Click <strong>New report</strong> to start.</div>';
+      '<div class="empty">No reports yet. Open an invoice and click <strong>Create report</strong>.</div>';
     return;
   }
 

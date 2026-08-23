@@ -51,7 +51,7 @@ function newLine(partial = {}) {
 function canEditLines(doc) {
   if (!doc || doc.status === "void") return false;
   if (doc.kind === "quote") return doc.status === "draft" || doc.status === "sent";
-  return doc.status === "draft";
+  return true;
 }
 
 function canEditCustomer(doc) {
@@ -853,10 +853,16 @@ function updateActionButtons() {
   const jobBtn = document.getElementById("btn-billing-job");
   const canJob =
     (doc.kind === "quote" && (doc.status === "accepted" || doc.status === "invoiced")) ||
-    (doc.kind === "invoice" && Boolean(doc.acceptedAt));
+    (doc.kind === "invoice" && doc.status !== "void");
   if (jobBtn) {
     jobBtn.hidden = !canJob;
     jobBtn.textContent = doc.jobId ? "Open job card" : "Create job card";
+  }
+  const reportBtn = document.getElementById("btn-billing-report");
+  if (reportBtn) {
+    const canReport = doc.kind === "invoice" && doc.status !== "void";
+    reportBtn.hidden = !canReport;
+    reportBtn.textContent = doc.reportId ? "Open report" : "Create report";
   }
   emailBtn.textContent = "Send email";
   emailBtn.hidden =
@@ -1006,6 +1012,28 @@ document.getElementById("btn-billing-job")?.addEventListener("click", async () =
     updateActionButtons();
     Admin.setSection("jobs");
     await window.DeaneJobs.openJob(job.id);
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+document.getElementById("btn-billing-report")?.addEventListener("click", async () => {
+  if (!currentBill || currentBill.kind !== "invoice") return;
+  try {
+    await billAutosave.flush();
+    if (currentBill.reportId && window.DeaneAdmin?.openReport) {
+      Admin.setSection("reports");
+      await window.DeaneAdmin.openReport(currentBill.reportId);
+      return;
+    }
+    const report = await Admin.api(`/api/reports/from-invoice/${currentBill.id}`, {
+      method: "POST",
+      body: "{}",
+    });
+    currentBill.reportId = report.id;
+    updateActionButtons();
+    Admin.setSection("reports");
+    await window.DeaneAdmin.openReport(report.id);
   } catch (err) {
     alert(err.message);
   }

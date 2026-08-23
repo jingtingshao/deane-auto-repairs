@@ -498,13 +498,15 @@ label.check input {
   vertical-align: middle;
 }
 
-.billing-table th {
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  background: #f8fafc;
-  font-weight: 800;
+.billing-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.billing-table th.sortable:hover,
+.billing-table th.sortable.is-sorted {
+  color: var(--ink);
 }
 
 .billing-table tbody tr.customer-row {

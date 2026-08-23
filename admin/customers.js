@@ -11,6 +11,8 @@ const customerDeleteBtn = document.getElementById("btn-customer-delete");
 let customerRows = [];
 let customerFilter = "all";
 let editingCustomerId = "";
+let customerSortKey = "daily";
+let customerSortDir = "asc";
 
 function wofLabel(row) {
   if (row.wofStatus === "overdue") {
@@ -84,6 +86,50 @@ function findContactMatches(body, vehicles) {
   return hits;
 }
 
+function rowPlateSortValue(row) {
+  const plates =
+    Array.isArray(row.registrations) && row.registrations.length
+      ? row.registrations
+      : String(row.registration || "").split(",");
+  return String(plates[0] || "")
+    .toUpperCase()
+    .replace(/[\s-]/g, "");
+}
+
+function sortCustomerRows(rows) {
+  const dir = customerSortDir === "desc" ? -1 : 1;
+  return [...rows].sort((a, b) => {
+    if (customerSortKey === "plate") {
+      return dir * rowPlateSortValue(a).localeCompare(rowPlateSortValue(b), "en");
+    }
+    if (customerSortKey === "firstName") {
+      return (
+        dir *
+        namesFromRow(a).firstName.localeCompare(namesFromRow(b).firstName, "en", {
+          sensitivity: "base",
+        })
+      );
+    }
+    if (customerSortKey === "lastName") {
+      return (
+        dir *
+        namesFromRow(a).lastName.localeCompare(namesFromRow(b).lastName, "en", {
+          sensitivity: "base",
+        })
+      );
+    }
+    const dateCmp = String(b.dailySeqDate || "").localeCompare(String(a.dailySeqDate || ""));
+    if (dateCmp) return dateCmp;
+    return dir * ((Number(a.dailySeq) || 0) - (Number(b.dailySeq) || 0));
+  });
+}
+
+function sortHeader(key, label) {
+  const active = customerSortKey === key;
+  const arrow = active ? (customerSortDir === "desc" ? " ↓" : " ↑") : "";
+  return `<th class="sortable${active ? " is-sorted" : ""}" data-sort="${Admin.escapeAttr(key)}">${Admin.escapeHtml(label)}${arrow}</th>`;
+}
+
 function matchesCustomerSearch(row, query) {
   const q = String(query || "").trim().toLowerCase();
   if (!q) return true;
@@ -126,10 +172,12 @@ function renderCustomers() {
   }
 
   const query = customersSearch?.value || "";
-  const rows = customerRows.filter((row) => {
-    if (customerFilter !== "all" && row.wofStatus !== customerFilter) return false;
-    return matchesCustomerSearch(row, query);
-  });
+  const rows = sortCustomerRows(
+    customerRows.filter((row) => {
+      if (customerFilter !== "all" && row.wofStatus !== customerFilter) return false;
+      return matchesCustomerSearch(row, query);
+    })
+  );
 
   if (!rows.length) {
     customersList.innerHTML = '<div class="empty">No matching customers.</div>';
@@ -137,15 +185,15 @@ function renderCustomers() {
   }
 
   customersList.innerHTML = `
-    <p class="muted small">${rows.length} customer${rows.length === 1 ? "" : "s"} · overdue first, then due soon</p>
+    <p class="muted small">${rows.length} customer${rows.length === 1 ? "" : "s"} · new customers number 1, 2, 3 each day (tomorrow starts at 1). Click Plate, First name or Last name to sort.</p>
     <div class="billing-table-wrap">
       <table class="billing-table">
         <thead>
           <tr>
-            <th class="customer-index">#</th>
-            <th>Plate</th>
-            <th>First name</th>
-            <th>Last name</th>
+            ${sortHeader("daily", "#")}
+            ${sortHeader("plate", "Plate")}
+            ${sortHeader("firstName", "First name")}
+            ${sortHeader("lastName", "Last name")}
             <th>Address</th>
             <th>Phone</th>
             <th>Email</th>
@@ -156,9 +204,9 @@ function renderCustomers() {
         <tbody>
           ${rows
             .map(
-              (row, index) => `
+              (row) => `
             <tr class="customer-row" data-key="${Admin.escapeAttr(row.key)}">
-              <td class="billing-number customer-index">${index + 1}</td>
+              <td class="billing-number customer-index">${Number(row.dailySeq) || "—"}</td>
               <td>${Admin.escapeHtml(
                 (Array.isArray(row.registrations) && row.registrations.length
                   ? row.registrations.join(", ")
@@ -207,6 +255,20 @@ function renderCustomers() {
         </tbody>
       </table>
     </div>`;
+
+  customersList.querySelectorAll("[data-sort]").forEach((th) => {
+    th.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const key = th.dataset.sort;
+      if (customerSortKey === key) {
+        customerSortDir = customerSortDir === "asc" ? "desc" : "asc";
+      } else {
+        customerSortKey = key;
+        customerSortDir = "asc";
+      }
+      renderCustomers();
+    });
+  });
 
   customersList.querySelectorAll("[data-invoices]").forEach((btn) => {
     btn.addEventListener("click", (event) => {

@@ -71,6 +71,7 @@ function resolvePersistentDataDir() {
 const DATA_DIR = resolvePersistentDataDir();
 const REPORTS_FILE = path.join(DATA_DIR, "reports.json");
 const BILLING_FILE = path.join(DATA_DIR, "billing.json");
+const BILLING_SEQ_FILE = path.join(DATA_DIR, "billing-seq.json");
 const CUSTOMERS_FILE = path.join(DATA_DIR, "customers.json");
 const JOBS_FILE = path.join(DATA_DIR, "jobs.json");
 const UPLOADS_DIR = (() => {
@@ -123,7 +124,15 @@ for (const file of [REPORTS_FILE, BILLING_FILE, CUSTOMERS_FILE, JOBS_FILE]) {
 }
 
 function readReports() {
-  return readJsonArray(REPORTS_FILE, "reports");
+  const reports = readJsonArray(REPORTS_FILE, "reports");
+  if (alignLinkedReportNumbers(reports)) {
+    try {
+      writeReports(reports);
+    } catch (err) {
+      console.error("Could not align report numbers:", err);
+    }
+  }
+  return reports;
 }
 
 function writeReports(reports) {
@@ -144,10 +153,19 @@ function readBilling() {
 
 function writeBilling(docs) {
   writeJsonArray(BILLING_FILE, docs);
+  bumpBillingHighWater(docs);
 }
 
 function readSavedCustomers() {
-  return readJsonArray(CUSTOMERS_FILE, "customers");
+  const rows = readJsonArray(CUSTOMERS_FILE, "customers");
+  if (ensureDailyCustomerNumbers(rows)) {
+    try {
+      writeSavedCustomers(rows);
+    } catch (err) {
+      console.error("Could not save daily customer numbers:", err);
+    }
+  }
+  return rows;
 }
 
 function readJobs() {
@@ -195,6 +213,58 @@ function jobNumberFromBilling(number) {
   const parts = billingNumberParts(number);
   if (!parts) return "";
   return `JC-${parts.year}-${String(parts.seq).padStart(4, "0")}`;
+}
+
+function reportNumberFromInvoice(number) {
+  return String(number || "").trim();
+}
+
+function jobTypeFromInvoice(invoice) {
+  const id = String(invoice?.preset || "");
+  if (id === "wof") return "wof";
+  if (id === "premium") return "premium_service";
+  if (id === "standard") return "standard_service";
+  return "repair";
+}
+
+function packageFromInvoice(invoice) {
+  return String(invoice?.preset || "") === "premium" ? "premium" : "standard";
+}
+
+function alignLinkedReportNumbers(reports) {
+  let docs;
+  try {
+    docs = readJsonArray(BILLING_FILE, "quotes and invoices");
+  } catch {
+    return false;
+  }
+  let changed = false;
+  for (const report of reports) {
+    const invoice =
+      (report.invoiceId &&
+        docs.find((d) => d.id === report.invoiceId && d.kind === "invoice")) ||
+      docs.find((d) => d.reportId === report.id && d.kind === "invoice") ||
+      null;
+    if (!invoice) continue;
+    const preferred = reportNumberFromInvoice(invoice.number);
+    if (report.invoiceId !== invoice.id) {
+      report.invoiceId = invoice.id;
+      changed = true;
+    }
+    if (report.invoiceNumber !== invoice.number) {
+      report.invoiceNumber = invoice.number;
+      changed = true;
+    }
+    if (
+      preferred &&
+      report.jobNumber !== preferred &&
+      !reports.some((row) => row.id !== report.id && row.jobNumber === preferred)
+    ) {
+      report.jobNumber = preferred;
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 function assignJobNumber(jobs, billingNumber) {
@@ -253,11 +323,8 @@ function billingSourceForJob(docs, id) {
   const doc = docs.find((d) => d.id === id);
   if (!doc) return { error: "Quote not found", status: 404 };
   if (doc.kind === "invoice") {
-    if (!doc.acceptedAt && doc.status !== "accepted") {
-      return {
-        error: "This invoice was not created from an accepted quote.",
-        status: 400,
-      };
+    if (doc.status === "void") {
+      return { error: "This invoice has been voided.", status: 400 };
     }
     return { quote: doc, invoice: doc, source: doc };
   }
@@ -446,6 +513,24 @@ function ensureJobFromAcceptedQuote(docs, quote, invoice) {
   return { job, created: true };
 }
 
+/** After an invoice is saved: extra lines (not WOF/Standard/Premium) go onto the job card. */
+function syncJobFromInvoiceExtras(docs, invoice) {
+  if (!invoice || invoice.kind !== "invoice" || invoice.status === "void") return null;
+  const extras = jobsLib.partsFromQuoteLines(invoice.lines || [], () => randomUUID());
+  if (!extras.length) return null;
+  const ensured = ensureJobFromAcceptedQuote(docs, invoice, invoice);
+  if (!ensured?.job) return null;
+  const jobs = readJobs();
+  const index = jobs.findIndex((j) => j.id === ensured.job.id);
+  if (index < 0) return ensured;
+  if (jobsLib.mergeNewParts(jobs[index], extras)) {
+    jobs[index].updatedAt = nowIso();
+    writeJobs(jobs);
+    ensured.job = jobs[index];
+  }
+  return ensured;
+}
+
 function unlinkJobFromBilling(jobId) {
   const docs = readBilling();
   let changed = false;
@@ -534,6 +619,57 @@ function applyJobFields(job, body = {}) {
 
 function writeSavedCustomers(rows) {
   writeJsonArray(CUSTOMERS_FILE, rows);
+}
+
+function nzCalendarDate(iso) {
+  const raw = String(iso || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw.slice(0, 10)) && raw.length <= 10) {
+    return raw.slice(0, 10);
+  }
+  const t = Date.parse(raw);
+  if (!Number.isFinite(t)) return raw.slice(0, 10);
+  return todayIso(new Date(t));
+}
+
+function nextDailyCustomerSeq(rows, day) {
+  let max = 0;
+  for (const row of rows || []) {
+    const d = String(row.dailySeqDate || "").slice(0, 10) || nzCalendarDate(row.createdAt);
+    if (d !== day) continue;
+    const n = Number(row.dailySeq) || 0;
+    if (n > max) max = n;
+  }
+  return max + 1;
+}
+
+function ensureDailyCustomerNumbers(rows) {
+  const byDay = new Map();
+  for (const row of rows || []) {
+    const day =
+      String(row.dailySeqDate || "").slice(0, 10) ||
+      nzCalendarDate(row.createdAt || row.updatedAt);
+    if (!day) continue;
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push(row);
+  }
+  let changed = false;
+  for (const [day, group] of byDay) {
+    let max = 0;
+    for (const row of group) {
+      const n = Number(row.dailySeq) || 0;
+      if (n > max) max = n;
+    }
+    const pending = group
+      .filter((row) => !(Number(row.dailySeq) > 0))
+      .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+    for (const row of pending) {
+      max += 1;
+      row.dailySeq = max;
+      row.dailySeqDate = day;
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 function normalizeVehicles(body = {}, current = {}) {
@@ -718,6 +854,9 @@ function mergeCustomer(map, incoming) {
     lastBillingId: "",
     customerAddress: "",
     customerId: "",
+    dailySeq: 0,
+    dailySeqDate: "",
+    createdAt: "",
   };
   const incomingVisit = incoming.lastVisit || "";
   const isNewerVisit = !cur.lastVisit || incomingVisit >= cur.lastVisit;
@@ -797,6 +936,9 @@ function mergeCustomer(map, incoming) {
     lastReportId: incoming.lastReportId || cur.lastReportId,
     lastBillingId: incoming.lastBillingId || cur.lastBillingId,
     customerId: incoming.customerId || cur.customerId,
+    dailySeq: incoming.dailySeq || cur.dailySeq || 0,
+    dailySeqDate: incoming.dailySeqDate || cur.dailySeqDate || "",
+    createdAt: incoming.createdAt || cur.createdAt || "",
   });
 }
 
@@ -828,6 +970,9 @@ function listCustomers() {
       lastReportId: "",
       lastBillingId: "",
       customerId: c.id,
+      dailySeq: c.dailySeq || 0,
+      dailySeqDate: c.dailySeqDate || "",
+      createdAt: c.createdAt || "",
     });
   }
 
@@ -951,14 +1096,55 @@ function repairLegacyConvertedBilling(docs) {
   return changed;
 }
 
+function readBillingSeqMap() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(BILLING_SEQ_FILE, "utf8"));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+  } catch {
+    /* first run or unreadable file */
+  }
+  return {};
+}
+
+function writeBillingSeqMap(map) {
+  fs.mkdirSync(path.dirname(BILLING_SEQ_FILE), { recursive: true });
+  fs.writeFileSync(BILLING_SEQ_FILE, `${JSON.stringify(map, null, 2)}\n`);
+}
+
+function bumpBillingHighWater(docs) {
+  const map = readBillingSeqMap();
+  let changed = false;
+  for (const doc of docs || []) {
+    const parts = billingNumberParts(doc.number);
+    if (!parts) continue;
+    const prev = Number(map[parts.year]) || 0;
+    if (parts.seq > prev) {
+      map[parts.year] = parts.seq;
+      changed = true;
+    }
+  }
+  if (changed || !fs.existsSync(BILLING_SEQ_FILE)) {
+    try {
+      writeBillingSeqMap(map);
+    } catch (err) {
+      console.error("Could not save billing sequence:", err);
+    }
+  }
+  return map;
+}
+
 function nextBillingNumber(docs, kind) {
   const year = todayIso().slice(0, 4);
-  let max = 0;
-  for (const doc of docs) {
-    const parts = billingNumberParts(doc.number);
-    if (parts && parts.year === year && parts.seq > max) max = parts.seq;
+  const map = bumpBillingHighWater(docs);
+  const max = Number(map[year]) || 0;
+  const seq = max + 1;
+  map[year] = seq;
+  try {
+    writeBillingSeqMap(map);
+  } catch (err) {
+    console.error("Could not reserve billing number:", err);
   }
-  return formatBillingNumber(kind === "invoice" ? "invoice" : "quote", year, max + 1);
+  return formatBillingNumber(kind === "invoice" ? "invoice" : "quote", year, seq);
 }
 
 function requireCustomerSnapshot(body) {
@@ -1516,6 +1702,7 @@ app.get("/api/reports", requireAdmin, (_req, res) => {
     .map((r) => ({
       id: r.id,
       jobNumber: r.jobNumber,
+      invoiceNumber: r.invoiceNumber || "",
       status: r.status,
       serviceDate: r.serviceDate,
       customerName: r.customerName,
@@ -1561,9 +1748,12 @@ app.post("/api/customers", requireAdmin, (req, res) => {
       writeSavedCustomers(rows);
       return res.json(existing);
     }
+    const day = todayIso();
     const row = {
       id: randomUUID(),
       ...fields,
+      dailySeq: nextDailyCustomerSeq(rows, day),
+      dailySeqDate: day,
       createdAt: now,
       updatedAt: now,
     };
@@ -1594,6 +1784,8 @@ app.put("/api/customers/:id", requireAdmin, (req, res) => {
       ...fields,
       id: rows[index].id,
       createdAt: rows[index].createdAt,
+      dailySeq: rows[index].dailySeq,
+      dailySeqDate: rows[index].dailySeqDate,
       updatedAt: nowIso(),
     };
     writeSavedCustomers(rows);
@@ -1658,57 +1850,23 @@ app.get("/api/reports/:id", (req, res) => {
   res.json(report);
 });
 
-app.post("/api/reports", requireAdmin, (req, res) => {
-  const reports = readReports();
-  const now = nowIso();
-  const servicePackage = normalizePackage(req.body.servicePackage);
-  let jobType = req.body.jobType || "standard_service";
-  if (jobType === "full_service") jobType = "premium_service";
-  if (jobType === "full_wof") jobType = "premium_wof";
+app.post("/api/reports", requireAdmin, (_req, res) => {
+  res.status(400).json({
+    error: "Create a report from an invoice. Direct reports are not used.",
+  });
+});
 
-  const report = {
-    id: randomUUID(),
-    jobNumber: nextJobNumber(reports),
-    status: "draft",
-    createdAt: now,
-    updatedAt: now,
-    serviceDate: req.body.serviceDate || now.slice(0, 10),
-    technicianName: req.body.technicianName || "",
-    customerId: "",
-    vehicleId: "",
-    customerName: "",
-    customerEmail: "",
-    customerPhone: "",
-    registration: "",
-    vehicle: "",
-    odometer: req.body.odometer || "",
-    vin: req.body.vin || "",
-    jobType,
-    servicePackage,
-    customerConcern: req.body.customerConcern || "",
-    checks: emptyChecks(servicePackage),
-    actionsDone: {},
-    actionsOther: "",
-    oilSpec: "",
-    oilFilter: "",
-    wof: {
-      performed: jobType.includes("wof"),
-      result: "not_completed",
-      expiry: "",
-      reference: "",
-      failNotes: "",
-      repairsForPass: "",
-      recheckRequired: false,
-    },
-    summary: "",
-    nextServiceDue: "",
-    technicianComments: "",
-    vehiclePhoto: "",
-  };
-
-  reports.push(report);
-  writeReports(reports);
-  res.status(201).json(report);
+app.post("/api/reports/from-invoice/:id", requireAdmin, (req, res) => {
+  try {
+    const docs = readBilling();
+    const invoice = docs.find((d) => d.id === req.params.id);
+    if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+    const ensured = ensureReportFromInvoice(docs, invoice);
+    if (ensured.created) writeBilling(docs);
+    res.status(ensured.created ? 201 : 200).json(ensured.report);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
 });
 
 app.put("/api/reports/:id", requireAdmin, (req, res) => {
@@ -1745,6 +1903,8 @@ app.put("/api/reports/:id", requireAdmin, (req, res) => {
     ...snapshot,
     id: current.id,
     jobNumber: current.jobNumber,
+    invoiceId: current.invoiceId || "",
+    invoiceNumber: current.invoiceNumber || "",
     createdAt: current.createdAt,
     servicePackage: nextPackage,
     checks,
@@ -2184,6 +2344,7 @@ app.get("/api/billing", requireAdmin, (_req, res) => {
         invoiceId: d.invoiceId || "",
         quoteId: d.quoteId || "",
         jobId: d.jobId || "",
+        reportId: d.reportId || "",
         paymentStatus: payment?.paymentStatus || "",
         amountPaid: payment?.amountPaid ?? null,
         balanceDue: payment?.balanceDue ?? null,
@@ -2246,6 +2407,13 @@ app.post("/api/billing", requireAdmin, (req, res) => {
   });
 
   docs.push(doc);
+  if (doc.kind === "invoice") {
+    try {
+      syncJobFromInvoiceExtras(docs, doc);
+    } catch (err) {
+      console.error("Could not add invoice extras to job card:", err);
+    }
+  }
   writeBilling(docs);
   res.status(201).json(withBillingTotals(doc, true));
 });
@@ -2311,9 +2479,13 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
     return res.status(err.status || 400).json({ error: err.message });
   }
   const locked = isLockedBilling(current);
-  const nextLines = locked
-    ? current.lines
-    : normalizeLines(body.lines != null ? body.lines : current.lines);
+  const incomingLines = body.lines != null ? body.lines : body.lines;
+  const nextLines =
+    current.kind === "invoice" && current.status !== "void"
+      ? normalizeLines(incomingLines != null ? incomingLines : current.lines)
+      : locked
+        ? current.lines
+        : normalizeLines(incomingLines != null ? incomingLines : current.lines);
 
   const next = {
     ...current,
@@ -2384,6 +2556,14 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
   }
 
   docs[index] = next;
+
+  if (next.kind === "invoice") {
+    try {
+      syncJobFromInvoiceExtras(docs, next);
+    } catch (err) {
+      console.error("Could not add invoice extras to job card:", err);
+    }
+  }
 
   writeBilling(docs);
   res.json(withBillingTotals(docs[index], true));
@@ -2646,7 +2826,130 @@ function convertQuoteToInvoice(docs, quote) {
       writeJobs(jobs);
     }
   }
+  try {
+    syncJobFromInvoiceExtras(docs, quote);
+  } catch (err) {
+    console.error("Could not add invoice extras to job card:", err);
+  }
   return quote;
+}
+
+function emptyReportRecord(now, extra = {}) {
+  const servicePackage = extra.servicePackage || "standard";
+  let jobType = extra.jobType || "standard_service";
+  if (jobType === "full_service") jobType = "premium_service";
+  if (jobType === "full_wof") jobType = "premium_wof";
+  return {
+    id: extra.id || randomUUID(),
+    jobNumber: extra.jobNumber || "",
+    status: "draft",
+    createdAt: now,
+    updatedAt: now,
+    serviceDate: extra.serviceDate || now.slice(0, 10),
+    technicianName: extra.technicianName || "",
+    customerId: extra.customerId || "",
+    vehicleId: extra.vehicleId || "",
+    customerName: extra.customerName || "",
+    customerEmail: extra.customerEmail || "",
+    customerPhone: extra.customerPhone || "",
+    registration: extra.registration || "",
+    vehicle: extra.vehicle || "",
+    odometer: extra.odometer || "",
+    vin: extra.vin || "",
+    jobType,
+    servicePackage,
+    customerConcern: extra.customerConcern || "",
+    invoiceId: extra.invoiceId || "",
+    invoiceNumber: extra.invoiceNumber || "",
+    checks: extra.checks || emptyChecks(servicePackage),
+    actionsDone: extra.actionsDone || {},
+    actionsOther: extra.actionsOther || "",
+    oilSpec: extra.oilSpec || "",
+    oilFilter: extra.oilFilter || "",
+    wof: extra.wof || {
+      performed: jobType.includes("wof"),
+      result: "not_completed",
+      expiry: "",
+      reference: "",
+      failNotes: "",
+      repairsForPass: "",
+      recheckRequired: false,
+    },
+    summary: extra.summary || "",
+    nextServiceDue: extra.nextServiceDue || "",
+    technicianComments: extra.technicianComments || "",
+    vehiclePhoto: extra.vehiclePhoto || "",
+  };
+}
+
+function ensureReportFromInvoice(docs, invoice) {
+  if (!invoice || invoice.kind !== "invoice") {
+    const err = new Error("Create the invoice first.");
+    err.status = 400;
+    throw err;
+  }
+  if (invoice.status === "void") {
+    const err = new Error("This invoice has been voided.");
+    err.status = 400;
+    throw err;
+  }
+  if (!invoice.number) {
+    const err = new Error("This invoice has no number yet.");
+    err.status = 400;
+    throw err;
+  }
+
+  const reports = readReports();
+  let existing =
+    (invoice.reportId && reports.find((r) => r.id === invoice.reportId)) ||
+    reports.find((r) => r.invoiceId === invoice.id) ||
+    reports.find((r) => r.jobNumber === invoice.number) ||
+    null;
+  if (existing) {
+    existing.invoiceId = invoice.id;
+    existing.invoiceNumber = invoice.number;
+    if (existing.jobNumber !== invoice.number) {
+      const taken = reports.some(
+        (r) => r.id !== existing.id && r.jobNumber === invoice.number
+      );
+      if (!taken) existing.jobNumber = invoice.number;
+    }
+    invoice.reportId = existing.id;
+    existing.updatedAt = nowIso();
+    writeReports(reports);
+    return { report: existing, created: false };
+  }
+
+  let snapshot = {
+    customerId: invoice.customerId || "",
+    vehicleId: invoice.vehicleId || "",
+    customerName: invoice.customerName || "",
+    customerEmail: invoice.customerEmail || "",
+    customerPhone: invoice.customerPhone || "",
+    registration: invoice.registration || "",
+    vehicle: invoice.vehicle || "",
+  };
+  try {
+    snapshot = { ...snapshot, ...requireCustomerSnapshot(invoice) };
+  } catch {
+    /* keep invoice fields */
+  }
+
+  const now = nowIso();
+  const report = emptyReportRecord(now, {
+    jobNumber: invoice.number,
+    ...snapshot,
+    jobType: jobTypeFromInvoice(invoice),
+    servicePackage: packageFromInvoice(invoice),
+    customerConcern: invoice.notes || "",
+    invoiceId: invoice.id,
+    invoiceNumber: invoice.number,
+  });
+  invoice.reportId = report.id;
+  invoice.updatedAt = now;
+  reports.push(report);
+  writeReports(reports);
+  return { report, created: true };
 }
 
 async function notifyWorkshopQuoteAccepted(quote, invoice, job, req) {
@@ -2939,8 +3242,16 @@ app.post("/api/jobs/from-quote/:id", requireAdmin, (req, res) => {
     if (!ensured?.job) {
       return res.status(400).json({ error: "Could not create job card." });
     }
+    if (invoice) {
+      try {
+        syncJobFromInvoiceExtras(docs, invoice);
+      } catch (err) {
+        console.error("Could not sync invoice parts onto job card:", err);
+      }
+    }
     if (ensured.created) writeBilling(docs);
-    res.status(ensured.created ? 201 : 200).json(ensured.job);
+    const job = readJobs().find((j) => j.id === ensured.job.id) || ensured.job;
+    res.status(ensured.created ? 201 : 200).json(job);
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
   }
@@ -2960,6 +3271,15 @@ app.get("/api/jobs/:id", requireAdmin, (req, res) => {
     if (applyCustomerFieldsToJob(job, fields, true)) {
       jobs[index] = job;
       writeJobs(jobs);
+    }
+    if (invoice && invoice.kind === "invoice") {
+      try {
+        syncJobFromInvoiceExtras(docs, invoice);
+        const latest = readJobs().find((j) => j.id === job.id);
+        if (latest) return res.json(latest);
+      } catch (err) {
+        console.error("Could not sync invoice parts onto job card:", err);
+      }
     }
   }
   res.json(job);

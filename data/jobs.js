@@ -34,11 +34,10 @@ function isServiceOrLabourLine(description) {
     .toLowerCase();
   if (!d) return true;
   return (
+    /^wof\b/.test(d) ||
     /wof inspection/.test(d) ||
     /standard service/.test(d) ||
-    /premium service/.test(d) ||
-    /workshop labour/.test(d) ||
-    /diagnostic labour/.test(d)
+    /premium service/.test(d)
   );
 }
 
@@ -62,13 +61,17 @@ function normalizeParts(parts, newId) {
     .filter((part) => part.description || part.supplier || part.note);
 }
 
+function lineDescription(line) {
+  return String(line?.description || line?.name || "").trim();
+}
+
 function partsFromQuoteLines(lines, newId) {
   return (lines || [])
-    .filter((line) => line?.description && !isServiceOrLabourLine(line.description))
+    .filter((line) => lineDescription(line) && !isServiceOrLabourLine(lineDescription(line)))
     .map((line) =>
       normalizePart(
         {
-          description: line.description,
+          description: lineDescription(line),
           qty: line.qty,
           ordered: false,
           received: false,
@@ -78,6 +81,35 @@ function partsFromQuoteLines(lines, newId) {
         newId ? newId() : ""
       )
     );
+}
+
+function mergeNewParts(job, incoming) {
+  if (!job) return false;
+  const extra = (incoming || []).filter((p) => String(p.description || "").trim());
+  if (!extra.length) return false;
+  const parts = Array.isArray(job.parts) ? [...job.parts] : [];
+  let changed = false;
+  for (const part of extra) {
+    const key = String(part.description || "").trim().toLowerCase();
+    if (!key) continue;
+    const existing = parts.find(
+      (p) => String(p.description || "").trim().toLowerCase() === key
+    );
+    if (existing) {
+      const qty = Math.max(0, Number(part.qty) || 0) || existing.qty;
+      if (Number(existing.qty) !== Number(qty)) {
+        existing.qty = qty;
+        changed = true;
+      }
+      continue;
+    }
+    parts.push(part);
+    changed = true;
+  }
+  if (!changed) return false;
+  job.parts = parts;
+  job.status = normalizeJobStatus(job.status, job.parts);
+  return true;
 }
 
 function workRequestedFromQuote(quote) {
@@ -116,14 +148,25 @@ function suggestStatusFromParts(currentStatus, parts) {
 
 module.exports = {
   JOB_STATUSES,
+  JOB_STATUSES: JOB_STATUSES,
   isJobStatus,
+  isJobStatus: isJobStatus,
   statusLabel,
+  statusLabel: statusLabel,
   normalizeJobStatus,
   isServiceOrLabourLine,
+  isServiceOrLabourLine: isServiceOrLabourLine,
   normalizePart,
   normalizeParts,
+  normalizeParts: normalizeParts,
   partsFromQuoteLines,
+  partsFromQuoteLines: partsFromQuoteLines,
+  partsFromQuoteLines: partsFromQuoteLines,
+  mergeNewParts,
   workRequestedFromQuote,
+  workRequestedFromQuote: workRequestedFromQuote,
   partsSummary,
+  partsSummary: partsSummary,
   suggestStatusFromParts,
+  suggestStatusFromParts: suggestStatusFromParts,
 };
