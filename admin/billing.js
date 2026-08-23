@@ -19,6 +19,7 @@ let billingDocs = [];
 let customerDirectory = [];
 let listKind = "quote";
 let listFilter = "all";
+let partyFilter = { customerId: "", customerName: "", customerEmail: "" };
 const billingSearch = document.getElementById("billing-search");
 const billingFilterEl = document.getElementById("billing-filter");
 const quotePresetPanel = document.getElementById("quote-preset-panel");
@@ -176,6 +177,65 @@ function invoiceFilters() {
   ];
 }
 
+function matchesPartyFilter(d) {
+  const id = String(partyFilter.customerId || "").trim();
+  const name = String(partyFilter.customerName || "").trim().toLowerCase();
+  const email = String(partyFilter.customerEmail || "").trim().toLowerCase();
+  if (!id && !name && !email) return true;
+  if (id && String(d.customerId || "") === id) return true;
+  const docEmail = String(d.customerEmail || "").trim().toLowerCase();
+  const docName = String(d.customerName || "").trim().toLowerCase();
+  if (email && docEmail && email === docEmail) return true;
+  if (name && docName && name === docName) return true;
+  return false;
+}
+
+function partyFilterActive() {
+  return Boolean(partyFilter.customerId || partyFilter.customerName || partyFilter.customerEmail);
+}
+
+function applyPartyOpts(opts) {
+  if (opts.customerId != null || opts.customerName != null || opts.customerEmail != null) {
+    partyFilter = {
+      customerId: opts.customerId || "",
+      customerName: opts.customerName || "",
+      customerEmail: opts.customerEmail || "",
+    };
+    return;
+  }
+  if (opts.kind || opts.resetParty) {
+    partyFilter = { customerId: "", customerName: "", customerEmail: "" };
+  }
+}
+
+function listTitle() {
+  const base = listKind === "invoice" ? "Invoices" : "Quotes";
+  if (!partyFilterActive()) return base;
+  const name = partyFilter.customerName || "customer";
+  return `${base} · ${name}`;
+}
+
+function renderPartyChip() {
+  const el = document.getElementById("billing-party-chip");
+  if (!el) return;
+  if (!partyFilterActive()) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  const who = partyFilter.customerName || "this customer";
+  const kind = listKind === "invoice" ? "invoices" : "quotes";
+  el.hidden = false;
+  el.innerHTML = `Showing ${kind} for <strong></strong> <button type="button" class="ghost" id="btn-clear-party">Show all</button>`;
+  el.querySelector("strong").textContent = who;
+  el.querySelector("#btn-clear-party")?.addEventListener("click", () => {
+    partyFilter = { customerId: "", customerName: "", customerEmail: "" };
+    Admin.setViewTitle(listTitle());
+    renderPartyChip();
+    renderBillingList();
+  });
+}
+
 function matchesListFilter(d) {
   if (d.kind !== listKind) return false;
   if (listKind === "quote") {
@@ -205,6 +265,7 @@ function updateListChrome() {
   const back = document.getElementById("btn-billing-back");
   if (back) back.textContent = isInvoice ? "← All invoices" : "← All quotes";
   renderBillingFilters();
+  renderPartyChip();
 }
 
 function renderBillingFilters() {
@@ -227,10 +288,15 @@ function renderBillingFilters() {
 }
 
 function renderBillingList() {
-  const kindDocs = billingDocs.filter((d) => matchesListFilter(d));
-  if (!billingDocs.filter((d) => d.kind === listKind && d.status !== "void").length) {
-    billingList.innerHTML =
-      listKind === "invoice"
+  const kindDocs = billingDocs.filter((d) => matchesListFilter(d) && matchesPartyFilter(d));
+  if (
+    !billingDocs.filter(
+      (d) => d.kind === listKind && d.status !== "void" && matchesPartyFilter(d)
+    ).length
+  ) {
+    billingList.innerHTML = partyFilterActive()
+      ? `<div class="empty">No ${listKind === "invoice" ? "invoices" : "quotes"} for ${Admin.escapeHtml(partyFilter.customerName || "this customer")}.</div>`
+      : listKind === "invoice"
         ? '<div class="empty">No invoices yet. Convert an accepted quote, or use Invoice now above.</div>'
         : '<div class="empty">No quotes yet. Use the buttons above to start.</div>';
     return;
@@ -272,7 +338,7 @@ function renderBillingList() {
       <article class="report-card billing-card" data-id="${d.id}">
         <div class="billing-number">${Admin.escapeHtml(d.number)}</div>
         <div>
-          <h2>${Admin.escapeHtml(d.customerName || "Customer")}</h2>
+          <h2><button type="button" class="customer-name-link" data-party-id="${Admin.escapeAttr(d.customerId || "")}" data-party-name="${Admin.escapeAttr(d.customerName || "")}" data-party-email="${Admin.escapeAttr(d.customerEmail || "")}">${Admin.escapeHtml(d.customerName || "Customer")}</button></h2>
           <p class="muted">${when ? `${Admin.escapeHtml(when)} · ` : ""}${Admin.escapeHtml(d.registration || "No plate")} · ${Admin.escapeHtml(kindLabel(d.kind))} · ${Admin.escapeHtml(d.vehicle || "")} · ${money(d.totalIncl)}${payHint}</p>
         </div>
         <div class="job-card-meta">
@@ -285,6 +351,18 @@ function renderBillingList() {
     .join("");
   billingList.querySelectorAll(".report-card").forEach((card) => {
     card.addEventListener("click", () => openDoc(card.dataset.id));
+  });
+  billingList.querySelectorAll(".customer-name-link").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      showList({
+        kind: "invoice",
+        filter: "all",
+        customerId: btn.dataset.partyId || "",
+        customerName: btn.dataset.partyName || "",
+        customerEmail: btn.dataset.partyEmail || "",
+      });
+    });
   });
 }
 
@@ -802,11 +880,12 @@ async function showList(opts = {}) {
   if (opts.kind === "invoice" || opts.kind === "quote") listKind = opts.kind;
   if (opts.filter) listFilter = opts.filter;
   else if (opts.kind) listFilter = "all";
+  applyPartyOpts(opts);
   billingEditView.hidden = true;
   billingListView.hidden = false;
   Admin.setSection(listKind === "invoice" ? "invoices" : "quotes");
   updateListChrome();
-  Admin.setViewTitle(listKind === "invoice" ? "Invoices" : "Quotes");
+  Admin.setViewTitle(listTitle());
   try {
     await loadBillingList();
   } catch (err) {

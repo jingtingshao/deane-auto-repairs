@@ -225,7 +225,10 @@ window.DeaneAdmin = {
           .map((v) => v.registration)
           .filter(Boolean)
           .join(", ");
-        const label = [row.customerName, plates].filter(Boolean).join(" · ");
+        const labelName =
+          [row.firstName, row.lastName].filter(Boolean).join(" ") ||
+          row.customerName;
+        const label = [labelName, plates].filter(Boolean).join(" · ");
         const sel = row.customerId === current ? " selected" : "";
         return `<option value="${escapeAttr(row.customerId)}"${sel}>${escapeHtml(
           label || "Customer"
@@ -261,7 +264,7 @@ window.DeaneAdmin = {
       if (el) el.value = String(value || "");
     };
     set("customerId", row.customerId || row.id || "");
-    set("customerName", row.customerName);
+    set("customerName", [row.firstName, row.lastName].filter(Boolean).join(" ") || row.customerName);
     set("customerEmail", row.customerEmail);
     set("customerPhone", row.customerPhone);
     if (vehicle) {
@@ -394,7 +397,7 @@ document.getElementById("btn-new").addEventListener("click", async () => {
       if (form) {
         form.hidden = false;
         form.removeAttribute("hidden");
-        document.getElementById("customer-name")?.focus();
+        document.getElementById("customer-first-name")?.focus();
       }
     }
     return;

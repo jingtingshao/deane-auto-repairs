@@ -23,10 +23,73 @@ function wofLabel(row) {
   return "No date";
 }
 
+function displayName(row) {
+  const joined = [row.firstName, row.lastName].filter(Boolean).join(" ").trim();
+  return joined || String(row.customerName || "").trim();
+}
+
+function namesFromRow(row) {
+  const first = String(row?.firstName || "").trim();
+  const last = String(row?.lastName || "").trim();
+  if (first || last) return { firstName: first, lastName: last };
+  const parts = String(row?.customerName || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  return {
+    firstName: parts[0] || "",
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
+function plateKey(value) {
+  return String(value || "")
+    .toUpperCase()
+    .replace(/[\s-]/g, "");
+}
+
+function phoneKey(value) {
+  return String(value || "").replace(/[\s()+-]/g, "");
+}
+
+function rowPlates(row) {
+  const fromVehicles = Admin.customerVehicles(row)
+    .map((v) => plateKey(v.registration))
+    .filter(Boolean);
+  if (fromVehicles.length) return fromVehicles;
+  return String(row.registration || "")
+    .split(",")
+    .map((p) => plateKey(p))
+    .filter(Boolean);
+}
+
+function findContactMatches(body, vehicles) {
+  const email = String(body.customerEmail || "").trim().toLowerCase();
+  const phone = phoneKey(body.customerPhone);
+  const plates = new Set(vehicles.map((v) => plateKey(v.registration)).filter(Boolean));
+  const hits = [];
+  for (const row of customerRows) {
+    if (editingCustomerId && row.customerId === editingCustomerId) continue;
+    const reasons = [];
+    if (phone && phoneKey(row.customerPhone) === phone) reasons.push("phone");
+    if (email && String(row.customerEmail || "").trim().toLowerCase() === email) {
+      reasons.push("email");
+    }
+    const overlap = rowPlates(row).filter((p) => plates.has(p));
+    if (overlap.length) reasons.push(`plate ${overlap.join(", ")}`);
+    if (reasons.length) {
+      hits.push({ name: displayName(row) || "Customer", reasons });
+    }
+  }
+  return hits;
+}
+
 function matchesCustomerSearch(row, query) {
   const q = String(query || "").trim().toLowerCase();
   if (!q) return true;
-  const name = String(row.customerName || "").toLowerCase();
+  const name = displayName(row).toLowerCase();
+  const first = String(row.firstName || "").toLowerCase();
+  const last = String(row.lastName || "").toLowerCase();
   const address = String(row.customerAddress || "").toLowerCase();
   const email = String(row.customerEmail || "").toLowerCase();
   const phone = String(row.customerPhone || "").toLowerCase().replace(/\s+/g, "");
@@ -45,6 +108,8 @@ function matchesCustomerSearch(row, query) {
   const phoneQuery = q.replace(/\s+/g, "");
   return (
     name.includes(q) ||
+    first.includes(q) ||
+    last.includes(q) ||
     address.includes(q) ||
     email.includes(q) ||
     phone.includes(phoneQuery) ||
@@ -79,7 +144,8 @@ function renderCustomers() {
           <tr>
             <th class="customer-index">#</th>
             <th>Plate</th>
-            <th>Name</th>
+            <th>First name</th>
+            <th>Last name</th>
             <th>Address</th>
             <th>Phone</th>
             <th>Email</th>
@@ -98,7 +164,8 @@ function renderCustomers() {
                   ? row.registrations.join(", ")
                   : row.registration) || "—"
               )}</td>
-              <td>${Admin.escapeHtml(row.customerName || "—")}</td>
+              <td><button type="button" class="customer-name-link" data-invoices="1">${Admin.escapeHtml(namesFromRow(row).firstName || "—")}</button></td>
+              <td><button type="button" class="customer-name-link" data-invoices="1">${Admin.escapeHtml(namesFromRow(row).lastName || "—")}</button></td>
               <td>${Admin.escapeHtml(row.customerAddress || "—")}</td>
               <td>
                 ${
@@ -141,6 +208,14 @@ function renderCustomers() {
       </table>
     </div>`;
 
+  customersList.querySelectorAll("[data-invoices]").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const found = customerRows.find((r) => r.key === btn.closest("tr")?.dataset.key);
+      if (found) openCustomerInvoices(found);
+    });
+  });
+
   customersList.querySelectorAll("tr.customer-row").forEach((row) => {
     row.addEventListener("click", () => {
       const found = customerRows.find((r) => r.key === row.dataset.key);
@@ -181,6 +256,17 @@ function renderCustomers() {
   });
 }
 
+function openCustomerInvoices(row) {
+  if (!row) return;
+  window.DeaneBilling?.showList({
+    kind: "invoice",
+    filter: "all",
+    customerId: row.customerId || "",
+    customerName: displayName(row),
+    customerEmail: row.customerEmail || "",
+  });
+}
+
 async function deleteCustomerById(id, btn) {
   if (!id || !confirm("Delete this customer? Only customers with no reports or invoices can be deleted.")) {
     return;
@@ -218,11 +304,14 @@ function showCustomerForm(row = null) {
   form.hidden = false;
   const legend = document.getElementById("customer-form-legend");
   if (legend) legend.textContent = editingCustomerId ? "Edit customer" : "New customer";
-  const name = document.getElementById("customer-name");
+  const names = namesFromRow(row);
+  const first = document.getElementById("customer-first-name");
+  const last = document.getElementById("customer-last-name");
   const address = document.getElementById("customer-address");
   const phone = document.getElementById("customer-phone");
   const email = document.getElementById("customer-email");
-  if (name) name.value = row?.customerName || "";
+  if (first) first.value = names.firstName;
+  if (last) last.value = names.lastName;
   if (address) address.value = row?.customerAddress || "";
   if (phone) phone.value = row?.customerPhone || "";
   if (email) email.value = row?.customerEmail || "";
@@ -236,8 +325,13 @@ function showCustomerForm(row = null) {
   if (customerDeleteBtn) {
     customerDeleteBtn.hidden = !(editingCustomerId && row?.canDelete);
   }
+  const invoicesBtn = document.getElementById("btn-customer-invoices");
+  if (invoicesBtn) {
+    invoicesBtn.hidden = !row;
+    invoicesBtn.onclick = () => openCustomerInvoices(row);
+  }
   form.scrollIntoView({ block: "start", behavior: "smooth" });
-  if (name) name.focus();
+  if (first) first.focus();
 }
 
 function renderVehicleRows(vehicles) {
@@ -295,21 +389,47 @@ async function saveCustomer(event) {
   const status = document.getElementById("customer-save-status");
   const vehicles = collectVehiclesFromForm().filter((v) => v.registration);
   const body = {
-    customerName: (document.getElementById("customer-name")?.value || "").trim(),
+    firstName: (document.getElementById("customer-first-name")?.value || "").trim(),
+    lastName: (document.getElementById("customer-last-name")?.value || "").trim(),
     customerAddress: (document.getElementById("customer-address")?.value || "").trim(),
     customerPhone: (document.getElementById("customer-phone")?.value || "").trim(),
     customerEmail: (document.getElementById("customer-email")?.value || "").trim(),
     vehicles,
   };
-  if (!body.customerName) {
-    alert("Enter the customer name.");
-    document.getElementById("customer-name")?.focus();
+  if (!body.firstName) {
+    alert("Enter the first name.");
+    document.getElementById("customer-first-name")?.focus();
+    return;
+  }
+  if (!body.lastName) {
+    alert("Enter the last name.");
+    document.getElementById("customer-last-name")?.focus();
+    return;
+  }
+  const fullName = `${body.firstName} ${body.lastName}`.replace(/\s+/g, " ").trim();
+  const nameKey = fullName.toLowerCase();
+  const duplicate = customerRows.find((row) => {
+    if (editingCustomerId && row.customerId === editingCustomerId) return false;
+    return displayName(row).toLowerCase().replace(/\s+/g, " ") === nameKey;
+  });
+  if (duplicate) {
+    alert(`A customer named ${fullName} already exists. Open that record instead.`);
     return;
   }
   if (!vehicles.length) {
     alert("Enter at least one registration / plate.");
     document.querySelector(".vehicle-rego")?.focus();
     return;
+  }
+  const matches = findContactMatches(body, vehicles);
+  if (matches.length) {
+    const detail = matches
+      .map((hit) => `${hit.name} (${hit.reasons.join(", ")})`)
+      .join("\n");
+    const ok = confirm(
+      `This customer may already exist:\n\n${detail}\n\nSave anyway?`
+    );
+    if (!ok) return;
   }
   if (status) {
     status.hidden = false;
@@ -340,7 +460,7 @@ async function saveCustomer(event) {
       hint.textContent = `Saving to ${info.dataDir} (${info.customersSaved || 0} saved).`;
     }
     const plates = (saved.vehicles || vehicles).map((v) => v.registration).join(", ");
-    const msg = `Saved ${saved.customerName || body.customerName} · ${plates}`;
+    const msg = `Saved ${saved.customerName || fullName} · ${plates}`;
     if (status) status.textContent = msg;
     alert(msg);
   } catch (err) {

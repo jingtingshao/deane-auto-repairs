@@ -577,13 +577,57 @@ function normalizeVehicles(body = {}, current = {}) {
   return vehicles;
 }
 
+function splitFullName(full) {
+  const parts = String(full || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts.length) return { firstName: "", lastName: "" };
+  if (parts.length === 1) return { firstName: parts[0], lastName: "" };
+  return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
+}
+
+function composeCustomerName(firstName, lastName, fallback = "") {
+  const joined = [String(firstName || "").trim(), String(lastName || "").trim()]
+    .filter(Boolean)
+    .join(" ");
+  return joined || String(fallback || "").trim();
+}
+
+function namesFromCustomer(row = {}) {
+  let firstName = String(row.firstName || "").trim();
+  let lastName = String(row.lastName || "").trim();
+  if (!firstName && !lastName) {
+    const split = splitFullName(row.customerName);
+    firstName = split.firstName;
+    lastName = split.lastName;
+  }
+  return {
+    firstName,
+    lastName,
+    customerName: composeCustomerName(firstName, lastName, row.customerName),
+  };
+}
+
 function normalizeSavedCustomer(body, current = {}) {
-  const customerName = String(body?.customerName ?? current.customerName ?? "").trim();
+  const fromBody = namesFromCustomer({
+    firstName: body?.firstName ?? current.firstName,
+    lastName: body?.lastName ?? current.lastName,
+    customerName: body?.customerName ?? current.customerName,
+  });
+  const firstName = fromBody.firstName;
+  const lastName = fromBody.lastName;
+  const customerName = fromBody.customerName;
   const customerAddress = String(body?.customerAddress ?? current.customerAddress ?? "").trim();
   const customerPhone = String(body?.customerPhone ?? current.customerPhone ?? "").trim();
   const vehicles = normalizeVehicles(body || {}, current || {});
-  if (!customerName) {
-    const err = new Error("Customer name is required.");
+  if (!firstName) {
+    const err = new Error("First name is required.");
+    err.status = 400;
+    throw err;
+  }
+  if (!lastName) {
+    const err = new Error("Last name is required.");
     err.status = 400;
     throw err;
   }
@@ -593,6 +637,8 @@ function normalizeSavedCustomer(body, current = {}) {
     throw err;
   }
   return {
+    firstName,
+    lastName,
     customerName,
     customerAddress,
     customerPhone,
@@ -606,6 +652,25 @@ function plateKey(value) {
   return String(value || "")
     .toUpperCase()
     .replace(/[\s-]/g, "");
+}
+
+function customerNameKey(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function findCustomerWithSameName(rows, name, exceptId = "") {
+  const key = customerNameKey(name);
+  if (!key) return null;
+  return (
+    rows.find(
+      (row) =>
+        row.id !== exceptId &&
+        customerNameKey(namesFromCustomer(row).customerName) === key
+    ) || null
+  );
 }
 
 function customerRecordKey(item) {
@@ -638,6 +703,8 @@ function mergeCustomer(map, incoming) {
   const cur = map.get(key) || {
     key,
     customerName: "",
+    firstName: "",
+    lastName: "",
     customerEmail: "",
     customerPhone: "",
     registration: "",
@@ -706,9 +773,13 @@ function mergeCustomer(map, incoming) {
     .filter(Boolean)
     .sort()[0] || incoming.wofExpiry || cur.wofExpiry || "";
 
+  const names = namesFromCustomer(incoming);
+  const curNames = namesFromCustomer(cur);
   map.set(key, {
     ...cur,
-    customerName: incoming.customerName || cur.customerName || "",
+    firstName: names.firstName || curNames.firstName || "",
+    lastName: names.lastName || curNames.lastName || "",
+    customerName: names.customerName || curNames.customerName || "",
     customerAddress: incoming.customerAddress || cur.customerAddress,
     customerEmail: incoming.customerEmail || cur.customerEmail,
     customerPhone: incoming.customerPhone || cur.customerPhone,
@@ -740,8 +811,11 @@ function listCustomers() {
       const pk = plateKey(v.registration);
       if (pk) plateOwner.set(pk, key);
     }
+    const names = namesFromCustomer(c);
     mergeCustomer(map, {
-      customerName: c.customerName,
+      firstName: names.firstName,
+      lastName: names.lastName,
+      customerName: names.customerName,
       customerAddress: c.customerAddress,
       customerPhone: c.customerPhone,
       customerEmail: c.customerEmail || "",
@@ -913,7 +987,7 @@ function requireCustomerSnapshot(body) {
   return {
     customerId: saved.id,
     vehicleId: vehicle.id,
-    customerName: saved.customerName,
+    ...namesFromCustomer(saved),
     customerEmail: saved.customerEmail || "",
     customerPhone: saved.customerPhone || "",
     registration: vehicle.registration,
@@ -1473,6 +1547,14 @@ app.post("/api/customers", requireAdmin, (req, res) => {
       const vehicles = normalizeVehicles(c, c);
       return vehicles.some((v) => plates.has(plateKey(v.registration)));
     });
+    const sameName = findCustomerWithSameName(rows, fields.customerName, existing?.id);
+    if (sameName) {
+      const err = new Error(
+        `A customer named ${fields.customerName} already exists. Open that record instead.`
+      );
+      err.status = 400;
+      throw err;
+    }
     const now = nowIso();
     if (existing) {
       Object.assign(existing, fields, { updatedAt: now });
@@ -1499,6 +1581,14 @@ app.put("/api/customers/:id", requireAdmin, (req, res) => {
     const index = rows.findIndex((c) => c.id === req.params.id);
     if (index < 0) return res.status(404).json({ error: "Customer not found" });
     const fields = normalizeSavedCustomer(req.body, rows[index]);
+    const sameName = findCustomerWithSameName(rows, fields.customerName, rows[index].id);
+    if (sameName) {
+      const err = new Error(
+        `A customer named ${fields.customerName} already exists. Use a different name.`
+      );
+      err.status = 400;
+      throw err;
+    }
     rows[index] = {
       ...rows[index],
       ...fields,
@@ -2077,6 +2167,8 @@ app.get("/api/billing", requireAdmin, (_req, res) => {
         preset: d.preset,
         customerName: d.customerName,
         customerEmail: d.customerEmail,
+        customerId: d.customerId || "",
+        vehicleId: d.vehicleId || "",
         registration: d.registration,
         vehicle: d.vehicle,
         totalIncl: totals.totalIncl,

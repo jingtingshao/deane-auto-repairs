@@ -298,7 +298,8 @@
             <fieldset>
               <legend id="customer-form-legend">Customer details</legend>
               <div class="grid-3">
-                <label>Name<input id="customer-name" name="customerName" required /></label>
+                <label>First name<input id="customer-first-name" name="firstName" required autocomplete="given-name" /></label>
+                <label>Last name<input id="customer-last-name" name="lastName" required autocomplete="family-name" /></label>
                 <label>Phone<input id="customer-phone" name="customerPhone" type="tel" /></label>
                 <label>Email<input id="customer-email" name="customerEmail" type="email" /></label>
               </div>
@@ -313,6 +314,7 @@
               <p id="customer-save-status" class="status-line" hidden></p>
               <div class="line-actions">
                 <button type="submit" id="btn-customer-save" class="primary">Save customer</button>
+                <button type="button" id="btn-customer-invoices" class="ghost" hidden>View invoices</button>
                 <button type="button" id="btn-customer-cancel" class="ghost">Clear</button>
                 <button type="button" id="btn-customer-delete" class="danger" hidden>Delete</button>
               </div>
@@ -323,7 +325,7 @@
             <input
               id="customers-search"
               type="search"
-              placeholder="Name, plate, phone or address"
+              placeholder="First name, last name, plate, phone or address"
               autocomplete="off"
             />
           </label>
@@ -362,6 +364,7 @@
               />
             </label>
             <div id="billing-filter" class="filter-row"></div>
+            <p id="billing-party-chip" class="billing-party-chip muted small" hidden></p>
             <div id="billing-list" class="report-list"></div>
           </section>
 
@@ -497,10 +500,10 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260823name"></script>
+    <script src="admin.js?v=20260823fl"></script>
     <script src="dashboard.js?v=20260823sales"></script>
-    <script src="billing.js?v=20260823name"></script>
-    <script src="customers.js?v=20260820aj"></script>
+    <script src="billing.js?v=20260823party"></script>
+    <script src="customers.js?v=20260823dup2"></script>
     <script src="jobs.js?v=20260823noj"></script>
   </body>
 </html>
