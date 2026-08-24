@@ -180,6 +180,10 @@ function lineLooksLikeWof(description) {
   return /\bwof\b/i.test(String(description || "").trim());
 }
 
+function lineLooksLikeService(description) {
+  return /\bservice\b/i.test(String(description || "").trim());
+}
+
 module.exports = {
   GST_RATE,
   GST_FRACTION,
@@ -198,4 +202,5 @@ module.exports = {
   cloneLines,
   presetById,
   lineLooksLikeWof,
+  lineLooksLikeService,
 };

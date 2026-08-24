@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260825pay" />
+    <link rel="stylesheet" href="admin.css?v=20260825dashui" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -178,7 +178,7 @@
 
         <section id="jobs-section" hidden>
           <section id="jobs-list-view">
-            <p class="muted small">Job cards are created from an accepted quote or invoice. Status: Waiting parts / In progress / Completed. Tick Ordered or Received for parts; set Completed by hand when done.</p>
+            <p class="muted small">Active jobs stay visible until the customer collects the vehicle. Mark work Ready to collect, then use Mark collected to move it into searchable history.</p>
             <label class="list-search">
               Search jobs
               <input
@@ -188,7 +188,13 @@
                 autocomplete="off"
               />
             </label>
-            <div id="jobs-filter" class="filter-row"></div>
+            <div class="jobs-list-controls">
+              <div id="jobs-filter" class="filter-row"></div>
+              <label id="jobs-year-label">
+                History year
+                <select id="jobs-year"></select>
+              </label>
+            </div>
             <div id="jobs-list" class="report-list"></div>
           </section>
 
@@ -197,6 +203,7 @@
               <button type="button" id="btn-jobs-back" class="ghost">← All jobs</button>
               <div class="edit-actions">
                 <button type="button" id="btn-jobs-save" class="ghost">Save</button>
+                <button type="button" id="btn-jobs-collected" class="primary" hidden>Mark collected</button>
                 <button type="button" id="btn-jobs-open-quote" class="ghost" hidden>Open quote</button>
                 <button type="button" id="btn-jobs-delete" class="danger">Delete</button>
               </div>
@@ -508,9 +515,9 @@
     </div>
 
     <script src="admin.js?v=20260825clean"></script>
-    <script src="dashboard.js?v=20260823sales"></script>
-    <script src="jobs.js?v=20260825case"></script>
-    <script src="billing.js?v=20260825clean"></script>
+    <script src="dashboard.js?v=20260825dashui"></script>
+    <script src="jobs.js?v=20260825jobs"></script>
+    <script src="billing.js?v=20260825invstats"></script>
     <script src="customers.js?v=20260825veh2"></script>
   </body>
 </html>

@@ -3,7 +3,8 @@
 const JOB_STATUSES = [
   { id: "waiting_parts", label: "Waiting parts" },
   { id: "in_progress", label: "In progress" },
-  { id: "completed", label: "Completed" },
+  { id: "completed", label: "Ready to collect" },
+  { id: "collected", label: "Collected" },
 ];
 
 const LEGACY_STATUS_MAP = {
@@ -24,7 +25,7 @@ function normalizeJobStatus(status, parts) {
   let next = String(status || "").trim();
   if (LEGACY_STATUS_MAP[next]) next = LEGACY_STATUS_MAP[next];
   if (!isJobStatus(next)) next = "in_progress";
-  if (next === "completed") return "completed";
+  if (next === "completed" || next === "collected") return next;
   return suggestStatusFromParts(next, parts);
 }
 
@@ -171,11 +172,13 @@ function partsSummary(parts) {
 
 /**
  * Keep Waiting parts / In progress in sync with parts ticks.
- * Does not change Completed.
+ * Does not change Ready to collect or Collected.
  * Any listed part not yet received → waiting_parts.
  */
 function suggestStatusFromParts(currentStatus, parts) {
-  if (currentStatus === "completed") return "completed";
+  if (currentStatus === "completed" || currentStatus === "collected") {
+    return currentStatus;
+  }
 
   const rows = (parts || []).filter((p) => String(p.description || "").trim());
   if (!rows.length) return "in_progress";

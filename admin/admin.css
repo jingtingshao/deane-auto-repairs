@@ -519,6 +519,23 @@ label.check input {
   color: var(--blue);
 }
 
+.jobs-list-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+}
+
+.jobs-list-controls .filter-row {
+  margin-bottom: 0.9rem;
+}
+
+#jobs-year-label {
+  min-width: 8rem;
+  margin-bottom: 0.9rem;
+}
+
 .suggest-wrap {
   position: relative;
 }
@@ -871,7 +888,12 @@ label.check input {
   color: var(--ok);
 }
 
-.badge.completed,
+.badge.completed {
+  background: #e8f5e9;
+  color: var(--ok);
+}
+
+.badge.collected,
 .badge.parts-none {
   background: #eee;
   color: #555;
@@ -983,6 +1005,139 @@ label.check input {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1rem;
+  max-width: 1500px;
+  margin: 0 auto;
+}
+
+.dash-section-heading {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.15rem;
+  padding: 0 0.1rem;
+}
+
+.dash-section-heading-first {
+  margin-top: 0;
+}
+
+.dash-section-heading h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(1.6rem, 3vw, 2.15rem);
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.dash-section-heading p {
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+}
+
+.dash-section-heading .dash-eyebrow {
+  margin: 0 0 0.3rem;
+  color: var(--blue);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.dash-kpi-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.dash-kpi-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dash-kpi-grid-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dash-kpi {
+  --tone: var(--blue);
+  position: relative;
+  min-width: 0;
+  min-height: 145px;
+  padding: 1rem 1.1rem 1.05rem;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--tone);
+  border-radius: 13px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 5px 16px rgba(26, 35, 50, 0.06);
+  text-align: left;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.dash-kpi:hover {
+  transform: translateY(-2px);
+  border-color: var(--tone);
+  box-shadow: 0 9px 24px rgba(26, 35, 50, 0.11);
+}
+
+.dash-kpi:focus-visible {
+  outline: 3px solid rgba(21, 101, 192, 0.25);
+  outline-offset: 2px;
+}
+
+.dash-kpi-label {
+  display: block;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.dash-kpi strong {
+  display: block;
+  margin: 0.25rem 0 0.3rem;
+  font-family: var(--display);
+  font-size: clamp(2.5rem, 5vw, 3.6rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.dash-kpi-money strong {
+  font-size: clamp(1.85rem, 3vw, 2.55rem);
+}
+
+.dash-kpi small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.tone-wait,
+.tone-due {
+  --tone: #d18600;
+}
+
+.tone-progress,
+.tone-quote,
+.tone-service {
+  --tone: #1565c0;
+}
+
+.tone-ready,
+.tone-paid {
+  --tone: #2e7d32;
+}
+
+.tone-overdue {
+  --tone: #c62828;
+}
+
+.tone-wof {
+  --tone: #6a4caf;
+}
+
+.tone-collected {
+  --tone: #607d8b;
 }
 
 .dash-card {
@@ -990,6 +1145,7 @@ label.check input {
   border: 1px solid var(--line, #d7e0ea);
   border-radius: 14px;
   padding: 1.1rem 1.2rem;
+  box-shadow: 0 5px 16px rgba(26, 35, 50, 0.05);
 }
 
 .dash-card-wide {
@@ -1038,16 +1194,77 @@ label.check input {
   font-size: 1.45rem;
 }
 
+.dash-card-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.dash-card-heading h2 {
+  margin-bottom: 0;
+}
+
 .dash-month-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
 }
 
-.dash-month-stats div {
+.dash-job-stats {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.dash-job-year {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(48px, 1fr));
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+}
+
+.dash-job-year div {
+  padding: 0.55rem 0.3rem;
+  border-radius: 8px;
+  background: var(--blue-soft);
+  text-align: center;
+}
+
+.dash-job-year strong,
+.dash-job-year span {
+  display: block;
+}
+
+.dash-job-year strong {
+  font-family: var(--display);
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.dash-job-year span {
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.dash-month-stats div,
+.dash-month-stats .dash-stat-button {
   background: #f6f8fb;
   border-radius: 10px;
   padding: 0.85rem 1rem;
+}
+
+.dash-month-stats .dash-stat-button {
+  width: 100%;
+  border: 1px solid transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.dash-month-stats .dash-stat-button:hover {
+  border-color: #c5d8f0;
+  background: var(--blue-soft);
 }
 
 .dash-month-stats strong {
@@ -1080,12 +1297,21 @@ label.check input {
   vertical-align: -1px;
 }
 
-.dash-chart-legend .swatch.sales {
+.dash-chart-legend .swatch.invoiced {
   background: #1565c0;
+}
+
+.dash-chart-legend .swatch.received {
+  background: #2e7d32;
 }
 
 .dash-chart-legend .swatch.outstanding {
   background: #ef6c00;
+}
+
+.dash-chart-scroll {
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
 }
 
 .dash-chart {
@@ -1094,6 +1320,11 @@ label.check input {
   gap: 0.85rem;
   align-items: end;
   min-height: 220px;
+}
+
+.dash-chart.financial {
+  grid-template-columns: repeat(12, minmax(86px, 1fr));
+  min-width: 1060px;
 }
 
 .dash-bar-group {
@@ -1117,8 +1348,12 @@ label.check input {
   min-height: 0;
 }
 
-.dash-bar.sales {
+.dash-bar.invoiced {
   background: #1565c0;
+}
+
+.dash-bar.received {
+  background: #2e7d32;
 }
 
 .dash-bar.outstanding {
@@ -1144,6 +1379,15 @@ label.check input {
 .dash-bar-label {
   font-size: 0.85rem;
   font-weight: 700;
+}
+
+.dash-financial-totals {
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 1rem;
+}
+
+.dash-year-select {
+  min-width: 7rem;
 }
 
 .dash-tree {
@@ -1196,6 +1440,10 @@ label.check input {
   .pay-entry {
     grid-template-columns: 1fr;
   }
+
+  .dash-job-year {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 .badge.quote {
@@ -1224,5 +1472,27 @@ label.check input {
 
   .job-card-meta {
     align-items: flex-start;
+  }
+
+  .dash-kpi-grid-3,
+  .dash-kpi-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .dash-kpi-grid-3,
+  .dash-kpi-grid-4,
+  .dash-financial-totals,
+  .dash-job-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-kpi {
+    min-height: 130px;
+  }
+
+  .dash-section-heading {
+    margin-top: 0.8rem;
   }
 }

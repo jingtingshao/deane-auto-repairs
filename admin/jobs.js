@@ -4,7 +4,8 @@ var Admin = window.DeaneAdmin;
 const JOB_STATUSES = [
   { id: "waiting_parts", label: "Waiting parts" },
   { id: "in_progress", label: "In progress" },
-  { id: "completed", label: "Completed" },
+  { id: "completed", label: "Ready to collect" },
+  { id: "collected", label: "Collected" },
 ];
 
 const jobsListView = document.getElementById("jobs-list-view");
@@ -16,11 +17,15 @@ const jobsForm = document.getElementById("jobs-form");
 const jobsPartsEl = document.getElementById("jobs-parts");
 const jobsQuoteLink = document.getElementById("jobs-quote-link");
 const openQuoteBtn = document.getElementById("btn-jobs-open-quote");
+const collectBtn = document.getElementById("btn-jobs-collected");
+const jobsYearSelect = document.getElementById("jobs-year");
+const jobsYearLabel = document.getElementById("jobs-year-label");
 
 let currentJob = null;
 let jobRows = [];
 let partRows = [];
-let jobFilter = "all";
+let jobFilter = "active";
+let jobYear = String(new Date().getFullYear());
 
 function statusLabel(id) {
   return JOB_STATUSES.find((s) => s.id === id)?.label || id || "";
@@ -50,16 +55,18 @@ function renderFilters() {
   if (!jobsFilter) return;
   if (!jobsFilter.dataset.ready) {
     jobsFilter.innerHTML = [
-      `<button type="button" class="ghost" data-filter="all">All</button>`,
-      ...JOB_STATUSES.map(
-        (s) =>
-          `<button type="button" class="ghost" data-filter="${Admin.escapeAttr(s.id)}">${Admin.escapeHtml(s.label)}</button>`
-      ),
+      `<button type="button" class="ghost" data-filter="active">Active</button>`,
+      `<button type="button" class="ghost" data-filter="waiting_parts">Waiting parts</button>`,
+      `<button type="button" class="ghost" data-filter="in_progress">In progress</button>`,
+      `<button type="button" class="ghost" data-filter="completed">Ready to collect</button>`,
+      `<button type="button" class="ghost" data-filter="collected_month">Collected this month</button>`,
+      `<button type="button" class="ghost" data-filter="collected">All history</button>`,
     ].join("");
     jobsFilter.querySelectorAll("[data-filter]").forEach((btn) => {
       btn.addEventListener("click", () => {
         jobFilter = btn.dataset.filter;
         renderFilters();
+        Admin.setViewTitle(jobListTitle());
         renderJobList();
       });
     });
@@ -68,6 +75,45 @@ function renderFilters() {
   jobsFilter.querySelectorAll("[data-filter]").forEach((el) => {
     el.classList.toggle("is-active", el.dataset.filter === jobFilter);
   });
+  if (jobsYearLabel) jobsYearLabel.hidden = jobFilter !== "collected";
+}
+
+function archiveDate(job) {
+  return String(job.collectedAt || job.updatedAt || job.createdAt || "").slice(0, 10);
+}
+
+function currentMonthKey() {
+  return Admin.todayIso().slice(0, 7);
+}
+
+function jobListTitle() {
+  if (jobFilter === "waiting_parts") return "Waiting parts";
+  if (jobFilter === "in_progress") return "Jobs in progress";
+  if (jobFilter === "completed") return "Ready to collect";
+  if (jobFilter === "collected_month") return "Collected this month";
+  if (jobFilter === "collected") return `Job history · ${jobYear}`;
+  return "Active jobs";
+}
+
+function renderYearFilter() {
+  if (!jobsYearSelect) return;
+  const currentYear = Admin.todayIso().slice(0, 4);
+  const years = new Set([currentYear]);
+  jobRows.forEach((job) => {
+    if (job.status !== "collected") return;
+    const year = archiveDate(job).slice(0, 4);
+    if (/^\d{4}$/.test(year)) years.add(year);
+  });
+  const ordered = [...years].sort((a, b) => b.localeCompare(a));
+  if (!ordered.includes(jobYear)) jobYear = currentYear;
+  jobsYearSelect.innerHTML = ordered
+    .map(
+      (year) =>
+        `<option value="${Admin.escapeAttr(year)}"${year === jobYear ? " selected" : ""}>${Admin.escapeHtml(year)}</option>`
+    )
+    .join("");
+  jobsYearSelect.value = jobYear;
+  if (jobsYearLabel) jobsYearLabel.hidden = jobFilter !== "collected";
 }
 
 function fillStatusSelect(selected) {
@@ -107,7 +153,22 @@ function renderJobList() {
 
   const query = jobsSearch?.value || "";
   const jobs = jobRows.filter((job) => {
-    if (jobFilter !== "all" && job.status !== jobFilter) return false;
+    if (jobFilter === "active" && job.status === "collected") return false;
+    if (jobFilter === "collected_month") {
+      if (job.status !== "collected" || !archiveDate(job).startsWith(currentMonthKey())) {
+        return false;
+      }
+    } else if (jobFilter === "collected") {
+      if (job.status !== "collected" || !archiveDate(job).startsWith(`${jobYear}-`)) {
+        return false;
+      }
+    } else if (
+      jobFilter !== "active" &&
+      jobFilter !== "collected_month" &&
+      job.status !== jobFilter
+    ) {
+      return false;
+    }
     return matchesJobSearch(job, query);
   });
   if (!jobs.length) {
@@ -118,7 +179,11 @@ function renderJobList() {
           ? "in progress"
           : jobFilter === "completed"
             ? "ready to collect"
-            : "matching";
+            : jobFilter === "collected_month"
+              ? "collected this month"
+              : jobFilter === "collected"
+                ? `collected in ${jobYear}`
+                : "matching";
     jobsList.innerHTML = `<div class="empty">No vehicles ${Admin.escapeHtml(label)}.</div>`;
     return;
   }
@@ -131,12 +196,16 @@ function renderJobList() {
         job.status === "waiting_parts" && waiting
           ? ` · ${waiting} part${waiting === 1 ? "" : "s"} to arrive`
           : "";
+      const archiveHint =
+        job.status === "collected" && archiveDate(job)
+          ? ` · Collected ${archiveDate(job)}`
+          : "";
       return `
       <article class="report-card billing-card" data-id="${job.id}">
         <div class="billing-number">${Admin.escapeHtml(job.number)}</div>
         <div>
           <h2>${Admin.escapeHtml(job.customerName || "Customer")}</h2>
-          <p class="muted">${Admin.escapeHtml(job.registration || "No plate")} · ${Admin.escapeHtml(job.vehicle || "No vehicle")}${job.quoteNumber ? ` · ${Admin.escapeHtml(job.quoteNumber)}` : ""}${job.invoiceNumber ? ` · ${Admin.escapeHtml(job.invoiceNumber)}` : ""}${waitHint}</p>
+          <p class="muted">${Admin.escapeHtml(job.registration || "No plate")} · ${Admin.escapeHtml(job.vehicle || "No vehicle")}${job.quoteNumber ? ` · ${Admin.escapeHtml(job.quoteNumber)}` : ""}${job.invoiceNumber ? ` · ${Admin.escapeHtml(job.invoiceNumber)}` : ""}${waitHint}${archiveHint}</p>
         </div>
         <div class="job-card-meta">
           <span class="badge ${Admin.escapeAttr(job.status)}">${Admin.escapeHtml(statusLabel(job.status))}</span>
@@ -162,7 +231,9 @@ function syncStatusFromParts() {
 }
 
 function suggestStatusFromParts(currentStatus, parts) {
-  if (currentStatus === "completed") return "completed";
+  if (currentStatus === "completed" || currentStatus === "collected") {
+    return currentStatus;
+  }
   const rows = (parts || []).filter((p) => String(p.description || "").trim());
   if (!rows.length) return "in_progress";
   if (rows.some((p) => !p.received)) return "waiting_parts";
@@ -284,6 +355,12 @@ function fillForm(job) {
       jobsQuoteLink.textContent = "";
     }
   }
+  updateCollectedButton();
+}
+
+function updateCollectedButton() {
+  if (!collectBtn) return;
+  collectBtn.hidden = !currentJob || jobInput("status")?.value !== "completed";
 }
 
 function collectJob() {
@@ -311,6 +388,7 @@ async function saveJob(opts = {}) {
   });
   const statusEl = jobInput("status");
   if (statusEl) statusEl.value = currentJob.status;
+  updateCollectedButton();
   const el = document.getElementById("jobs-save-status");
   if (el) {
     el.hidden = false;
@@ -347,7 +425,7 @@ window.DeaneJobs = {
   openJob,
   createJob,
   filterBy(status) {
-    jobFilter = status || "all";
+    jobFilter = status || "active";
     const filter = document.getElementById("jobs-filter");
     filter?.querySelectorAll("[data-filter]").forEach((el) => {
       el.classList.toggle("is-active", el.dataset.filter === jobFilter);
@@ -377,8 +455,9 @@ async function createJob() {
 }
 
 async function loadJobList() {
-  renderFilters();
   jobRows = await Admin.api("/api/jobs");
+  renderFilters();
+  renderYearFilter();
   renderJobList();
 }
 
@@ -391,18 +470,11 @@ async function showList(opts = {}) {
   jobAutosave.cancel();
   currentJob = null;
   if (opts.filter) jobFilter = opts.filter;
-  else jobFilter = "all";
+  else jobFilter = "active";
+  if (opts.year) jobYear = String(opts.year);
   jobsEditView.hidden = true;
   jobsListView.hidden = false;
-  Admin.setViewTitle(
-    jobFilter === "waiting_parts"
-      ? "Waiting parts"
-      : jobFilter === "in_progress"
-        ? "Jobs in progress"
-        : jobFilter === "completed"
-          ? "Ready to collect"
-          : "Jobs"
-  );
+  Admin.setViewTitle(jobListTitle());
   try {
     await loadJobList();
   } catch (err) {
@@ -412,6 +484,11 @@ async function showList(opts = {}) {
 
 jobsSearch?.addEventListener("input", renderJobList);
 jobsSearch?.addEventListener("search", renderJobList);
+jobsYearSelect?.addEventListener("change", () => {
+  jobYear = jobsYearSelect.value;
+  Admin.setViewTitle(jobListTitle());
+  renderJobList();
+});
 
 document.getElementById("btn-jobs-back")?.addEventListener("click", showList);
 
@@ -425,6 +502,21 @@ document.getElementById("btn-jobs-save")?.addEventListener("click", async () => 
   try {
     await saveJob();
   } catch (err) {
+    alert(err.message);
+  }
+});
+
+collectBtn?.addEventListener("click", async () => {
+  if (!currentJob || jobInput("status")?.value !== "completed") return;
+  if (!confirm("Mark this vehicle as collected and move the job to history?")) return;
+  const statusEl = jobInput("status");
+  statusEl.value = "collected";
+  try {
+    await saveJob();
+    await showList({ filter: "active" });
+  } catch (err) {
+    statusEl.value = "completed";
+    updateCollectedButton();
     alert(err.message);
   }
 });
@@ -469,7 +561,10 @@ jobsForm?.addEventListener("input", (e) => {
   }
   scheduleJobAutosave();
 });
-jobsForm?.addEventListener("change", scheduleJobAutosave);
+jobsForm?.addEventListener("change", (event) => {
+  if (event.target === jobInput("status")) updateCollectedButton();
+  scheduleJobAutosave();
+});
 window.addEventListener("beforeunload", () => {
   jobAutosave.flush();
 });

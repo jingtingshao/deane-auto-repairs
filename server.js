@@ -19,7 +19,7 @@ const jobsLib = require("./data/jobs");
 const { buildBillingPdf, safeFilename } = require("./data/billing-pdf");
 const { readJsonArray, writeJsonArray } = require("./data/json-store");
 const { blockedStaticPath, safeUploadPath, UPLOAD_EXTS } = require("./data/static-guard");
-const { todayIso, plusDays, nowIso, monthKey, shiftMonthKey, monthShortLabel, monthLongLabel } = require("./data/nz-time");
+const { todayIso, plusDays, nowIso, monthKey, monthShortLabel, monthLongLabel } = require("./data/nz-time");
 const driveBackup = require("./data/drive-backup");
 
 const PORT = Number(process.env.PORT) || 5173;
@@ -315,6 +315,8 @@ function summarizeJob(job) {
     invoiceNumber: job.invoiceNumber || "",
     partsTotal: parts.total,
     partsReceived: parts.received,
+    readyAt: job.readyAt || "",
+    collectedAt: job.collectedAt || "",
     updatedAt: job.updatedAt,
     createdAt: job.createdAt,
   };
@@ -565,6 +567,8 @@ function emptyJob(now) {
     id: randomUUID(),
     number: "",
     status: "in_progress",
+    readyAt: "",
+    collectedAt: "",
     createdAt: now,
     updatedAt: now,
     customerName: "",
@@ -604,10 +608,28 @@ function applyJobFields(job, body = {}) {
     }
   }
   status = jobsLib.normalizeJobStatus(status, parts);
+  const previousStatus = jobsLib.normalizeJobStatus(job.status, job.parts || []);
+  const changedAt = nowIso();
+  const readyAt =
+    status === "completed"
+      ? previousStatus === "completed"
+        ? job.readyAt || job.updatedAt || job.createdAt || changedAt
+        : changedAt
+      : status === "collected"
+        ? job.readyAt || job.updatedAt || job.createdAt || changedAt
+        : "";
+  const collectedAt =
+    status === "collected"
+      ? previousStatus === "collected"
+        ? job.collectedAt || job.updatedAt || job.createdAt || changedAt
+        : changedAt
+      : "";
 
   return {
     ...job,
     status,
+    readyAt,
+    collectedAt,
     customerName:
       body.customerName != null ? String(body.customerName).trim() : job.customerName,
     customerEmail:
@@ -629,7 +651,7 @@ function applyJobFields(job, body = {}) {
         : job.technicianName,
     notes: body.notes != null ? String(body.notes) : job.notes,
     parts,
-    updatedAt: nowIso(),
+    updatedAt: changedAt,
   };
 }
 
@@ -2135,13 +2157,14 @@ app.post("/api/admin/restore-workshop", requireAdmin, (req, res) => {
   }
 });
 
-app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
+app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
   try {
     const jobs = readJobs();
     const jobCounts = {
       waiting_parts: 0,
       in_progress: 0,
       completed: 0,
+      collected: 0,
     };
     for (const job of jobs) {
       const status = jobsLib.normalizeJobStatus(job.status, job.parts || []);
@@ -2149,6 +2172,36 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
     }
     const jobTotal =
       jobCounts.waiting_parts + jobCounts.in_progress + jobCounts.completed;
+    const today = todayIso();
+    const todayUtc = new Date(`${today}T00:00:00Z`);
+    const daysSinceMonday = (todayUtc.getUTCDay() + 6) % 7;
+    const weekStart = plusDays(today, -daysSinceMonday);
+    const thisMonthKey = monthKey();
+    const thisYear = Number(thisMonthKey.slice(0, 4));
+    const collectedByMonth = Array.from({ length: 12 }, (_row, index) => {
+      const key = `${thisYear}-${String(index + 1).padStart(2, "0")}`;
+      return {
+        key,
+        label: monthShortLabel(key),
+        count: 0,
+      };
+    });
+    let collectedThisWeek = 0;
+    let collectedThisMonth = 0;
+    let collectedThisYear = 0;
+    for (const job of jobs) {
+      const status = jobsLib.normalizeJobStatus(job.status, job.parts || []);
+      if (status !== "collected") continue;
+      const day = String(job.collectedAt || job.updatedAt || job.createdAt || "").slice(0, 10);
+      if (!day) continue;
+      if (day >= weekStart && day <= today) collectedThisWeek += 1;
+      if (day.startsWith(thisMonthKey)) collectedThisMonth += 1;
+      if (day.startsWith(`${thisYear}-`)) {
+        collectedThisYear += 1;
+        const monthIndex = Number(day.slice(5, 7)) - 1;
+        if (collectedByMonth[monthIndex]) collectedByMonth[monthIndex].count += 1;
+      }
+    }
 
     let quotesAwaiting = 0;
     let quotesAwaitingTotal = 0;
@@ -2156,21 +2209,30 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
     let invoicesUnpaidCount = 0;
     let invoicesOverdueTotal = 0;
     let invoicesOverdueCount = 0;
+    let paymentsThisMonthTotal = 0;
+    let paymentsThisMonthCount = 0;
 
+    const requestedYear = Number(req.query.year);
+    const financialYear =
+      Number.isInteger(requestedYear) && requestedYear >= 2000 && requestedYear <= 2200
+        ? requestedYear
+        : thisYear;
+    const financialYears = new Set([thisYear, financialYear]);
     const monthBuckets = new Map();
-    const thisMonthKey = monthKey();
-    for (let i = 5; i >= 0; i -= 1) {
-      const key = shiftMonthKey(thisMonthKey, -i);
+    for (let month = 1; month <= 12; month += 1) {
+      const key = `${financialYear}-${String(month).padStart(2, "0")}`;
       monthBuckets.set(key, {
         key,
         label: monthShortLabel(key),
-        year: Number(key.slice(0, 4)),
-        sales: 0,
+        year: financialYear,
+        invoiced: 0,
+        received: 0,
         outstanding: 0,
       });
     }
 
-    for (const doc of readBilling()) {
+    const billing = readBilling();
+    for (const doc of billing) {
       if (doc.status === "void") continue;
       const totals = catalog.computeTotals(doc.lines || []);
       if (doc.kind === "quote" && doc.status === "sent") {
@@ -2179,6 +2241,7 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
       }
       if (doc.kind === "invoice") {
         const payment = normalizeInvoicePayment(doc, {}, totals);
+        const issued = doc.status !== "draft" || payment.amountPaid > 0;
         if (isInvoiceOverdue(doc, payment)) {
           invoicesOverdueCount += 1;
           invoicesOverdueTotal = catalog.round2(
@@ -2186,6 +2249,7 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
           );
         }
         if (
+          issued &&
           (payment.paymentStatus === "unpaid" || payment.paymentStatus === "deposit") &&
           payment.balanceDue > 0
         ) {
@@ -2195,14 +2259,35 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
           );
         }
 
-        const anchor = billingAnchorDate(doc);
-        const docMonthKey = anchor ? monthKey(new Date(anchor)) : "";
-        const bucket = monthBuckets.get(docMonthKey);
-        if (bucket) {
-          bucket.sales = catalog.round2(bucket.sales + totals.totalIncl);
+        const anchor = String(doc.sentAt || doc.createdAt || doc.updatedAt || "");
+        const docMonthKey = anchor.slice(0, 7);
+        const docYear = Number(docMonthKey.slice(0, 4));
+        if (Number.isInteger(docYear)) financialYears.add(docYear);
+        const invoiceBucket = issued ? monthBuckets.get(docMonthKey) : null;
+        if (invoiceBucket) {
+          invoiceBucket.invoiced = catalog.round2(
+            invoiceBucket.invoiced + totals.totalIncl
+          );
           if (payment.balanceDue > 0) {
-            bucket.outstanding = catalog.round2(
-              bucket.outstanding + payment.balanceDue
+            invoiceBucket.outstanding = catalog.round2(
+              invoiceBucket.outstanding + payment.balanceDue
+            );
+          }
+        }
+        for (const row of payment.payments) {
+          const paidMonth = String(row.paidAt || "").slice(0, 7);
+          const paidYear = Number(paidMonth.slice(0, 4));
+          if (Number.isInteger(paidYear)) financialYears.add(paidYear);
+          if (paidMonth === thisMonthKey) {
+            paymentsThisMonthCount += 1;
+            paymentsThisMonthTotal = catalog.round2(
+              paymentsThisMonthTotal + row.amount
+            );
+          }
+          const paymentBucket = monthBuckets.get(paidMonth);
+          if (paymentBucket) {
+            paymentBucket.received = catalog.round2(
+              paymentBucket.received + row.amount
             );
           }
         }
@@ -2211,21 +2296,26 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
 
     let servicesThisMonth = 0;
     let wofsThisMonth = 0;
-    for (const report of readReports()) {
-      if (report.status === "void") continue;
-      const day = String(report.serviceDate || report.createdAt || "").slice(0, 10);
+    for (const invoice of billing) {
+      if (invoice.kind !== "invoice" || invoice.status === "void") continue;
+      if (!(invoice.customerId || invoice.customerName || invoice.registration)) continue;
+      const day = String(
+        invoice.sentAt || invoice.createdAt || invoice.updatedAt || ""
+      ).slice(0, 10);
       if (!day.startsWith(thisMonthKey)) continue;
-      const jobType = String(report.jobType || "").toLowerCase();
-      const pkg = String(report.servicePackage || "").toLowerCase();
-      const isService =
-        /service/.test(jobType) || pkg === "standard" || pkg === "premium";
-      const isWof =
-        /wof/.test(jobType) || Boolean(report.wof && report.wof.performed);
+      const lines = invoice.lines || [];
+      const isService = lines.some(
+        (line) =>
+          Number(line.qty) > 0 && catalog.lineLooksLikeService(line.description)
+      );
+      const isWof = lines.some(
+        (line) => Number(line.qty) > 0 && catalog.lineLooksLikeWof(line.description)
+      );
       if (isService) servicesThisMonth += 1;
       if (isWof) wofsThisMonth += 1;
     }
 
-    const monthly = [...monthBuckets.values()];
+    const financialMonthly = [...monthBuckets.values()];
     const thisMonthLabel = monthLongLabel(thisMonthKey);
 
     res.json({
@@ -2234,6 +2324,13 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
         waiting_parts: jobCounts.waiting_parts,
         in_progress: jobCounts.in_progress,
         completed: jobCounts.completed,
+      },
+      jobHistory: {
+        week: collectedThisWeek,
+        month: collectedThisMonth,
+        year: collectedThisYear,
+        yearLabel: thisYear,
+        monthly: collectedByMonth,
       },
       quotesAwaitingAcceptance: {
         count: quotesAwaiting,
@@ -2247,7 +2344,23 @@ app.get("/api/admin/dashboard", requireAdmin, (_req, res) => {
         count: invoicesOverdueCount,
         totalIncl: invoicesOverdueTotal,
       },
-      monthly,
+      paymentsThisMonth: {
+        count: paymentsThisMonthCount,
+        totalIncl: paymentsThisMonthTotal,
+      },
+      financialHistory: {
+        year: financialYear,
+        availableYears: [...financialYears].sort((a, b) => b - a),
+        monthly: financialMonthly,
+        totals: financialMonthly.reduce(
+          (sum, row) => ({
+            invoiced: catalog.round2(sum.invoiced + row.invoiced),
+            received: catalog.round2(sum.received + row.received),
+            outstanding: catalog.round2(sum.outstanding + row.outstanding),
+          }),
+          { invoiced: 0, received: 0, outstanding: 0 }
+        ),
+      },
       thisMonth: {
         key: thisMonthKey,
         label: thisMonthLabel,
@@ -2573,9 +2686,17 @@ app.get("/api/billing", requireAdmin, (_req, res) => {
         quoteId: d.quoteId || "",
         jobId: d.jobId || "",
         reportId: d.reportId || "",
+        hasService: (d.lines || []).some(
+          (line) =>
+            Number(line.qty) > 0 && catalog.lineLooksLikeService(line.description)
+        ),
+        hasWof: (d.lines || []).some(
+          (line) => Number(line.qty) > 0 && catalog.lineLooksLikeWof(line.description)
+        ),
         paymentStatus: payment?.paymentStatus || "",
         amountPaid: payment?.amountPaid ?? null,
         balanceDue: payment?.balanceDue ?? null,
+        paymentDates: payment?.payments.map((row) => row.paidAt).filter(Boolean) || [],
       };
     })
     .sort((a, b) => {

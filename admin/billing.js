@@ -173,8 +173,11 @@ function quoteFilters() {
 function invoiceFilters() {
   return [
     { id: "all", label: "All invoices" },
-    { id: "outstanding", label: "Outstanding" },
+    { id: "outstanding", label: "Awaiting payment" },
     { id: "overdue", label: "Overdue" },
+    { id: "paid_month", label: "Payments this month" },
+    { id: "service_month", label: "Services this month" },
+    { id: "wof_month", label: "WOFs this month" },
     { id: "paid", label: "Paid" },
   ];
 }
@@ -250,9 +253,24 @@ function matchesListFilter(d) {
     if (d.status === "void") return false;
     if (listFilter === "all") return true;
     if (listFilter === "outstanding") {
-      return d.paymentStatus === "unpaid" || d.paymentStatus === "deposit";
+      const issued = d.status !== "draft" || Number(d.amountPaid) > 0;
+      return (
+        issued &&
+        (d.paymentStatus === "unpaid" || d.paymentStatus === "deposit") &&
+        Number(d.balanceDue) > 0
+      );
     }
     if (listFilter === "overdue") return Boolean(d.overdue);
+    if (listFilter === "paid_month") {
+      const month = Admin.todayIso().slice(0, 7);
+      return (d.paymentDates || []).some((day) => String(day).startsWith(month));
+    }
+    if (listFilter === "service_month" || listFilter === "wof_month") {
+      const month = Admin.todayIso().slice(0, 7);
+      const issuedMonth = String(d.sentAt || d.createdAt || d.updatedAt || "").slice(0, 7);
+      if (issuedMonth !== month) return false;
+      return listFilter === "service_month" ? Boolean(d.hasService) : Boolean(d.hasWof);
+    }
     if (listFilter === "paid") return d.paymentStatus === "paid";
   }
   return false;
