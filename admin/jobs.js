@@ -254,7 +254,7 @@ function fillForm(job) {
   set("customerName", job.customerName);
   set("customerEmail", job.customerEmail);
   set("customerPhone", job.customerPhone);
-  set("registration", job.registration);
+  set("registration", String(job.registration || "").toUpperCase());
   set("vehicle", job.vehicle);
   set("odometer", job.odometer);
   set("workRequested", job.workRequested);
@@ -294,7 +294,7 @@ function collectJob() {
     customerName: value("customerName"),
     customerEmail: value("customerEmail"),
     customerPhone: value("customerPhone"),
-    registration: value("registration"),
+    registration: value("registration").toUpperCase(),
     vehicle: value("vehicle"),
     odometer: value("odometer"),
     workRequested: String(jobInput("workRequested")?.value || ""),
@@ -452,7 +452,23 @@ document.getElementById("btn-jobs-delete")?.addEventListener("click", async () =
   }
 });
 
-jobsForm?.addEventListener("input", scheduleJobAutosave);
+jobsForm?.addEventListener("input", (e) => {
+  const el = e.target;
+  if (el?.id === "job-registration" || el?.name === "registration") {
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const next = String(el.value || "").toUpperCase();
+    if (next !== el.value) {
+      el.value = next;
+      try {
+        el.setSelectionRange(start, end);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  scheduleJobAutosave();
+});
 jobsForm?.addEventListener("change", scheduleJobAutosave);
 window.addEventListener("beforeunload", () => {
   jobAutosave.flush();

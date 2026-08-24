@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260824invlist" />
+    <link rel="stylesheet" href="admin.css?v=20260825find" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -222,7 +222,7 @@
                   <label>Customer name<input id="job-customer-name" name="customerName" required /></label>
                   <label>Email<input id="job-customer-email" name="customerEmail" type="email" /></label>
                   <label>Phone<input id="job-customer-phone" name="customerPhone" type="tel" /></label>
-                  <label>Registration<input id="job-registration" name="registration" /></label>
+                  <label>Registration<input id="job-registration" name="registration" autocapitalize="characters" spellcheck="false" /></label>
                   <label>Vehicle<input id="job-vehicle" name="vehicle" /></label>
                   <label>Odometer (km)<input id="job-odometer" name="odometer" /></label>
                 </div>
@@ -267,13 +267,31 @@
         </section>
 
         <section id="customers-section" hidden>
-          <p class="muted small">This is the only place to type customer and vehicle details. Reports and quotes pick from this list. Each customer number is unique and never restarts the next day (today 1, 2, 3, tomorrow 4, 5, 6). Click a column heading to sort. WOF expiry still comes from the service report. <span id="customer-storage-hint"></span></p>
-          <form id="customer-form" class="report-form customer-editor" novalidate>
+          <div class="customers-find">
+            <label class="list-search">
+              Find a customer
+              <input
+                id="customers-search"
+                type="search"
+                placeholder="Type a name, plate, phone or #"
+                autocomplete="off"
+              />
+            </label>
+            <div id="customers-letters" class="letter-row" aria-label="Last name A to Z"></div>
+            <div id="customers-filter" class="filter-row">
+              <button type="button" class="ghost is-active" data-filter="all">All</button>
+              <button type="button" class="ghost" data-filter="overdue">Overdue</button>
+              <button type="button" class="ghost" data-filter="due_soon">Due in 30 days</button>
+              <button type="button" class="ghost" data-filter="missing">No WOF date</button>
+            </div>
+          </div>
+          <p class="muted small">Do not scroll the whole list. Search or tap a last-name letter. New customer is top right. <span id="customer-storage-hint"></span></p>
+          <form id="customer-form" class="report-form customer-editor" hidden novalidate>
             <fieldset>
               <legend id="customer-form-legend">Customer details</legend>
               <div class="grid-3">
-                <label>First name<input id="customer-first-name" name="firstName" required autocomplete="given-name" /></label>
-                <label>Last name<input id="customer-last-name" name="lastName" required autocomplete="family-name" /></label>
+                <label>First name<input id="customer-first-name" name="firstName" required autocomplete="given-name" autocapitalize="words" /></label>
+                <label>Last name<input id="customer-last-name" name="lastName" required autocomplete="family-name" autocapitalize="words" /></label>
                 <label>Phone<input id="customer-phone" name="customerPhone" type="tel" /></label>
                 <label>Email<input id="customer-email" name="customerEmail" type="email" /></label>
               </div>
@@ -289,26 +307,11 @@
               <div class="line-actions">
                 <button type="submit" id="btn-customer-save" class="primary">Save customer</button>
                 <button type="button" id="btn-customer-invoices" class="ghost" hidden>View invoices</button>
-                <button type="button" id="btn-customer-cancel" class="ghost">Clear</button>
+                <button type="button" id="btn-customer-cancel" class="ghost">Close</button>
                 <button type="button" id="btn-customer-delete" class="danger" hidden>Delete</button>
               </div>
             </fieldset>
           </form>
-          <label class="list-search">
-            Search customers
-            <input
-              id="customers-search"
-              type="search"
-              placeholder="First name, last name, plate, phone or address"
-              autocomplete="off"
-            />
-          </label>
-          <div id="customers-filter" class="filter-row">
-            <button type="button" class="ghost is-active" data-filter="all">All</button>
-            <button type="button" class="ghost" data-filter="overdue">Overdue</button>
-            <button type="button" class="ghost" data-filter="due_soon">Due in 30 days</button>
-            <button type="button" class="ghost" data-filter="missing">No WOF date</button>
-          </div>
           <div id="customers-list" class="report-list"></div>
         </section>
 
@@ -477,8 +480,8 @@
 
     <script src="admin.js?v=20260824photos"></script>
     <script src="dashboard.js?v=20260823sales"></script>
-    <script src="jobs.js?v=20260824job"></script>
+    <script src="jobs.js?v=20260825case"></script>
     <script src="billing.js?v=20260824invlist"></script>
-    <script src="customers.js?v=20260824cont"></script>
+    <script src="customers.js?v=20260825veh"></script>
   </body>
 </html>

@@ -764,7 +764,7 @@ function normalizeVehicles(body = {}, current = {}) {
     vehicles.push({
       id: row.id || randomUUID(),
       registration,
-      vehicle: String(row?.vehicle || "").trim(),
+      vehicle: capitalizePersonName(String(row?.vehicle || "").trim()),
     });
   }
   return vehicles;
@@ -787,6 +787,13 @@ function composeCustomerName(firstName, lastName, fallback = "") {
   return joined || String(fallback || "").trim();
 }
 
+function capitalizePersonName(value) {
+  return String(value || "").replace(
+    /(^|[\s-])(\S)/g,
+    (_, sep, ch) => sep + ch.toLocaleUpperCase("en-NZ")
+  );
+}
+
 function namesFromCustomer(row = {}) {
   let firstName = String(row.firstName || "").trim();
   let lastName = String(row.lastName || "").trim();
@@ -795,6 +802,8 @@ function namesFromCustomer(row = {}) {
     firstName = split.firstName;
     lastName = split.lastName;
   }
+  firstName = capitalizePersonName(firstName);
+  lastName = capitalizePersonName(lastName);
   return {
     firstName,
     lastName,
@@ -852,6 +861,21 @@ function customerNameKey(name) {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ");
+}
+
+function invoiceBlocksCustomerDelete(customer) {
+  const id = String(customer?.id || customer?.customerId || "");
+  const plates = new Set(
+    normalizeVehicles(customer, customer)
+      .map((v) => plateKey(v.registration))
+      .filter(Boolean)
+  );
+  return readBilling().some((d) => {
+    if (d.kind !== "invoice" || d.status === "void") return false;
+    if (id && d.customerId && d.customerId === id) return true;
+    const plate = plateKey(d.registration);
+    return Boolean(plate && plates.has(plate));
+  });
 }
 
 function findCustomerWithSameName(rows, name, exceptId = "") {
@@ -1079,10 +1103,15 @@ function listCustomers() {
 
   const rank = { overdue: 0, due_soon: 1, ok: 2, missing: 3 };
   return [...map.values()]
+    .filter((row) => Boolean(row.customerId))
     .map((row) => {
       const hasReport = Boolean(row.lastReportId);
       const hasBilling = Boolean(row.lastBillingId);
-      const canDelete = Boolean(row.customerId) && !hasReport && !hasBilling;
+      const canDelete = !invoiceBlocksCustomerDelete({
+        id: row.customerId,
+        vehicles: row.vehicles,
+        registration: row.registration,
+      });
       const seq = row.customerId ? Number(seqById.get(row.customerId)) || 0 : 0;
       return {
         ...row,
@@ -1868,38 +1897,9 @@ app.delete("/api/customers/:id", requireAdmin, (req, res) => {
   const customer = rows.find((c) => c.id === req.params.id);
   if (!customer) return res.status(404).json({ error: "Customer not found" });
 
-  const vehicles = normalizeVehicles(customer, customer);
-  const plates = new Set(vehicles.map((v) => plateKey(v.registration)).filter(Boolean));
-  const name = String(customer.customerName || "").trim().toLowerCase();
-  const email = String(customer.customerEmail || "").trim().toLowerCase();
-
-  const hasReport = readReports().some((r) => {
-    const plate = plateKey(r.registration);
-    if (plate && plates.has(plate)) return true;
-    if (email && String(r.customerEmail || "").trim().toLowerCase() === email) return true;
-    return (
-      name &&
-      String(r.customerName || "").trim().toLowerCase() === name &&
-      plate &&
-      plates.has(plate)
-    );
-  });
-  if (hasReport) {
+  if (invoiceBlocksCustomerDelete(customer)) {
     return res.status(400).json({
-      error: "This customer has a service report. Delete is not available.",
-    });
-  }
-
-  const hasBilling = readBilling().some((d) => {
-    if (d.status === "void") return false;
-    const plate = plateKey(d.registration);
-    if (plate && plates.has(plate)) return true;
-    if (email && String(d.customerEmail || "").trim().toLowerCase() === email) return true;
-    return false;
-  });
-  if (hasBilling) {
-    return res.status(400).json({
-      error: "This customer has a quote or invoice. Delete is not available.",
+      error: "This customer has an invoice. Delete is not available.",
     });
   }
 

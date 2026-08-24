@@ -10,9 +10,12 @@ const customerDeleteBtn = document.getElementById("btn-customer-delete");
 
 let customerRows = [];
 let customerFilter = "all";
+let customerLetter = "";
+let customerShowAll = false;
 let editingCustomerId = "";
-let customerSortKey = "seq";
+let customerSortKey = "lastName";
 let customerSortDir = "asc";
+const RECENT_CUSTOMER_LIMIT = 25;
 
 function wofLabel(row) {
   if (row.wofStatus === "overdue") {
@@ -26,21 +29,48 @@ function wofLabel(row) {
 }
 
 function displayName(row) {
-  const joined = [row.firstName, row.lastName].filter(Boolean).join(" ").trim();
-  return joined || String(row.customerName || "").trim();
+  const names = namesFromRow(row);
+  const joined = [names.firstName, names.lastName].filter(Boolean).join(" ").trim();
+  return joined || capitalizePersonName(String(row.customerName || "").trim());
+}
+
+function capitalizePersonName(value) {
+  return String(value || "").replace(
+    /(^|[\s-])(\S)/g,
+    (_, sep, ch) => sep + ch.toLocaleUpperCase("en-NZ")
+  );
+}
+
+function applyLiveTransform(input, transform) {
+  if (!input) return;
+  const start = input.selectionStart;
+  const end = input.selectionEnd;
+  const next = transform(input.value);
+  if (next === input.value) return;
+  input.value = next;
+  try {
+    input.setSelectionRange(start, end);
+  } catch {
+    /* some input types do not support selection */
+  }
 }
 
 function namesFromRow(row) {
   const first = String(row?.firstName || "").trim();
   const last = String(row?.lastName || "").trim();
-  if (first || last) return { firstName: first, lastName: last };
+  if (first || last) {
+    return {
+      firstName: capitalizePersonName(first),
+      lastName: capitalizePersonName(last),
+    };
+  }
   const parts = String(row?.customerName || "")
     .trim()
     .split(/\s+/)
     .filter(Boolean);
   return {
-    firstName: parts[0] || "",
-    lastName: parts.slice(1).join(" "),
+    firstName: capitalizePersonName(parts[0] || ""),
+    lastName: capitalizePersonName(parts.slice(1).join(" ")),
   };
 }
 
@@ -158,61 +188,113 @@ function sortHeader(key, label) {
 }
 
 function matchesCustomerSearch(row, query) {
-  const q = String(query || "").trim().toLowerCase();
-  if (!q) return true;
-  const name = displayName(row).toLowerCase();
-  const first = String(row.firstName || "").toLowerCase();
-  const last = String(row.lastName || "").toLowerCase();
-  const address = String(row.customerAddress || "").toLowerCase();
-  const email = String(row.customerEmail || "").toLowerCase();
-  const phone = String(row.customerPhone || "").toLowerCase().replace(/\s+/g, "");
+  const raw = String(query || "").trim().toLowerCase();
+  if (!raw) return true;
+  const names = namesFromRow(row);
   const plates = (
     Array.isArray(row.registrations) && row.registrations.length
       ? row.registrations
       : String(row.registration || "").split(",")
   )
-    .map((p) =>
-      String(p || "")
-        .toLowerCase()
-        .replace(/[\s-]/g, "")
-    )
+    .map((p) => String(p || "").toUpperCase().replace(/[\s-]/g, ""))
     .filter(Boolean);
-  const plateQuery = q.replace(/[\s-]/g, "");
-  const phoneQuery = q.replace(/\s+/g, "");
-  return (
-    name.includes(q) ||
-    first.includes(q) ||
-    last.includes(q) ||
-    address.includes(q) ||
-    email.includes(q) ||
-    phone.includes(phoneQuery) ||
-    plates.some((p) => p.includes(plateQuery))
-  );
+  const hay = [
+    displayName(row),
+    names.firstName,
+    names.lastName,
+    row.customerAddress,
+    row.customerEmail,
+    row.customerPhone,
+    String(row.customerSeq || row.dailySeq || ""),
+    plates.join(" "),
+  ]
+    .join(" ")
+    .toLowerCase();
+  const compactHay = hay.replace(/[\s()-]/g, "");
+  return raw.split(/\s+/).filter(Boolean).every((token) => {
+    const compact = token.replace(/[\s-]/g, "");
+    return hay.includes(token) || (compact && compactHay.includes(compact));
+  });
+}
+
+function lastNameInitial(row) {
+  const ch = namesFromRow(row).lastName.charAt(0).toUpperCase();
+  return /[A-Z]/.test(ch) ? ch : "#";
+}
+
+function recentCustomerRows(rows) {
+  return [...rows]
+    .sort((a, b) => {
+      const byVisit = String(b.lastVisit || "").localeCompare(String(a.lastVisit || ""));
+      if (byVisit) return byVisit;
+      return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+    })
+    .slice(0, RECENT_CUSTOMER_LIMIT);
+}
+
+function renderLetterBar() {
+  const el = document.getElementById("customers-letters");
+  if (!el) return;
+  const keys = ["", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""), "#"];
+  el.innerHTML = keys
+    .map((key) => {
+      const label = key || "All";
+      const active = customerLetter === key ? " is-active" : "";
+      return `<button type="button" class="ghost letter-btn${active}" data-letter="${Admin.escapeAttr(key)}">${label}</button>`;
+    })
+    .join("");
+  el.querySelectorAll("[data-letter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      customerLetter = btn.dataset.letter || "";
+      customerShowAll = false;
+      if (customersSearch) customersSearch.value = "";
+      renderLetterBar();
+      renderCustomers();
+    });
+  });
 }
 
 function renderCustomers() {
   if (!customersList) return;
   if (!customerRows.length) {
     customersList.innerHTML =
-      '<div class="empty">No customers yet. Fill in the form above and click Save customer.</div>';
+      '<div class="empty">No customers yet. Click <strong>New customer</strong> (top right).</div>';
     return;
   }
 
   const query = customersSearch?.value || "";
-  const rows = sortCustomerRows(
-    uniqueDisplaySeq(customerRows).filter((row) => {
-      if (customerFilter !== "all" && row.wofStatus !== customerFilter) return false;
-      return matchesCustomerSearch(row, query);
-    })
-  );
+  const filtered = uniqueDisplaySeq(customerRows).filter((row) => {
+    if (customerFilter !== "all" && row.wofStatus !== customerFilter) return false;
+    if (customerLetter && lastNameInitial(row) !== customerLetter) return false;
+    return matchesCustomerSearch(row, query);
+  });
+  const browsingRecent =
+    !String(query).trim() && !customerLetter && customerFilter === "all" && !customerShowAll;
+  const rows = browsingRecent ? recentCustomerRows(filtered) : sortCustomerRows(filtered);
 
-  if (!rows.length) {
-    customersList.innerHTML = '<div class="empty">No matching customers.</div>';
+  if (!filtered.length) {
+    customersList.innerHTML = '<div class="empty">No matching customers. Try another name, plate, or letter.</div>';
     return;
   }
 
+  const total = uniqueDisplaySeq(customerRows).length;
+  let summary = `${rows.length} customer${rows.length === 1 ? "" : "s"}`;
+  if (browsingRecent && total > rows.length) {
+    summary = `Showing the ${rows.length} most recent of ${total}. Type a name or plate, or tap a letter.`;
+  } else if (customerLetter) {
+    summary = `${rows.length} customer${rows.length === 1 ? "" : "s"} · last name ${customerLetter}`;
+  } else if (String(query).trim()) {
+    summary = `${rows.length} match${rows.length === 1 ? "" : "es"}`;
+  } else if (customerShowAll) {
+    summary = `All ${rows.length} customers · sorted by last name`;
+  }
+
   customersList.innerHTML = `
-    <p class="muted small">${rows.length} customer${rows.length === 1 ? "" : "s"} · each number is unique and does not restart tomorrow. Click a column heading to sort.</p>
+    <p class="muted small">${Admin.escapeHtml(summary)}${
+      browsingRecent && total > rows.length
+        ? ` <button type="button" id="btn-customers-show-all" class="ghost">Show all</button>`
+        : ""
+    }</p>
     <div class="billing-table-wrap">
       <table class="billing-table">
         <thead>
@@ -236,8 +318,12 @@ function renderCustomers() {
               <td class="billing-number customer-index">${Number(row.customerSeq || row.dailySeq) || "—"}</td>
               <td>${Admin.escapeHtml(
                 (Array.isArray(row.registrations) && row.registrations.length
-                  ? row.registrations.join(", ")
-                  : row.registration) || "—"
+                  ? row.registrations
+                  : String(row.registration || "").split(",")
+                )
+                  .map((p) => String(p || "").trim().toUpperCase())
+                  .filter(Boolean)
+                  .join(", ") || "—"
               )}</td>
               <td><button type="button" class="customer-name-link" data-invoices="1">${Admin.escapeHtml(namesFromRow(row).firstName || "—")}</button></td>
               <td><button type="button" class="customer-name-link" data-invoices="1">${Admin.escapeHtml(namesFromRow(row).lastName || "—")}</button></td>
@@ -282,6 +368,11 @@ function renderCustomers() {
         </tbody>
       </table>
     </div>`;
+
+  customersList.querySelector("#btn-customers-show-all")?.addEventListener("click", () => {
+    customerShowAll = true;
+    renderCustomers();
+  });
 
   customersList.querySelectorAll("[data-sort]").forEach((th) => {
     th.addEventListener("click", (event) => {
@@ -357,7 +448,7 @@ function openCustomerInvoices(row) {
 }
 
 async function deleteCustomerById(id, btn) {
-  if (!id || !confirm("Delete this customer? Only customers with no reports or invoices can be deleted.")) {
+  if (!id || !confirm("Delete this customer? Only customers with no invoice can be deleted.")) {
     return;
   }
   try {
@@ -382,6 +473,13 @@ async function openCustomer(rowEl) {
   if (found) showCustomerForm(found);
 }
 
+function clearCustomerSaveStatus() {
+  const status = document.getElementById("customer-save-status");
+  if (!status) return;
+  status.textContent = "";
+  status.hidden = true;
+}
+
 function showCustomerForm(row = null) {
   const form = document.getElementById("customer-form");
   if (!form) {
@@ -391,6 +489,7 @@ function showCustomerForm(row = null) {
   editingCustomerId = row?.customerId || "";
   form.removeAttribute("hidden");
   form.hidden = false;
+  clearCustomerSaveStatus();
   const legend = document.getElementById("customer-form-legend");
   if (legend) legend.textContent = editingCustomerId ? "Edit customer" : "New customer";
   const names = namesFromRow(row);
@@ -399,8 +498,8 @@ function showCustomerForm(row = null) {
   const address = document.getElementById("customer-address");
   const phone = document.getElementById("customer-phone");
   const email = document.getElementById("customer-email");
-  if (first) first.value = names.firstName;
-  if (last) last.value = names.lastName;
+  if (first) first.value = capitalizePersonName(names.firstName);
+  if (last) last.value = capitalizePersonName(names.lastName);
   if (address) address.value = row?.customerAddress || "";
   if (phone) phone.value = row?.customerPhone || "";
   if (email) email.value = row?.customerEmail || "";
@@ -433,11 +532,11 @@ function renderVehicleRows(vehicles) {
       <div class="vehicle-row" data-index="${index}">
         <label>
           Registration
-          <input class="vehicle-rego" value="${Admin.escapeAttr(v.registration || "")}" required />
+          <input class="vehicle-rego" value="${Admin.escapeAttr(String(v.registration || "").toUpperCase())}" required autocapitalize="characters" spellcheck="false" />
         </label>
         <label>
           Vehicle
-          <input class="vehicle-desc" value="${Admin.escapeAttr(v.vehicle || "")}" placeholder="e.g. Toyota Camry" />
+          <input class="vehicle-desc" value="${Admin.escapeAttr(capitalizePersonName(v.vehicle || ""))}" placeholder="e.g. Toyota Camry" autocapitalize="words" />
         </label>
         <button type="button" class="ghost vehicle-remove" data-remove="${index}" ${rows.length <= 1 ? "hidden" : ""}>×</button>
       </div>`
@@ -456,8 +555,10 @@ function collectVehiclesFromForm() {
   const wrap = document.getElementById("customer-vehicles");
   if (!wrap) return [];
   return [...wrap.querySelectorAll(".vehicle-row")].map((row) => ({
-    registration: String(row.querySelector(".vehicle-rego")?.value || "").trim(),
-    vehicle: String(row.querySelector(".vehicle-desc")?.value || "").trim(),
+    registration: String(row.querySelector(".vehicle-rego")?.value || "")
+      .trim()
+      .toUpperCase(),
+    vehicle: capitalizePersonName(String(row.querySelector(".vehicle-desc")?.value || "").trim()),
   }));
 }
 
@@ -466,10 +567,14 @@ function hideCustomerForm() {
   if (!form) return;
   form.reset();
   editingCustomerId = "";
+  clearCustomerSaveStatus();
   renderVehicleRows([{ registration: "", vehicle: "" }]);
   if (customerDeleteBtn) customerDeleteBtn.hidden = true;
+  const invoicesBtn = document.getElementById("btn-customer-invoices");
+  if (invoicesBtn) invoicesBtn.hidden = true;
   const legend = document.getElementById("customer-form-legend");
   if (legend) legend.textContent = "New customer";
+  form.hidden = true;
 }
 
 async function saveCustomer(event) {
@@ -478,8 +583,12 @@ async function saveCustomer(event) {
   const status = document.getElementById("customer-save-status");
   const vehicles = collectVehiclesFromForm().filter((v) => v.registration);
   const body = {
-    firstName: (document.getElementById("customer-first-name")?.value || "").trim(),
-    lastName: (document.getElementById("customer-last-name")?.value || "").trim(),
+    firstName: capitalizePersonName(
+      (document.getElementById("customer-first-name")?.value || "").trim()
+    ),
+    lastName: capitalizePersonName(
+      (document.getElementById("customer-last-name")?.value || "").trim()
+    ),
     customerAddress: (document.getElementById("customer-address")?.value || "").trim(),
     customerPhone: (document.getElementById("customer-phone")?.value || "").trim(),
     customerEmail: (document.getElementById("customer-email")?.value || "").trim(),
@@ -538,20 +647,19 @@ async function saveCustomer(event) {
           method: "POST",
           body: JSON.stringify(body),
         });
-    editingCustomerId = saved.id || editingCustomerId;
-    if (customerDeleteBtn) customerDeleteBtn.hidden = !editingCustomerId;
-    const legend = document.getElementById("customer-form-legend");
-    if (legend && editingCustomerId) legend.textContent = "Edit customer";
     await loadCustomers();
-    const info = await Admin.api("/api/admin/email-status").catch(() => null);
-    const hint = document.getElementById("customer-storage-hint");
-    if (hint && info?.dataDir) {
-      hint.textContent = `Saving to ${info.dataDir} (${info.customersSaved || 0} saved).`;
-    }
     const plates = (saved.vehicles || vehicles).map((v) => v.registration).join(", ");
     const msg = `Saved ${saved.customerName || fullName} · ${plates}`;
-    if (status) status.textContent = msg;
     alert(msg);
+    hideCustomerForm();
+    customerLetter = "";
+    customerShowAll = false;
+    if (customersSearch) {
+      customersSearch.value = [body.lastName, vehicles[0]?.registration].filter(Boolean).join(" ");
+    }
+    renderLetterBar();
+    renderCustomers();
+    customersSearch?.focus();
   } catch (err) {
     const msg = err?.name === "AbortError" ? "Save timed out. Check the Render disk at /data." : err.message;
     if (status) {
@@ -611,6 +719,8 @@ async function showCustomers() {
   Admin.setViewTitle("Customers");
   try {
     await loadCustomers();
+    renderLetterBar();
+    if (!customerForm || customerForm.hidden) customersSearch?.focus();
     const info = await Admin.api("/api/admin/email-status");
     const hint = document.getElementById("customer-storage-hint");
     if (hint && info?.dataDir) {
@@ -621,8 +731,17 @@ async function showCustomers() {
   }
 }
 
-customersSearch?.addEventListener("input", renderCustomers);
-customersSearch?.addEventListener("search", renderCustomers);
+function onCustomerSearchInput() {
+  customerShowAll = false;
+  if (String(customersSearch?.value || "").trim() && customerLetter) {
+    customerLetter = "";
+    renderLetterBar();
+  }
+  renderCustomers();
+}
+
+customersSearch?.addEventListener("input", onCustomerSearchInput);
+customersSearch?.addEventListener("search", onCustomerSearchInput);
 
 customersFilter?.querySelectorAll("[data-filter]").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -632,6 +751,22 @@ customersFilter?.querySelectorAll("[data-filter]").forEach((btn) => {
     });
     renderCustomers();
   });
+});
+
+document.getElementById("customer-first-name")?.addEventListener("input", (e) => {
+  applyLiveTransform(e.target, capitalizePersonName);
+});
+document.getElementById("customer-last-name")?.addEventListener("input", (e) => {
+  applyLiveTransform(e.target, capitalizePersonName);
+});
+document.getElementById("customer-vehicles")?.addEventListener("input", (e) => {
+  if (e.target.classList.contains("vehicle-rego")) {
+    applyLiveTransform(e.target, (value) => String(value || "").toUpperCase());
+    return;
+  }
+  if (e.target.classList.contains("vehicle-desc")) {
+    applyLiveTransform(e.target, capitalizePersonName);
+  }
 });
 
 document.getElementById("btn-customer-cancel")?.addEventListener("click", hideCustomerForm);
@@ -644,6 +779,7 @@ document.getElementById("btn-add-vehicle")?.addEventListener("click", () => {
   inputs[inputs.length - 1]?.focus();
 });
 
+renderLetterBar();
 renderVehicleRows([{ registration: "", vehicle: "" }]);
 
 customerForm?.addEventListener("submit", saveCustomer);

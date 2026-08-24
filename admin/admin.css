@@ -263,6 +263,11 @@ button.customer-name-link {
   display: grid !important;
 }
 
+.vehicle-rego,
+#job-registration {
+  text-transform: uppercase;
+}
+
 fieldset {
   margin: 0;
   border: 1px solid var(--line);
@@ -445,6 +450,41 @@ label.check input {
 
 .list-search input {
   max-width: 420px;
+}
+
+.customers-find .list-search input {
+  max-width: none;
+  width: 100%;
+  font-size: 1.15rem;
+  padding: 0.7rem 0.85rem;
+}
+
+.customers-find {
+  position: sticky;
+  top: 4.6rem;
+  z-index: 6;
+  background: var(--paper);
+  padding: 0.15rem 0 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.letter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0 0 0.65rem;
+}
+
+.letter-btn {
+  min-width: 2rem;
+  padding: 0.28rem 0.4rem;
+  font-weight: 700;
+}
+
+.letter-btn.is-active {
+  background: var(--blue-soft);
+  border-color: #c5d8f0;
+  color: var(--blue);
 }
 
 .filter-row {
