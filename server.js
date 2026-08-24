@@ -73,6 +73,7 @@ const REPORTS_FILE = path.join(DATA_DIR, "reports.json");
 const BILLING_FILE = path.join(DATA_DIR, "billing.json");
 const BILLING_SEQ_FILE = path.join(DATA_DIR, "billing-seq.json");
 const CUSTOMERS_FILE = path.join(DATA_DIR, "customers.json");
+const CUSTOMERS_SEQ_FILE = path.join(DATA_DIR, "customers-seq.json");
 const JOBS_FILE = path.join(DATA_DIR, "jobs.json");
 const UPLOADS_DIR = (() => {
   const raw = String(process.env.UPLOADS_DIR || "").trim();
@@ -158,11 +159,11 @@ function writeBilling(docs) {
 
 function readSavedCustomers() {
   const rows = readJsonArray(CUSTOMERS_FILE, "customers");
-  if (ensureDailyCustomerNumbers(rows)) {
+  if (ensureUniqueCustomerNumbers(rows)) {
     try {
       writeSavedCustomers(rows);
     } catch (err) {
-      console.error("Could not save daily customer numbers:", err);
+      console.error("Could not save customer numbers:", err);
     }
   }
   return rows;
@@ -619,6 +620,7 @@ function applyJobFields(job, body = {}) {
 
 function writeSavedCustomers(rows) {
   writeJsonArray(CUSTOMERS_FILE, rows);
+  bumpCustomerHighWater(rows);
 }
 
 function nzCalendarDate(iso) {
@@ -631,45 +633,85 @@ function nzCalendarDate(iso) {
   return todayIso(new Date(t));
 }
 
-function nextDailyCustomerSeq(rows, day) {
-  let max = 0;
-  for (const row of rows || []) {
-    const d = String(row.dailySeqDate || "").slice(0, 10) || nzCalendarDate(row.createdAt);
-    if (d !== day) continue;
-    const n = Number(row.dailySeq) || 0;
-    if (n > max) max = n;
-  }
-  return max + 1;
+function customerSeqOf(row) {
+  return Number(row?.customerSeq || row?.dailySeq) || 0;
 }
 
-function ensureDailyCustomerNumbers(rows) {
-  const byDay = new Map();
+function readCustomerSeqMap() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(CUSTOMERS_SEQ_FILE, "utf8"));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+  } catch {
+    /* first run */
+  }
+  return { last: 0 };
+}
+
+function writeCustomerSeqMap(map) {
+  fs.mkdirSync(path.dirname(CUSTOMERS_SEQ_FILE), { recursive: true });
+  fs.writeFileSync(CUSTOMERS_SEQ_FILE, `${JSON.stringify(map, null, 2)}\n`);
+}
+
+function bumpCustomerHighWater(rows) {
+  const map = readCustomerSeqMap();
+  let last = Number(map.last) || 0;
   for (const row of rows || []) {
-    const day =
-      String(row.dailySeqDate || "").slice(0, 10) ||
-      nzCalendarDate(row.createdAt || row.updatedAt);
-    if (!day) continue;
-    if (!byDay.has(day)) byDay.set(day, []);
-    byDay.get(day).push(row);
+    const n = customerSeqOf(row);
+    if (n > last) last = n;
   }
-  let changed = false;
-  for (const [day, group] of byDay) {
-    let max = 0;
-    for (const row of group) {
-      const n = Number(row.dailySeq) || 0;
-      if (n > max) max = n;
-    }
-    const pending = group
-      .filter((row) => !(Number(row.dailySeq) > 0))
-      .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
-    for (const row of pending) {
-      max += 1;
-      row.dailySeq = max;
-      row.dailySeqDate = day;
-      changed = true;
+  if (last !== Number(map.last) || !fs.existsSync(CUSTOMERS_SEQ_FILE)) {
+    try {
+      writeCustomerSeqMap({ last });
+    } catch (err) {
+      console.error("Could not save customer sequence:", err);
     }
   }
-  return changed;
+  return last;
+}
+
+function nextCustomerSeq(rows) {
+  const last = bumpCustomerHighWater(rows);
+  const seq = last + 1;
+  try {
+    writeCustomerSeqMap({ last: seq });
+  } catch (err) {
+    console.error("Could not save customer sequence:", err);
+  }
+  return seq;
+}
+
+function customerNumbersNeedRenumber(rows) {
+  const seen = new Set();
+  for (const row of rows || []) {
+    const n = customerSeqOf(row);
+    if (!(n > 0) || seen.has(n)) return true;
+    seen.add(n);
+  }
+  return false;
+}
+
+function ensureUniqueCustomerNumbers(rows) {
+  const ordered = [...(rows || [])].sort((a, b) => {
+    const byDate = String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+    if (byDate) return byDate;
+    return String(a.id || "").localeCompare(String(b.id || ""));
+  });
+  if (!customerNumbersNeedRenumber(ordered)) {
+    bumpCustomerHighWater(ordered);
+    return false;
+  }
+  ordered.forEach((row, index) => {
+    const seq = index + 1;
+    row.customerSeq = seq;
+    row.dailySeq = seq;
+    row.dailySeqDate = "";
+  });
+  try {
+    writeCustomerSeqMap({ last: ordered.length });
+  } catch (err) {
+    console.error("Could not save customer sequence:", err);
+  }
+  return true;
 }
 
 function normalizeVehicles(body = {}, current = {}) {
@@ -855,6 +897,7 @@ function mergeCustomer(map, incoming) {
     customerAddress: "",
     customerId: "",
     dailySeq: 0,
+    customerSeq: 0,
     dailySeqDate: "",
     createdAt: "",
   };
@@ -936,7 +979,8 @@ function mergeCustomer(map, incoming) {
     lastReportId: incoming.lastReportId || cur.lastReportId,
     lastBillingId: incoming.lastBillingId || cur.lastBillingId,
     customerId: incoming.customerId || cur.customerId,
-    dailySeq: incoming.dailySeq || cur.dailySeq || 0,
+    dailySeq: incoming.dailySeq || incoming.customerSeq || cur.dailySeq || cur.customerSeq || 0,
+    customerSeq: incoming.customerSeq || cur.customerSeq || incoming.dailySeq || cur.dailySeq || 0,
     dailySeqDate: incoming.dailySeqDate || cur.dailySeqDate || "",
     createdAt: incoming.createdAt || cur.createdAt || "",
   });
@@ -945,8 +989,10 @@ function mergeCustomer(map, incoming) {
 function listCustomers() {
   const map = new Map();
   const plateOwner = new Map();
+  const seqById = new Map();
 
   for (const c of readSavedCustomers()) {
+    seqById.set(c.id, customerSeqOf(c));
     const vehicles = normalizeVehicles(c, c);
     const key = `id:${c.id}`;
     for (const v of vehicles) {
@@ -970,7 +1016,8 @@ function listCustomers() {
       lastReportId: "",
       lastBillingId: "",
       customerId: c.id,
-      dailySeq: c.dailySeq || 0,
+      dailySeq: c.dailySeq || c.customerSeq || 0,
+      customerSeq: c.customerSeq || c.dailySeq || 0,
       dailySeqDate: c.dailySeqDate || "",
       createdAt: c.createdAt || "",
     });
@@ -1021,9 +1068,12 @@ function listCustomers() {
       const hasReport = Boolean(row.lastReportId);
       const hasBilling = Boolean(row.lastBillingId);
       const canDelete = Boolean(row.customerId) && !hasReport && !hasBilling;
+      const seq = row.customerId ? Number(seqById.get(row.customerId)) || 0 : 0;
       return {
         ...row,
         ...wofMeta(row.wofExpiry),
+        customerSeq: seq,
+        dailySeq: seq,
         hasReport,
         hasBilling,
         canDelete,
@@ -1748,12 +1798,13 @@ app.post("/api/customers", requireAdmin, (req, res) => {
       writeSavedCustomers(rows);
       return res.json(existing);
     }
-    const day = todayIso();
+    const seq = nextCustomerSeq(rows);
     const row = {
       id: randomUUID(),
       ...fields,
-      dailySeq: nextDailyCustomerSeq(rows, day),
-      dailySeqDate: day,
+      dailySeq: seq,
+      customerSeq: seq,
+      dailySeqDate: "",
       createdAt: now,
       updatedAt: now,
     };
@@ -1785,6 +1836,7 @@ app.put("/api/customers/:id", requireAdmin, (req, res) => {
       id: rows[index].id,
       createdAt: rows[index].createdAt,
       dailySeq: rows[index].dailySeq,
+      customerSeq: rows[index].customerSeq || rows[index].dailySeq,
       dailySeqDate: rows[index].dailySeqDate,
       updatedAt: nowIso(),
     };

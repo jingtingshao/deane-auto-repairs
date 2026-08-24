@@ -3,6 +3,7 @@ data/reports.json
 data/billing.json
 data/billing-seq.json
 data/customers.json
+data/customers-seq.json
 data/jobs.json
 data/backup-status.json
 data/*.bak

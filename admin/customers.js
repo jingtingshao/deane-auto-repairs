@@ -11,7 +11,7 @@ const customerDeleteBtn = document.getElementById("btn-customer-delete");
 let customerRows = [];
 let customerFilter = "all";
 let editingCustomerId = "";
-let customerSortKey = "daily";
+let customerSortKey = "seq";
 let customerSortDir = "asc";
 
 function wofLabel(row) {
@@ -96,6 +96,35 @@ function rowPlateSortValue(row) {
     .replace(/[\s-]/g, "");
 }
 
+function uniqueDisplaySeq(rows) {
+  const saved = rows.filter((row) => row.customerId);
+  const ordered = [...saved].sort((a, b) => {
+    const byDate = String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+    if (byDate) return byDate;
+    return String(a.customerId).localeCompare(String(b.customerId));
+  });
+  const seen = new Set();
+  const needsFix = ordered.some((row) => {
+    const n = Number(row.customerSeq || row.dailySeq) || 0;
+    if (!(n > 0) || seen.has(n)) return true;
+    seen.add(n);
+    return false;
+  });
+  const seqById = new Map();
+  if (needsFix) {
+    ordered.forEach((row, index) => seqById.set(row.customerId, index + 1));
+  } else {
+    for (const row of ordered) {
+      seqById.set(row.customerId, Number(row.customerSeq || row.dailySeq));
+    }
+  }
+  return rows.map((row) => {
+    const n = row.customerId ? seqById.get(row.customerId) : 0;
+    if (!n) return { ...row, customerSeq: 0, dailySeq: 0 };
+    return { ...row, customerSeq: n, dailySeq: n };
+  });
+}
+
 function sortCustomerRows(rows) {
   const dir = customerSortDir === "desc" ? -1 : 1;
   return [...rows].sort((a, b) => {
@@ -118,9 +147,7 @@ function sortCustomerRows(rows) {
         })
       );
     }
-    const dateCmp = String(b.dailySeqDate || "").localeCompare(String(a.dailySeqDate || ""));
-    if (dateCmp) return dateCmp;
-    return dir * ((Number(a.dailySeq) || 0) - (Number(b.dailySeq) || 0));
+    return dir * ((Number(a.customerSeq || a.dailySeq) || 0) - (Number(b.customerSeq || b.dailySeq) || 0));
   });
 }
 
@@ -173,7 +200,7 @@ function renderCustomers() {
 
   const query = customersSearch?.value || "";
   const rows = sortCustomerRows(
-    customerRows.filter((row) => {
+    uniqueDisplaySeq(customerRows).filter((row) => {
       if (customerFilter !== "all" && row.wofStatus !== customerFilter) return false;
       return matchesCustomerSearch(row, query);
     })
@@ -185,12 +212,12 @@ function renderCustomers() {
   }
 
   customersList.innerHTML = `
-    <p class="muted small">${rows.length} customer${rows.length === 1 ? "" : "s"} · new customers number 1, 2, 3 each day (tomorrow starts at 1). Click Plate, First name or Last name to sort.</p>
+    <p class="muted small">${rows.length} customer${rows.length === 1 ? "" : "s"} · each number is unique and does not restart tomorrow. Click a column heading to sort.</p>
     <div class="billing-table-wrap">
       <table class="billing-table">
         <thead>
           <tr>
-            ${sortHeader("daily", "#")}
+            ${sortHeader("seq", "#")}
             ${sortHeader("plate", "Plate")}
             ${sortHeader("firstName", "First name")}
             ${sortHeader("lastName", "Last name")}
@@ -206,7 +233,7 @@ function renderCustomers() {
             .map(
               (row) => `
             <tr class="customer-row" data-key="${Admin.escapeAttr(row.key)}">
-              <td class="billing-number customer-index">${Number(row.dailySeq) || "—"}</td>
+              <td class="billing-number customer-index">${Number(row.customerSeq || row.dailySeq) || "—"}</td>
               <td>${Admin.escapeHtml(
                 (Array.isArray(row.registrations) && row.registrations.length
                   ? row.registrations.join(", ")
