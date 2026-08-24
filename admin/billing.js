@@ -537,7 +537,20 @@ function selectedBillingCustomer() {
 function selectedBillingVehicle(row) {
   const id = billingVehicleSelect?.value || "";
   const vehicles = Admin.customerVehicles(row);
-  return vehicles.find((v) => v.id === id || v.registration === id) || null;
+  const key = String(id)
+    .toUpperCase()
+    .replace(/[\s-]/g, "");
+  return (
+    vehicles.find(
+      (v) =>
+        v.id === id ||
+        v.registration === id ||
+        (key &&
+          String(v.registration || "")
+            .toUpperCase()
+            .replace(/[\s-]/g, "") === key)
+    ) || null
+  );
 }
 
 function syncBillingPartyFields() {
@@ -582,7 +595,7 @@ function refreshBillingPartySelects(doc = currentBill) {
 }
 
 async function openDoc(id) {
-  if (!customerDirectory.length) await loadCustomerDirectory();
+  await loadCustomerDirectory();
   currentBill = await Admin.api(`/api/billing/${id}`);
   listKind = currentBill.kind === "invoice" ? "invoice" : "quote";
   Admin.setSection(listKind === "invoice" ? "invoices" : "quotes");
@@ -1117,8 +1130,11 @@ async function showList(opts = {}) {
 billingSearch?.addEventListener("input", renderBillingList);
 billingSearch?.addEventListener("search", renderBillingList);
 
-billingCustomerSelect?.addEventListener("change", () => {
+billingCustomerSelect?.addEventListener("change", async () => {
   if (!canEditCustomer(currentBill)) return;
+  const customerId = billingCustomerSelect.value;
+  await loadCustomerDirectory();
+  Admin.fillCustomerSelect(billingCustomerSelect, customerDirectory, customerId);
   Admin.fillVehicleSelect(billingVehicleSelect, selectedBillingCustomer(), "");
   syncBillingPartyFields();
   scheduleBillAutosave();

@@ -1303,8 +1303,12 @@ function requireCustomerSnapshot(body) {
     throw err;
   }
   const vehicles = normalizeVehicles(saved, saved);
+  const wantedPlate = plateKey(vehicleId);
   const vehicle =
-    (vehicleId && vehicles.find((v) => v.id === vehicleId)) ||
+    (vehicleId &&
+      vehicles.find(
+        (v) => v.id === vehicleId || (wantedPlate && plateKey(v.registration) === wantedPlate)
+      )) ||
     (vehicles.length === 1 ? vehicles[0] : null);
   if (!vehicle) {
     const err = new Error("Select a vehicle for this customer.");

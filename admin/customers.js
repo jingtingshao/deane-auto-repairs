@@ -38,6 +38,8 @@ function canSendWofReminder(row) {
       !row.wofReminderSentAt
   );
 }
+
+function wofLabel(row) {
   if (row.wofStatus === "overdue") {
     return `Overdue ${Math.abs(row.daysUntil)}d`;
   }
@@ -553,7 +555,7 @@ function renderVehicleRows(vehicles) {
   wrap.innerHTML = rows
     .map(
       (v, index) => `
-      <div class="vehicle-row" data-index="${index}">
+      <div class="vehicle-row" data-index="${index}" data-id="${Admin.escapeAttr(v.id || "")}">
         <label>
           Registration
           <input class="vehicle-rego" value="${Admin.escapeAttr(String(v.registration || "").toUpperCase())}" required autocapitalize="characters" spellcheck="false" />
@@ -579,6 +581,7 @@ function collectVehiclesFromForm() {
   const wrap = document.getElementById("customer-vehicles");
   if (!wrap) return [];
   return [...wrap.querySelectorAll(".vehicle-row")].map((row) => ({
+    id: String(row.dataset.id || "").trim(),
     registration: String(row.querySelector(".vehicle-rego")?.value || "")
       .trim()
       .toUpperCase(),

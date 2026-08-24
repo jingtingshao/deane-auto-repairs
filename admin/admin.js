@@ -237,16 +237,27 @@ window.DeaneAdmin = {
     if (!selectEl) return;
     const vehicles = this.customerVehicles(row);
     const current = selectedId || selectEl.value || "";
+    const currentKey = String(current)
+      .toUpperCase()
+      .replace(/[\s-]/g, "");
+    const match = vehicles.find((v) => {
+      const id = v.id || v.registration;
+      const plate = String(v.registration || "")
+        .toUpperCase()
+        .replace(/[\s-]/g, "");
+      return id === current || v.registration === current || (currentKey && plate === currentKey);
+    });
+    const selectedValue = match ? match.id || match.registration : "";
     const options = vehicles
       .map((v) => {
         const id = v.id || v.registration;
         const label = [v.registration, v.vehicle].filter(Boolean).join(" · ");
-        const sel = id === current || v.registration === current ? " selected" : "";
+        const sel = selectedValue && id === selectedValue ? " selected" : "";
         return `<option value="${escapeAttr(id)}"${sel}>${escapeHtml(label || "Vehicle")}</option>`;
       })
       .join("");
     selectEl.innerHTML = `<option value="">Select vehicle…</option>${options}`;
-    if (current) selectEl.value = current;
+    if (selectedValue) selectEl.value = selectedValue;
   },
   applyPartyToForm(form, row, vehicle) {
     if (!form || !row || !(row.customerId || row.customerName)) return;
@@ -479,7 +490,7 @@ function normalizePkg(pkg) {
 }
 
 async function openReport(id) {
-  if (!reportCustomerDirectory.length) await loadReportCustomerDirectory();
+  await loadReportCustomerDirectory();
   current = await api(`/api/reports/${id}`);
   listView.hidden = true;
   editView.hidden = false;
@@ -506,7 +517,20 @@ function selectedReportCustomer() {
 function selectedReportVehicle(row) {
   const id = reportVehicleSelect?.value || "";
   const vehicles = window.DeaneAdmin.customerVehicles(row);
-  return vehicles.find((v) => v.id === id || v.registration === id) || null;
+  const key = String(id)
+    .toUpperCase()
+    .replace(/[\s-]/g, "");
+  return (
+    vehicles.find(
+      (v) =>
+        v.id === id ||
+        v.registration === id ||
+        (key &&
+          String(v.registration || "")
+            .toUpperCase()
+            .replace(/[\s-]/g, "") === key)
+    ) || null
+  );
 }
 
 function syncReportPartyFields() {
@@ -770,7 +794,10 @@ document.getElementById("btn-save").addEventListener("click", async () => {
   }
 });
 
-reportCustomerSelect?.addEventListener("change", () => {
+reportCustomerSelect?.addEventListener("change", async () => {
+  const customerId = reportCustomerSelect.value;
+  await loadReportCustomerDirectory();
+  window.DeaneAdmin.fillCustomerSelect(reportCustomerSelect, reportCustomerDirectory, customerId);
   window.DeaneAdmin.fillVehicleSelect(reportVehicleSelect, selectedReportCustomer(), "");
   syncReportPartyFields();
   scheduleReportAutosave();
