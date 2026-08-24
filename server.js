@@ -1685,6 +1685,7 @@ app.get("/api/health", (_req, res) => {
     ok: true,
     shop: business.name,
     dataDir: DATA_DIR,
+    restoreWorkshop: true,
   });
 });
 
@@ -2025,6 +2026,61 @@ app.post("/api/admin/backup", requireAdmin, async (_req, res) => {
   } catch (err) {
     console.error("Manual backup failed:", err);
     res.status(err.status || 502).json({ error: err.message || "Backup failed" });
+  }
+});
+
+app.post("/api/admin/restore-workshop", requireAdmin, (req, res) => {
+  try {
+    if (req.body?.replace !== true) {
+      return res.status(400).json({
+        error: "Pass replace: true to overwrite workshop data on this server.",
+      });
+    }
+    const customers = req.body.customers;
+    const billing = req.body.billing;
+    const jobs = req.body.jobs;
+    const reports = req.body.reports;
+    if (
+      !Array.isArray(customers) ||
+      !Array.isArray(billing) ||
+      !Array.isArray(jobs) ||
+      !Array.isArray(reports)
+    ) {
+      return res.status(400).json({
+        error: "customers, billing, jobs, and reports must be arrays.",
+      });
+    }
+    writeSavedCustomers(customers);
+    writeBilling(billing);
+    writeJobs(jobs);
+    writeJsonArray(REPORTS_FILE, reports);
+    if (req.body.billingSeq && typeof req.body.billingSeq === "object" && !Array.isArray(req.body.billingSeq)) {
+      writeBillingSeqMap(req.body.billingSeq);
+    } else {
+      bumpBillingHighWater(billing);
+    }
+    if (
+      req.body.customersSeq &&
+      typeof req.body.customersSeq === "object" &&
+      !Array.isArray(req.body.customersSeq)
+    ) {
+      writeCustomerSeqMap(req.body.customersSeq);
+    } else {
+      bumpCustomerHighWater(customers);
+    }
+    res.json({
+      ok: true,
+      dataDir: DATA_DIR,
+      counts: {
+        customers: customers.length,
+        billing: billing.length,
+        jobs: jobs.length,
+        reports: reports.length,
+      },
+    });
+  } catch (err) {
+    console.error("Workshop restore failed:", err);
+    res.status(err.status || 500).json({ error: err.message || "Restore failed" });
   }
 });
 
