@@ -751,6 +751,12 @@ function normalizeVehicles(body = {}, current = {}) {
     ];
   }
 
+  const currentByPlate = new Map();
+  for (const v of Array.isArray(current.vehicles) ? current.vehicles : []) {
+    const k = plateKey(v.registration);
+    if (k) currentByPlate.set(k, v);
+  }
+
   const vehicles = [];
   const seen = new Set();
   for (const row of raw) {
@@ -761,10 +767,13 @@ function normalizeVehicles(body = {}, current = {}) {
     const key = plateKey(registration);
     if (!key || seen.has(key)) continue;
     seen.add(key);
+    const prev = currentByPlate.get(key);
     vehicles.push({
-      id: row.id || randomUUID(),
+      id: row.id || prev?.id || randomUUID(),
       registration,
-      vehicle: capitalizePersonName(String(row?.vehicle || "").trim()),
+      vehicle: capitalizePersonName(String(row?.vehicle || prev?.vehicle || "").trim()),
+      wofExpiry: String(row?.wofExpiry || prev?.wofExpiry || "").trim(),
+      wofReminderSentAt: String(row?.wofReminderSentAt || prev?.wofReminderSentAt || "").trim(),
     });
   }
   return vehicles;
@@ -929,6 +938,7 @@ function mergeCustomer(map, incoming) {
     vehicles: [],
     vehicle: "",
     wofExpiry: "",
+    wofReminderSentAt: "",
     lastVisit: "",
     lastJobNumber: "",
     lastReportId: "",
@@ -956,6 +966,7 @@ function mergeCustomer(map, incoming) {
           registration: String(v.registration || vehicles[idx].registration).toUpperCase(),
           vehicle: v.vehicle || vehicles[idx].vehicle || "",
           wofExpiry: v.wofExpiry || vehicles[idx].wofExpiry || "",
+          wofReminderSentAt: v.wofReminderSentAt || vehicles[idx].wofReminderSentAt || "",
         };
       } else {
         vehicles.push({
@@ -963,6 +974,7 @@ function mergeCustomer(map, incoming) {
           registration: String(v.registration || "").toUpperCase(),
           vehicle: String(v.vehicle || "").trim(),
           wofExpiry: v.wofExpiry || "",
+          wofReminderSentAt: v.wofReminderSentAt || "",
         });
       }
     }
@@ -983,6 +995,7 @@ function mergeCustomer(map, incoming) {
           : idx >= 0
             ? vehicles[idx].wofExpiry || ""
             : "",
+      wofReminderSentAt: idx >= 0 ? vehicles[idx].wofReminderSentAt || "" : "",
     };
     if (idx >= 0) vehicles[idx] = { ...vehicles[idx], ...nextVehicle };
     else vehicles.push(nextVehicle);
@@ -1010,6 +1023,7 @@ function mergeCustomer(map, incoming) {
     vehicle:
       (isNewerVisit && incoming.vehicle) || cur.vehicle || incoming.vehicle || "",
     wofExpiry: bestWof,
+    wofReminderSentAt: incoming.wofReminderSentAt || cur.wofReminderSentAt || "",
     lastVisit: incomingVisit >= (cur.lastVisit || "") ? incomingVisit : cur.lastVisit,
     lastJobNumber:
       isNewerVisit && incoming.lastJobNumber
@@ -1049,7 +1063,9 @@ function listCustomers() {
       vehicles,
       registration: vehicles[0]?.registration || c.registration || "",
       vehicle: "",
-      wofExpiry: "",
+      wofExpiry:
+        vehicles.map((v) => v.wofExpiry).filter(Boolean).sort()[0] || c.wofExpiry || "",
+      wofReminderSentAt: c.wofReminderSentAt || "",
       lastVisit: "",
       lastJobNumber: "",
       lastReportId: "",
@@ -1093,7 +1109,7 @@ function listCustomers() {
       customerPhone: d.customerPhone,
       registration: d.registration,
       vehicle: d.vehicle,
-      wofExpiry: "",
+      wofExpiry: d.wofExpiry || "",
       lastVisit: (d.updatedAt || d.createdAt || "").slice(0, 10),
       lastJobNumber: d.number || "",
       lastReportId: "",
@@ -1239,6 +1255,37 @@ function nextBillingNumber(docs, kind) {
     console.error("Could not reserve billing number:", err);
   }
   return formatBillingNumber(kind === "invoice" ? "invoice" : "quote", year, seq);
+}
+
+function isoDateOnly(value) {
+  const raw = String(value || "").trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : "";
+}
+
+function applyInvoiceWofToCustomer(doc) {
+  if (!doc || doc.kind !== "invoice" || doc.status === "void") return;
+  const expiry = isoDateOnly(doc.wofExpiry);
+  if (!expiry) return;
+  if (!(doc.lines || []).some((line) => catalog.lineLooksLikeWof(line.description))) return;
+  const customerId = String(doc.customerId || "").trim();
+  if (!customerId) return;
+  const rows = readSavedCustomers();
+  const customer = rows.find((c) => c.id === customerId);
+  if (!customer) return;
+  const vehicles = normalizeVehicles(customer, customer);
+  const plate = plateKey(doc.registration);
+  const hit =
+    (plate && vehicles.find((v) => plateKey(v.registration) === plate)) || vehicles[0];
+  if (!hit) return;
+  if (hit.wofExpiry !== expiry) {
+    hit.wofReminderSentAt = "";
+    customer.wofReminderSentAt = "";
+  }
+  hit.wofExpiry = expiry;
+  customer.vehicles = vehicles;
+  customer.wofExpiry = vehicles.map((v) => v.wofExpiry).filter(Boolean).sort()[0] || expiry;
+  customer.updatedAt = nowIso();
+  writeSavedCustomers(rows);
 }
 
 function requireCustomerSnapshot(body) {
@@ -2218,16 +2265,41 @@ app.post("/api/customers/wof-reminder", requireAdmin, async (req, res) => {
     });
   }
 
-  const to = String(req.body?.to || "").trim();
-  const name = String(req.body?.customerName || "there").trim() || "there";
-  const registration = String(req.body?.registration || "").trim().toUpperCase();
-  const vehicle = String(req.body?.vehicle || "").trim();
-  const expiry = String(req.body?.wofExpiry || "").trim();
+  const customerId = String(req.body?.customerId || "").trim();
+  const rows = readSavedCustomers();
+  const customer = customerId ? rows.find((c) => c.id === customerId) : null;
+  if (!customer) {
+    return res.status(400).json({ error: "Open a saved customer first." });
+  }
+
+  const names = namesFromCustomer(customer);
+  const vehicles = normalizeVehicles(customer, customer);
+  const expiry =
+    vehicles.map((v) => v.wofExpiry).filter(Boolean).sort()[0] ||
+    String(customer.wofExpiry || req.body?.wofExpiry || "").trim();
+  const meta = wofMeta(expiry);
+  if (meta.wofStatus !== "due_soon") {
+    return res.status(400).json({
+      error: "Email reminder is only for customers whose WOF expires in the next 30 days.",
+    });
+  }
+  if (customer.wofReminderSentAt) {
+    return res.json({
+      ok: true,
+      alreadySent: true,
+      to: customer.customerEmail,
+      sentAt: customer.wofReminderSentAt,
+    });
+  }
+
+  const to = String(customer.customerEmail || req.body?.to || "").trim();
+  const name = names.customerName || "there";
+  const matchVehicle =
+    vehicles.find((v) => v.wofExpiry === expiry) || vehicles[0] || {};
+  const registration = String(matchVehicle.registration || "").trim().toUpperCase();
+  const vehicle = String(matchVehicle.vehicle || "").trim();
   if (!to) {
     return res.status(400).json({ error: "Customer email is missing." });
-  }
-  if (!expiry) {
-    return res.status(400).json({ error: "Add a WOF expiry date on the service report first." });
   }
 
   const vehicleBit = `${vehicle || "your vehicle"}${registration ? ` (${registration})` : ""}`;
@@ -2269,7 +2341,19 @@ app.post("/api/customers/wof-reminder", requireAdmin, async (req, res) => {
       text,
       html,
     });
-    res.json({ ok: true, to, messageId: info.messageId });
+    const sentAt = nowIso();
+    customer.wofReminderSentAt = sentAt;
+    const plate = plateKey(registration);
+    for (const v of vehicles) {
+      if (!plate || plateKey(v.registration) === plate) {
+        v.wofReminderSentAt = sentAt;
+        if (plate) break;
+      }
+    }
+    customer.vehicles = vehicles;
+    customer.updatedAt = sentAt;
+    writeSavedCustomers(rows);
+    res.json({ ok: true, to, sentAt });
   } catch (err) {
     console.error("WOF reminder email failed:", err);
     res.status(502).json({
@@ -2637,6 +2721,10 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
         ? String(body.validUntil)
         : current.validUntil,
     lines: nextLines,
+    wofExpiry:
+      current.kind === "invoice" && body.wofExpiry != null
+        ? isoDateOnly(body.wofExpiry)
+        : current.wofExpiry || "",
     updatedAt: nowIso(),
   };
 
@@ -2698,6 +2786,11 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
   docs[index] = next;
 
   if (next.kind === "invoice") {
+    try {
+      applyInvoiceWofToCustomer(next);
+    } catch (err) {
+      console.error("Could not save WOF expiry on customer:", err);
+    }
     try {
       syncJobFromInvoiceExtras(docs, next);
     } catch (err) {

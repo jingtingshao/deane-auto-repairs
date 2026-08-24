@@ -176,6 +176,10 @@ function presetById(id) {
   return PRESETS.find((p) => p.id === id) || null;
 }
 
+function lineLooksLikeWof(description) {
+  return /\bwof\b/i.test(String(description || "").trim());
+}
+
 module.exports = {
   GST_RATE,
   GST_FRACTION,
@@ -193,4 +197,5 @@ module.exports = {
   computeTotals,
   cloneLines,
   presetById,
+  lineLooksLikeWof,
 };

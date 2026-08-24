@@ -221,17 +221,12 @@ window.DeaneAdmin = {
         String(a.customerName || "").localeCompare(String(b.customerName || ""))
       )
       .map((row) => {
-        const plates = this.customerVehicles(row)
-          .map((v) => v.registration)
-          .filter(Boolean)
-          .join(", ");
         const labelName =
           [row.firstName, row.lastName].filter(Boolean).join(" ") ||
           row.customerName;
-        const label = [labelName, plates].filter(Boolean).join(" · ");
         const sel = row.customerId === current ? " selected" : "";
         return `<option value="${escapeAttr(row.customerId)}"${sel}>${escapeHtml(
-          label || "Customer"
+          labelName || "Customer"
         )}</option>`;
       })
       .join("");
@@ -251,11 +246,7 @@ window.DeaneAdmin = {
       })
       .join("");
     selectEl.innerHTML = `<option value="">Select vehicle…</option>${options}`;
-    if (vehicles.length === 1 && !current) {
-      selectEl.value = vehicles[0].id || vehicles[0].registration;
-    } else if (current) {
-      selectEl.value = current;
-    }
+    if (current) selectEl.value = current;
   },
   applyPartyToForm(form, row, vehicle) {
     if (!form || !row || !(row.customerId || row.customerName)) return;
@@ -268,9 +259,13 @@ window.DeaneAdmin = {
     set("customerEmail", row.customerEmail);
     set("customerPhone", row.customerPhone);
     if (vehicle) {
-      set("vehicleId", vehicle.id || "");
+      set("vehicleId", vehicle.id || vehicle.registration || "");
       set("registration", vehicle.registration);
       set("vehicle", vehicle.vehicle);
+    } else {
+      set("vehicleId", "");
+      set("registration", "");
+      set("vehicle", "");
     }
   },
   setViewTitle(text) {
@@ -511,10 +506,7 @@ function selectedReportCustomer() {
 function selectedReportVehicle(row) {
   const id = reportVehicleSelect?.value || "";
   const vehicles = window.DeaneAdmin.customerVehicles(row);
-  return (
-    vehicles.find((v) => v.id === id || v.registration === id) ||
-    (vehicles.length === 1 ? vehicles[0] : null)
-  );
+  return vehicles.find((v) => v.id === id || v.registration === id) || null;
 }
 
 function syncReportPartyFields() {

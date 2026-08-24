@@ -17,7 +17,27 @@ let customerSortKey = "lastName";
 let customerSortDir = "asc";
 const RECENT_CUSTOMER_LIMIT = 25;
 
-function wofLabel(row) {
+function formatReminderSent(iso) {
+  const raw = String(iso || "").trim();
+  if (!raw) return "";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw.slice(0, 10);
+  return new Intl.DateTimeFormat("en-NZ", {
+    timeZone: "Pacific/Auckland",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(d);
+}
+
+function canSendWofReminder(row) {
+  return Boolean(
+    row?.customerId &&
+      row.customerEmail &&
+      row.wofStatus === "due_soon" &&
+      !row.wofReminderSentAt
+  );
+}
   if (row.wofStatus === "overdue") {
     return `Overdue ${Math.abs(row.daysUntil)}d`;
   }
@@ -358,9 +378,13 @@ function renderCustomers() {
                     ? `<button type="button" class="danger" data-delete-id="${Admin.escapeAttr(row.customerId)}">Delete</button>`
                     : ""
                 }
-                <button type="button" class="primary" data-remind-key="${Admin.escapeAttr(row.key)}" ${
-                  row.customerEmail && row.wofExpiry ? "" : "disabled"
-                }>Email reminder</button>
+                ${
+                  row.wofReminderSentAt
+                    ? `<span class="reminder-sent">Sent ${Admin.escapeHtml(formatReminderSent(row.wofReminderSentAt))}</span>`
+                    : canSendWofReminder(row)
+                      ? `<button type="button" class="primary" data-remind-key="${Admin.escapeAttr(row.key)}">Email reminder</button>`
+                      : ""
+                }
               </td>
             </tr>`
             )
@@ -678,12 +702,12 @@ async function saveCustomer(event) {
 async function sendReminder(key, btn) {
   const row = customerRows.find((r) => r.key === key);
   if (!row) return;
-  if (!row.customerEmail) {
-    alert("Add the customer email first.");
-    return;
-  }
-  if (!row.wofExpiry) {
-    alert("Add the WOF expiry date on the service report first.");
+  if (!canSendWofReminder(row)) {
+    if (row.wofReminderSentAt) {
+      alert(`Reminder already sent on ${formatReminderSent(row.wofReminderSentAt)}.`);
+      return;
+    }
+    alert("Email reminder is only for customers whose WOF expires in the next 30 days, with an email on file.");
     return;
   }
   if (!confirm(`Send a WOF reminder to ${row.customerEmail}?`)) return;
@@ -693,14 +717,15 @@ async function sendReminder(key, btn) {
     const result = await Admin.api("/api/customers/wof-reminder", {
       method: "POST",
       body: JSON.stringify({
-        to: row.customerEmail,
-        customerName: row.customerName,
-        registration: row.registration,
-        vehicle: row.vehicle,
-        wofExpiry: row.wofExpiry,
+        customerId: row.customerId,
       }),
     });
-    alert(`Reminder sent to ${result.to}`);
+    if (result.alreadySent) {
+      alert(`Reminder already sent on ${formatReminderSent(result.sentAt)}.`);
+    } else {
+      alert(`Reminder sent to ${result.to}`);
+    }
+    await loadCustomers();
   } catch (err) {
     alert(err.message);
   } finally {

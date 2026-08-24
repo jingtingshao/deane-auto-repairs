@@ -69,6 +69,8 @@ function setBillingFieldsEditable(editable) {
   });
   if (billingCustomerSelect) billingCustomerSelect.disabled = !editable;
   if (billingVehicleSelect) billingVehicleSelect.disabled = !editable;
+  const plateFind = document.getElementById("billing-plate-find");
+  if (plateFind) plateFind.disabled = !editable;
 }
 
 function kindLabel(kind) {
@@ -415,6 +417,118 @@ async function loadCustomerDirectory() {
   }
 }
 
+function partyDisplayName(row) {
+  return (
+    [row?.firstName, row?.lastName].filter(Boolean).join(" ").trim() ||
+    String(row?.customerName || "").trim()
+  );
+}
+
+function plateKey(value) {
+  return String(value || "")
+    .toUpperCase()
+    .replace(/[\s-]/g, "");
+}
+
+function setBillingPlateFind(value) {
+  const el = document.getElementById("billing-plate-find");
+  if (el) el.value = String(value || "").toUpperCase();
+}
+
+function setBillingPlateStatus(text, ok = false) {
+  const el = document.getElementById("billing-plate-find-status");
+  if (!el) return;
+  if (!text) {
+    el.hidden = true;
+    el.textContent = "";
+    el.classList.remove("is-ok");
+    return;
+  }
+  el.hidden = false;
+  el.textContent = text;
+  el.classList.toggle("is-ok", Boolean(ok));
+}
+
+function billingPlateHits(query) {
+  const q = plateKey(query);
+  if (!q) return [];
+  const hits = [];
+  for (const row of customerDirectory) {
+    if (!row.customerId) continue;
+    for (const vehicle of Admin.customerVehicles(row)) {
+      const plate = plateKey(vehicle.registration);
+      if (!plate) continue;
+      if (plate === q || plate.startsWith(q) || plate.includes(q)) {
+        hits.push({ row, vehicle, plate });
+      }
+    }
+  }
+  hits.sort((a, b) => {
+    const aq = a.plate === q ? 0 : a.plate.startsWith(q) ? 1 : 2;
+    const bq = b.plate === q ? 0 : b.plate.startsWith(q) ? 1 : 2;
+    if (aq !== bq) return aq - bq;
+    return a.plate.localeCompare(b.plate);
+  });
+  return hits;
+}
+
+function applyBillingPlateHit(hit) {
+  if (!hit?.row) return;
+  Admin.fillCustomerSelect(billingCustomerSelect, customerDirectory, hit.row.customerId);
+  Admin.fillVehicleSelect(
+    billingVehicleSelect,
+    hit.row,
+    hit.vehicle.id || hit.vehicle.registration
+  );
+  Admin.applyPartyToForm(billingForm, hit.row, hit.vehicle);
+  setBillingPlateFind(hit.vehicle.registration);
+  const name = partyDisplayName(hit.row) || "Customer";
+  const plate = String(hit.vehicle.registration || "").toUpperCase();
+  setBillingPlateStatus(`${name} · ${plate}`, true);
+  scheduleBillAutosave();
+}
+
+function onBillingPlateFindInput() {
+  const input = document.getElementById("billing-plate-find");
+  if (!input || !canEditCustomer(currentBill)) return;
+  const start = input.selectionStart;
+  const next = String(input.value || "").toUpperCase();
+  if (next !== input.value) {
+    input.value = next;
+    try {
+      input.setSelectionRange(start, start);
+    } catch {
+      /* ignore */
+    }
+  }
+  const q = plateKey(input.value);
+  if (!q) {
+    setBillingPlateStatus("");
+    return;
+  }
+  if (!customerDirectory.length) {
+    setBillingPlateStatus("No customers yet. Add them under Customers first.");
+    return;
+  }
+  const hits = billingPlateHits(input.value);
+  const exact = hits.filter((h) => h.plate === q);
+  let chosen = null;
+  if (exact.length === 1) chosen = exact[0];
+  else if (q.length >= 3) {
+    const prefix = hits.filter((h) => h.plate.startsWith(q));
+    if (prefix.length === 1) chosen = prefix[0];
+  }
+  if (chosen) {
+    applyBillingPlateHit(chosen);
+    return;
+  }
+  if (hits.length > 1) {
+    setBillingPlateStatus(`${hits.length} matches — keep typing the plate`);
+    return;
+  }
+  setBillingPlateStatus("No customer with this plate. Add them under Customers first.");
+}
+
 function selectedBillingCustomer() {
   const id = billingCustomerSelect?.value || "";
   return customerDirectory.find((row) => row.customerId === id) || null;
@@ -423,16 +537,19 @@ function selectedBillingCustomer() {
 function selectedBillingVehicle(row) {
   const id = billingVehicleSelect?.value || "";
   const vehicles = Admin.customerVehicles(row);
-  return (
-    vehicles.find((v) => v.id === id || v.registration === id) ||
-    (vehicles.length === 1 ? vehicles[0] : null)
-  );
+  return vehicles.find((v) => v.id === id || v.registration === id) || null;
 }
 
 function syncBillingPartyFields() {
   const row = selectedBillingCustomer();
   const vehicle = selectedBillingVehicle(row);
   Admin.applyPartyToForm(billingForm, row || {}, vehicle);
+  setBillingPlateFind(vehicle?.registration || "");
+  if (row && vehicle?.registration) {
+    setBillingPlateStatus(`${partyDisplayName(row)} · ${String(vehicle.registration).toUpperCase()}`, true);
+  } else {
+    setBillingPlateStatus("");
+  }
 }
 
 function refreshBillingPartySelects(doc = currentBill) {
@@ -531,6 +648,16 @@ function fillForm(doc) {
 
   // Customer details stay editable on quotes until void; lines only while draft/sent.
   setBillingFieldsEditable(canEditCustomer(doc));
+  setBillingPlateFind(doc.registration || selectedBillingVehicle(selectedBillingCustomer())?.registration || "");
+  if (doc.customerName && doc.registration) {
+    setBillingPlateStatus(`${doc.customerName} · ${String(doc.registration).toUpperCase()}`, true);
+  } else {
+    setBillingPlateStatus("");
+  }
+  const plateFind = document.getElementById("billing-plate-find");
+  if (plateFind && canEditCustomer(doc) && !doc.customerId && !doc.customerName) {
+    plateFind.focus();
+  }
 
   const hint = document.getElementById("billing-edit-hint");
   if (hint) {
@@ -561,6 +688,12 @@ function fillForm(doc) {
   if (!lineRows.length) lineRows = [newLine()];
   renderLines();
   renderQuickAdds();
+  const wofInput = document.getElementById("billing-wof-expiry");
+  if (wofInput) {
+    const fromVehicle = selectedBillingVehicle(selectedBillingCustomer())?.wofExpiry || "";
+    wofInput.value = doc.wofExpiry || fromVehicle || "";
+  }
+  syncWofExpiryField();
   renderHistory(doc);
   updateActionButtons();
 }
@@ -607,6 +740,49 @@ function renderHistory(doc) {
       </li>`;
     })
     .join("");
+}
+
+function lineLooksLikeWof(description) {
+  return /\bwof\b/i.test(String(description || "").trim());
+}
+
+function plusCalendarMonths(iso, months) {
+  const parts = String(iso || "")
+    .slice(0, 10)
+    .split("-")
+    .map(Number);
+  if (parts.length < 3 || !parts[0]) return "";
+  let year = parts[0];
+  let month = parts[1] + Number(months || 0);
+  let day = parts[2];
+  while (month > 12) {
+    month -= 12;
+    year += 1;
+  }
+  while (month < 1) {
+    month += 12;
+    year -= 1;
+  }
+  const last = new Date(year, month, 0).getDate();
+  if (day > last) day = last;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function invoiceLinesHaveWof() {
+  return lineRows.some((line) => lineLooksLikeWof(line.description));
+}
+
+function syncWofExpiryField() {
+  const fieldset = document.getElementById("billing-wof-expiry-fieldset");
+  const input = document.getElementById("billing-wof-expiry");
+  const plusBtns = document.querySelectorAll("[data-wof-months]");
+  const show = currentBill?.kind === "invoice" && currentBill.status !== "void" && invoiceLinesHaveWof();
+  if (fieldset) fieldset.hidden = !show;
+  const editable = show && canEditCustomer(currentBill);
+  if (input) input.disabled = !editable;
+  plusBtns.forEach((btn) => {
+    btn.hidden = !editable;
+  });
 }
 
 function renderQuickAdds() {
@@ -659,6 +835,7 @@ function renderLines() {
       );
       row.querySelector(".total").textContent = money(total);
       renderTotals();
+      if (field === "description") syncWofExpiryField();
       scheduleBillAutosave();
     });
   });
@@ -672,6 +849,7 @@ function renderLines() {
     });
   });
   renderTotals();
+  syncWofExpiryField();
 }
 
 function advertisedInclFromExcl(excl) {
@@ -736,6 +914,9 @@ function collectBill() {
   };
   if (currentBill?.kind === "invoice") {
     payload.payments = paymentRows.map((p) => ({ ...p }));
+    payload.wofExpiry = invoiceLinesHaveWof()
+      ? String(document.getElementById("billing-wof-expiry")?.value || "").trim()
+      : "";
   }
   return payload;
 }
@@ -946,6 +1127,27 @@ billingVehicleSelect?.addEventListener("change", () => {
   if (!canEditCustomer(currentBill)) return;
   syncBillingPartyFields();
   scheduleBillAutosave();
+});
+
+document.getElementById("billing-plate-find")?.addEventListener("input", onBillingPlateFindInput);
+document.getElementById("billing-plate-find")?.addEventListener("search", onBillingPlateFindInput);
+document.getElementById("billing-plate-find")?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") event.preventDefault();
+});
+billingForm?.addEventListener("submit", (event) => event.preventDefault());
+
+document.getElementById("billing-wof-expiry")?.addEventListener("change", () => {
+  if (!canEditCustomer(currentBill)) return;
+  scheduleBillAutosave();
+});
+document.querySelectorAll("[data-wof-months]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (!canEditCustomer(currentBill)) return;
+    const input = document.getElementById("billing-wof-expiry");
+    if (!input) return;
+    input.value = plusCalendarMonths(Admin.todayIso(), Number(btn.dataset.wofMonths) || 12);
+    scheduleBillAutosave();
+  });
 });
 
 document.getElementById("btn-billing-back").addEventListener("click", () => showList());

@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260825find" />
+    <link rel="stylesheet" href="admin.css?v=20260825rem" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -375,8 +375,21 @@
               <fieldset>
                 <legend>Customer &amp; vehicle</legend>
                 <p class="muted small">
-                  Choose a saved customer. Add or change details under <strong>Customers</strong>.
+                  Type the plate to fill the customer, or choose from the list.
+                  Add or change details under <strong>Customers</strong>.
                 </p>
+                <label class="plate-find">
+                  Find by plate
+                  <input
+                    id="billing-plate-find"
+                    type="search"
+                    placeholder="e.g. ABC123"
+                    autocomplete="off"
+                    autocapitalize="characters"
+                    spellcheck="false"
+                  />
+                </label>
+                <p id="billing-plate-find-status" class="muted small" hidden></p>
                 <div class="grid-3">
                   <label>
                     Customer
@@ -472,16 +485,33 @@
                 </div>
                 <div id="billing-totals" class="billing-totals"></div>
               </fieldset>
+
+              <fieldset id="billing-wof-expiry-fieldset" hidden>
+                <legend>WOF expiry</legend>
+                <p class="muted small">
+                  This invoice includes a WOF. Save to write the new expiry onto the customer profile for this plate.
+                </p>
+                <div class="grid-3">
+                  <label>
+                    New WOF expiry date
+                    <input id="billing-wof-expiry" name="wofExpiry" type="date" />
+                  </label>
+                  <div class="line-actions" style="align-items: end">
+                    <button type="button" class="ghost" data-wof-months="12">+12 months from today</button>
+                    <button type="button" class="ghost" data-wof-months="6">+6 months from today</button>
+                  </div>
+                </div>
+              </fieldset>
             </form>
           </section>
         </section>
       </main>
     </div>
 
-    <script src="admin.js?v=20260824photos"></script>
+    <script src="admin.js?v=20260825name"></script>
     <script src="dashboard.js?v=20260823sales"></script>
     <script src="jobs.js?v=20260825case"></script>
-    <script src="billing.js?v=20260824invlist"></script>
-    <script src="customers.js?v=20260825veh"></script>
+    <script src="billing.js?v=20260825vehsel"></script>
+    <script src="customers.js?v=20260825rem"></script>
   </body>
 </html>

@@ -487,6 +487,25 @@ label.check input {
   color: var(--blue);
 }
 
+.plate-find {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 0.75rem;
+  font-weight: 700;
+}
+
+#billing-plate-find {
+  text-transform: uppercase;
+  font-size: 1.15rem;
+  letter-spacing: 0.06em;
+  max-width: 16rem;
+}
+
+#billing-plate-find-status.is-ok {
+  color: var(--ok);
+  font-weight: 700;
+}
+
 .filter-row {
   display: flex;
   flex-wrap: wrap;
@@ -613,6 +632,13 @@ label.check input {
 
 .customer-actions button {
   margin: 0.15rem 0.15rem 0.15rem 0;
+}
+
+.reminder-sent {
+  display: inline-block;
+  color: var(--ok);
+  font-weight: 700;
+  font-size: 0.9rem;
 }
 
 .badge.overdue {
