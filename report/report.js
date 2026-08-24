@@ -98,9 +98,12 @@ function render(report, meta) {
     ...(meta.actions.either || []),
   ];
   const done = actionLabels.filter((a) => report.actionsDone?.[a.id]);
-  const wof = report.wof || {};
-  const wofResultLabel =
-    wof.result === "pass" ? "Pass" : wof.result === "fail" ? "Fail" : "Not completed";
+  const photos = Array.isArray(report.vehiclePhotos)
+    ? report.vehiclePhotos.filter(Boolean)
+    : report.vehiclePhoto
+      ? [report.vehiclePhoto]
+      : [];
+  const coverPhoto = photos[0] || "";
 
   document.body.classList.add("has-cover");
 
@@ -114,8 +117,8 @@ function render(report, meta) {
         <p class="cover-tag">Digital service report</p>
         <h1 class="cover-title">${escapeHtml(jobLabel(report))}</h1>
         ${
-          report.vehiclePhoto
-            ? `<img class="cover-photo" src="${escapeHtml(report.vehiclePhoto)}" alt="Vehicle photo" />`
+          coverPhoto
+            ? `<img class="cover-photo" src="${escapeHtml(coverPhoto)}" alt="Vehicle photo" />`
             : `<div class="cover-photo cover-photo-empty" aria-hidden="true"></div>`
         }
         <div class="cover-vehicle">
@@ -154,8 +157,13 @@ function render(report, meta) {
         </div>
       </div>
       ${
-        report.vehiclePhoto
-          ? `<img class="photo" src="${escapeHtml(report.vehiclePhoto)}" alt="Vehicle photo" />`
+        photos.length
+          ? `<div class="photo-gallery">${photos
+              .map(
+                (src) =>
+                  `<img class="photo" src="${escapeHtml(src)}" alt="Vehicle photo" />`
+              )
+              .join("")}</div>`
           : ""
       }
     </section>
@@ -184,21 +192,6 @@ function render(report, meta) {
               .join("")}
           </section>`
         : `<section class="panel"><h2>What needs your attention</h2><div class="alert ok-note">No Attention or Watch items recorded on this visit.</div></section>`
-    }
-
-    ${
-      wof.performed
-        ? `<section class="panel wof-box">
-            <h2>WOF result</h2>
-            <p><strong>${escapeHtml(wofResultLabel)}</strong>${
-              wof.expiry ? ` · Next due ${escapeHtml(wof.expiry)}` : ""
-            }</p>
-            ${wof.failNotes ? `<p>${escapeHtml(wof.failNotes)}</p>` : ""}
-            ${wof.repairsForPass ? `<p>Repairs for pass: ${escapeHtml(wof.repairsForPass)}</p>` : ""}
-            ${wof.recheckRequired ? "<p>Re-check required.</p>" : ""}
-            <p style="opacity:.85;font-size:.9rem">Official WOF outcome only — this page is not a WOF certificate.</p>
-          </section>`
-        : ""
     }
 
     <section class="panel">

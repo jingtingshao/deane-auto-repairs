@@ -307,17 +307,41 @@ label.check input {
 
 .photo-row {
   display: flex;
-  gap: 1rem;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-start;
   margin-top: 0.75rem;
 }
 
-#vehicle-photo {
+.photo-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.photo-thumb {
+  position: relative;
+  display: block;
+}
+
+.photo-thumb img {
   width: 120px;
   height: 80px;
   object-fit: cover;
   border-radius: 8px;
   border: 1px solid var(--line);
+  display: block;
+}
+
+.photo-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 1.6rem;
+  padding: 0.1rem 0.35rem;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .check-group {
@@ -513,8 +537,18 @@ label.check input {
   cursor: pointer;
 }
 
-.billing-table tbody tr.customer-row:hover {
+.billing-table tbody tr.invoice-row {
+  cursor: pointer;
+}
+
+.billing-table tbody tr.invoice-row:hover {
   background: var(--blue-soft);
+}
+
+.billing-table td.invoice-due {
+  text-align: right;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .billing-table .billing-number {

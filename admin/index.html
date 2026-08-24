@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260823dash" />
+    <link rel="stylesheet" href="admin.css?v=20260824invlist" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -139,38 +139,12 @@
               <label>Customer concern / notes<textarea name="customerConcern" rows="2"></textarea></label>
               <div class="photo-row">
                 <label class="file-label">
-                  Vehicle photo
-                  <input id="photo-input" type="file" accept="image/*" capture="environment" />
+                  Vehicle photos
+                  <input id="photo-input" type="file" accept="image/*" multiple />
                 </label>
-                <img id="vehicle-photo" alt="" hidden />
+                <p class="muted small">You can select more than one photo.</p>
+                <div id="vehicle-photos" class="photo-thumbs"></div>
               </div>
-            </fieldset>
-
-            <fieldset id="wof-panel">
-              <legend>WOF (official result — not this digital report)</legend>
-              <p class="muted small">
-                Digital report notes are advisory. Only record the official WOF outcome here.
-              </p>
-              <div class="grid-3">
-                <label class="check">
-                  <input name="wofPerformed" type="checkbox" /> WOF performed this visit
-                </label>
-                <label
-                  >Result
-                  <select name="wofResult">
-                    <option value="not_completed">Not completed</option>
-                    <option value="pass">Pass</option>
-                    <option value="fail">Fail</option>
-                  </select>
-                </label>
-                <label>WOF expiry<input name="wofExpiry" type="date" /></label>
-                <label>Cert / label ref<input name="wofReference" /></label>
-                <label class="check">
-                  <input name="wofRecheck" type="checkbox" /> Re-check required
-                </label>
-              </div>
-              <label>Fail items / notes<textarea name="wofFailNotes" rows="2"></textarea></label>
-              <label>Repairs done for pass<textarea name="wofRepairs" rows="2"></textarea></label>
             </fieldset>
 
             <fieldset>
@@ -501,10 +475,10 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260824rpt"></script>
+    <script src="admin.js?v=20260824photos"></script>
     <script src="dashboard.js?v=20260823sales"></script>
     <script src="jobs.js?v=20260824job"></script>
-    <script src="billing.js?v=20260824job"></script>
+    <script src="billing.js?v=20260824invlist"></script>
     <script src="customers.js?v=20260824cont"></script>
   </body>
 </html>

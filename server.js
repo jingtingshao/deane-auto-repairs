@@ -1915,7 +1915,7 @@ app.get("/api/reports/:id", (req, res) => {
   if (report.status !== "published" && !isAdmin) {
     return res.status(404).json({ error: "Report not found" });
   }
-  res.json(report);
+  res.json(withReportPhotos(report));
 });
 
 app.post("/api/reports", requireAdmin, (_req, res) => {
@@ -1980,7 +1980,7 @@ app.put("/api/reports/:id", requireAdmin, (req, res) => {
   };
 
   writeReports(reports);
-  res.json(reports[index]);
+  res.json(withReportPhotos(reports[index]));
 });
 
 app.post("/api/reports/:id/publish", requireAdmin, (req, res) => {
@@ -2396,19 +2396,36 @@ app.post("/api/reports/:id/unpublish", requireAdmin, (req, res) => {
 app.post(
   "/api/reports/:id/photo",
   requireAdmin,
-  upload.single("photo"),
+  upload.array("photos", 12),
   (req, res) => {
     const reports = readReports();
     const index = reports.findIndex((r) => r.id === req.params.id);
     if (index < 0) return res.status(404).json({ error: "Report not found" });
-    if (!req.file) return res.status(400).json({ error: "No photo uploaded" });
+    const files = req.files || [];
+    if (!files.length) return res.status(400).json({ error: "No photo uploaded" });
 
-    reports[index].vehiclePhoto = `/uploads/${req.file.filename}`;
+    const added = files.map((file) => `/uploads/${file.filename}`);
+    const photos = [...reportPhotoList(reports[index]), ...added].slice(0, 12);
+    reports[index].vehiclePhotos = photos;
+    reports[index].vehiclePhoto = photos[0] || "";
     reports[index].updatedAt = nowIso();
     writeReports(reports);
-    res.json(reports[index]);
+    res.json(withReportPhotos(reports[index]));
   }
 );
+
+app.delete("/api/reports/:id/photo", requireAdmin, (req, res) => {
+  const reports = readReports();
+  const index = reports.findIndex((r) => r.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: "Report not found" });
+  const url = String(req.body?.url || req.query.url || "").trim();
+  const photos = reportPhotoList(reports[index]).filter((src) => src !== url);
+  reports[index].vehiclePhotos = photos;
+  reports[index].vehiclePhoto = photos[0] || "";
+  reports[index].updatedAt = nowIso();
+  writeReports(reports);
+  res.json(withReportPhotos(reports[index]));
+});
 
 app.delete("/api/reports/:id", requireAdmin, (req, res) => {
   const reports = readReports();
@@ -2957,6 +2974,25 @@ function convertQuoteToInvoice(docs, quote) {
   return quote;
 }
 
+function reportPhotoList(report = {}) {
+  const listed = Array.isArray(report.vehiclePhotos)
+    ? report.vehiclePhotos.map((p) => String(p || "").trim()).filter(Boolean)
+    : [];
+  if (listed.length) return [...new Set(listed)];
+  const single = String(report.vehiclePhoto || "").trim();
+  return single ? [single] : [];
+}
+
+function withReportPhotos(report) {
+  if (!report) return report;
+  const photos = reportPhotoList(report);
+  return {
+    ...report,
+    vehiclePhotos: photos,
+    vehiclePhoto: photos[0] || "",
+  };
+}
+
 function emptyReportRecord(now, extra = {}) {
   const servicePackage = extra.servicePackage || "standard";
   let jobType = extra.jobType || "standard_service";
@@ -3002,6 +3038,7 @@ function emptyReportRecord(now, extra = {}) {
     nextServiceDue: extra.nextServiceDue || "",
     technicianComments: extra.technicianComments || "",
     vehiclePhoto: extra.vehiclePhoto || "",
+    vehiclePhotos: Array.isArray(extra.vehiclePhotos) ? extra.vehiclePhotos : extra.vehiclePhoto ? [extra.vehiclePhoto] : [],
   };
 }
 

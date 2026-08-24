@@ -312,6 +312,40 @@ function renderBillingList() {
     return;
   }
 
+  if (listKind === "invoice") {
+    billingList.innerHTML = `
+      <div class="billing-table-wrap">
+        <table class="billing-table invoice-list-table">
+          <thead>
+            <tr>
+              <th>Invoice number</th>
+              <th>Date</th>
+              <th>Customer name</th>
+              <th>Due $</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${docs
+              .map((d) => {
+                const when =
+                  formatListDate(d.sortAt || d.sentAt || d.createdAt || d.updatedAt) || "—";
+                return `<tr class="invoice-row" data-id="${Admin.escapeAttr(d.id)}">
+                  <td class="billing-number">${Admin.escapeHtml(d.number || "—")}</td>
+                  <td>${Admin.escapeHtml(when)}</td>
+                  <td>${Admin.escapeHtml(d.customerName || "—")}</td>
+                  <td class="invoice-due">${money(d.balanceDue)}</td>
+                </tr>`;
+              })
+              .join("")}
+          </tbody>
+        </table>
+      </div>`;
+    billingList.querySelectorAll(".invoice-row").forEach((row) => {
+      row.addEventListener("click", () => openDoc(row.dataset.id));
+    });
+    return;
+  }
+
   billingList.innerHTML = docs
     .map((d) => {
       const payStatus = d.overdue ? "overdue" : d.paymentStatus;

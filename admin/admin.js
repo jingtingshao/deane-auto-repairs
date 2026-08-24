@@ -13,7 +13,7 @@ const checklistEl = document.getElementById("checklist");
 const actionsEl = document.getElementById("actions");
 const saveStatus = document.getElementById("save-status");
 const viewTitle = document.getElementById("view-title");
-const vehiclePhoto = document.getElementById("vehicle-photo");
+const vehiclePhotosEl = document.getElementById("vehicle-photos");
 const photoInput = document.getElementById("photo-input");
 
 let pin = sessionStorage.getItem(PIN_KEY) || "";
@@ -492,7 +492,7 @@ async function openReport(id) {
   fillForm(current);
   await renderChecklist(current.servicePackage, current.checks);
   renderActions(current);
-  updatePhoto(current.vehiclePhoto);
+  updatePhotos(current);
 }
 
 window.DeaneAdmin.openReport = openReport;
@@ -586,13 +586,6 @@ function fillForm(r) {
   set("summary", r.summary);
   set("nextServiceDue", r.nextServiceDue);
   set("technicianComments", r.technicianComments);
-  set("wofPerformed", r.wof?.performed);
-  set("wofResult", r.wof?.result || "not_completed");
-  set("wofExpiry", r.wof?.expiry || "");
-  set("wofReference", r.wof?.reference || "");
-  set("wofFailNotes", r.wof?.failNotes || "");
-  set("wofRepairs", r.wof?.repairsForPass || "");
-  set("wofRecheck", r.wof?.recheckRequired);
   refreshReportPartySelects(r);
 }
 
@@ -734,14 +727,14 @@ function collectPayload() {
     summary: f.summary.value.trim(),
     nextServiceDue: f.nextServiceDue.value.trim(),
     technicianComments: f.technicianComments.value.trim(),
-    wof: {
-      performed: f.wofPerformed.checked,
-      result: f.wofResult.value,
-      expiry: f.wofExpiry.value,
-      reference: f.wofReference.value.trim(),
-      failNotes: f.wofFailNotes.value.trim(),
-      repairsForPass: f.wofRepairs.value.trim(),
-      recheckRequired: f.wofRecheck.checked,
+    wof: current?.wof || {
+      performed: false,
+      result: "not_completed",
+      expiry: "",
+      reference: "",
+      failNotes: "",
+      repairsForPass: "",
+      recheckRequired: false,
     },
   };
 }
@@ -891,10 +884,12 @@ document.getElementById("btn-delete").addEventListener("click", async () => {
   }
 });
 
-photoInput.addEventListener("change", async () => {
-  if (!current || !photoInput.files?.[0]) return;
+photoInput?.addEventListener("change", async () => {
+  if (!current || !photoInput.files?.length) return;
   const body = new FormData();
-  body.append("photo", photoInput.files[0]);
+  for (const file of photoInput.files) {
+    body.append("photos", file);
+  }
   try {
     const res = await fetch(`/api/reports/${current.id}/photo`, {
       method: "POST",
@@ -904,21 +899,54 @@ photoInput.addEventListener("change", async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Upload failed");
     current = data;
-    updatePhoto(current.vehiclePhoto);
-    showStatus("Photo uploaded");
+    updatePhotos(current);
+    showStatus(photoInput.files.length > 1 ? "Photos uploaded" : "Photo uploaded");
   } catch (err) {
     alert(err.message);
+  } finally {
+    photoInput.value = "";
   }
 });
 
-function updatePhoto(src) {
-  if (src) {
-    vehiclePhoto.src = src;
-    vehiclePhoto.hidden = false;
-  } else {
-    vehiclePhoto.hidden = true;
-    vehiclePhoto.removeAttribute("src");
+function reportPhotoList(report) {
+  const listed = Array.isArray(report?.vehiclePhotos)
+    ? report.vehiclePhotos.map((p) => String(p || "").trim()).filter(Boolean)
+    : [];
+  if (listed.length) return listed;
+  const single = String(report?.vehiclePhoto || "").trim();
+  return single ? [single] : [];
+}
+
+function updatePhotos(report) {
+  if (!vehiclePhotosEl) return;
+  const photos = reportPhotoList(report);
+  if (!photos.length) {
+    vehiclePhotosEl.innerHTML = "";
+    return;
   }
+  vehiclePhotosEl.innerHTML = photos
+    .map(
+      (src) => `
+      <span class="photo-thumb">
+        <img src="${escapeAttr(src)}" alt="Vehicle photo" />
+        <button type="button" class="ghost photo-remove" data-photo="${escapeAttr(src)}" aria-label="Remove photo">×</button>
+      </span>`
+    )
+    .join("");
+  vehiclePhotosEl.querySelectorAll("[data-photo]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!current) return;
+      try {
+        current = await api(`/api/reports/${current.id}/photo?url=${encodeURIComponent(btn.dataset.photo)}`, {
+          method: "DELETE",
+        });
+        updatePhotos(current);
+        showStatus("Photo removed");
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  });
 }
 
 function escapeHtml(str) {

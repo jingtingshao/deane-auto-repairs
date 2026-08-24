@@ -246,12 +246,24 @@ body.has-cover main.wrap {
   color: var(--muted);
 }
 
+.photo-gallery {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.6rem;
+}
+
 .photo {
   width: 100%;
   border-radius: 10px;
   object-fit: cover;
-  max-height: 180px;
+  max-height: 220px;
   border: 1px solid var(--line);
+}
+
+@media (min-width: 640px) {
+  .photo-gallery {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .counts {

@@ -1,0 +1,19 @@
+---
+description: Uploading to Git also means push so Render deploys
+alwaysApply: true
+---
+
+# Deane Auto Repairs — Git upload also deploys Render
+
+From 24 Aug 2026: when the user says **上传到 GIT / GitHub**, **push to git**, **upload to git**, or similar, **also push to `origin`** so Render auto-deploys. Do not wait for them to say Render separately.
+
+## Do
+- Commit if they asked to upload (and there are code changes)
+- `git push origin` the current branch (usually `master`)
+- Keep secrets off GitHub (see never-commit-secrets)
+- Briefly confirm GitHub commit and that Render will follow
+
+## Do not
+- Push only and skip Render: this repo’s Render service deploys from GitHub `master`
+- Commit `.env`, live `data/*.json`, or keys
+- Force-push unless they explicitly ask
