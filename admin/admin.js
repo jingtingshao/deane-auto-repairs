@@ -214,7 +214,7 @@ window.DeaneAdmin = {
   fillCustomerSelect(selectEl, directory, selectedId = "") {
     if (!selectEl) return;
     const saved = (directory || []).filter((row) => row.customerId);
-    const current = selectedId || selectEl.value || "";
+    const current = String(selectedId || "");
     const options = saved
       .slice()
       .sort((a, b) =>
@@ -231,22 +231,22 @@ window.DeaneAdmin = {
       })
       .join("");
     selectEl.innerHTML = `<option value="">Select customer…</option>${options}`;
-    if (current) selectEl.value = current;
+    selectEl.value = current;
   },
   fillVehicleSelect(selectEl, row, selectedId = "") {
     if (!selectEl) return;
     const vehicles = this.customerVehicles(row);
-    const current = selectedId || selectEl.value || "";
-    const currentKey = String(current)
-      .toUpperCase()
-      .replace(/[\s-]/g, "");
-    const match = vehicles.find((v) => {
-      const id = v.id || v.registration;
-      const plate = String(v.registration || "")
-        .toUpperCase()
-        .replace(/[\s-]/g, "");
-      return id === current || v.registration === current || (currentKey && plate === currentKey);
-    });
+    const current = String(selectedId || "");
+    const currentKey = current.toUpperCase().replace(/[\s-]/g, "");
+    const match = current
+      ? vehicles.find((v) => {
+          const id = v.id || v.registration;
+          const plate = String(v.registration || "")
+            .toUpperCase()
+            .replace(/[\s-]/g, "");
+          return id === current || v.registration === current || (currentKey && plate === currentKey);
+        })
+      : null;
     const selectedValue = match ? match.id || match.registration : "";
     const options = vehicles
       .map((v) => {
@@ -257,14 +257,24 @@ window.DeaneAdmin = {
       })
       .join("");
     selectEl.innerHTML = `<option value="">Select vehicle…</option>${options}`;
-    if (selectedValue) selectEl.value = selectedValue;
+    selectEl.value = selectedValue;
   },
   applyPartyToForm(form, row, vehicle) {
-    if (!form || !row || !(row.customerId || row.customerName)) return;
+    if (!form) return;
     const set = (name, value) => {
       const el = form.elements.namedItem(name);
       if (el) el.value = String(value || "");
     };
+    if (!row || !(row.customerId || row.customerName)) {
+      set("customerId", "");
+      set("customerName", "");
+      set("customerEmail", "");
+      set("customerPhone", "");
+      set("vehicleId", "");
+      set("registration", "");
+      set("vehicle", "");
+      return;
+    }
     set("customerId", row.customerId || row.id || "");
     set("customerName", [row.firstName, row.lastName].filter(Boolean).join(" ") || row.customerName);
     set("customerEmail", row.customerEmail);

@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260825veh2" />
+    <link rel="stylesheet" href="admin.css?v=20260825pay" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -420,8 +420,8 @@
               <fieldset id="billing-payment-fieldset" hidden>
                 <legend>Payment</legend>
                 <p class="muted small">
-                  Record each payment separately (deposit, then balance). Amounts are GST-inclusive.
-                  Status updates automatically from the total paid.
+                  Tap Cash or EFTPOS, then Add payment to record the full balance due.
+                  Amounts are GST-inclusive. Status updates from the total paid.
                 </p>
                 <p id="billing-payment-summary" class="muted small"></p>
                 <div class="line-table-wrap">
@@ -430,31 +430,30 @@
                       <tr>
                         <th>Date</th>
                         <th>Amount</th>
-                        <th>Note</th>
+                        <th>Paid by</th>
                         <th></th>
                       </tr>
                     </thead>
                     <tbody id="billing-payments"></tbody>
                   </table>
                 </div>
-                <div class="grid-3" style="margin-top: 0.75rem">
+                <div class="pay-entry">
                   <label>
                     Date
                     <input id="billing-pay-date" type="date" />
                   </label>
-                  <label>
-                    Amount
-                    <input id="billing-pay-amount" type="number" min="0" step="0.01" placeholder="0.00" />
-                  </label>
-                  <label>
-                    Note
-                    <input id="billing-pay-note" placeholder="Bank / cash / reference" />
-                  </label>
+                  <div class="pay-method-block">
+                    <p class="pay-method-label">Paid by</p>
+                    <div class="pay-method-row" role="group" aria-label="Paid by">
+                      <button type="button" class="ghost" data-pay-method="Cash">Cash</button>
+                      <button type="button" class="ghost" data-pay-method="EFTPOS">EFTPOS</button>
+                    </div>
+                  </div>
+                  <p id="billing-pay-full-hint" class="muted small">Add payment records the full balance due.</p>
                 </div>
-                <div class="preset-row" id="billing-payment-actions" style="margin-top: 0.5rem">
+                <div class="preset-row" id="billing-payment-actions">
                   <button type="button" class="primary" id="btn-add-payment">Add payment</button>
                   <button type="button" class="ghost" id="btn-add-deposit-30">Add 30% deposit</button>
-                  <button type="button" class="ghost" id="btn-add-balance">Add balance due</button>
                 </div>
               </fieldset>
 
@@ -508,10 +507,10 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260825veh2"></script>
+    <script src="admin.js?v=20260825clean"></script>
     <script src="dashboard.js?v=20260823sales"></script>
     <script src="jobs.js?v=20260825case"></script>
-    <script src="billing.js?v=20260825veh2"></script>
+    <script src="billing.js?v=20260825clean"></script>
     <script src="customers.js?v=20260825veh2"></script>
   </body>
 </html>

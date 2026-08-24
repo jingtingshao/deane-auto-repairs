@@ -577,14 +577,12 @@ function refreshBillingPartySelects(doc = currentBill) {
     selectedBillingCustomer() || matched,
     doc?.vehicleId || doc?.registration || ""
   );
-  const row = selectedBillingCustomer();
-  if (row) {
-    Admin.applyPartyToForm(billingForm, row, selectedBillingVehicle(row));
-  }
-  if (billingForm && doc) {
+  const row = selectedBillingCustomer() || matched;
+  Admin.applyPartyToForm(billingForm, row, selectedBillingVehicle(row));
+  if (!row && billingForm && doc) {
     const set = (name, value) => {
       const el = billingInput(name);
-      if (el && value) el.value = value;
+      if (el) el.value = value || "";
     };
     set("customerName", doc.customerName);
     set("customerEmail", doc.customerEmail);
@@ -592,6 +590,17 @@ function refreshBillingPartySelects(doc = currentBill) {
     set("registration", doc.registration);
     set("vehicle", doc.vehicle);
   }
+}
+
+function resetBillingPartyFields() {
+  Admin.fillCustomerSelect(billingCustomerSelect, customerDirectory, "");
+  Admin.fillVehicleSelect(billingVehicleSelect, null, "");
+  Admin.applyPartyToForm(billingForm, null, null);
+  setBillingPlateFind("");
+  setBillingPlateStatus("");
+  document.querySelectorAll("[data-pay-method]").forEach((btn) => {
+    btn.classList.remove("is-active");
+  });
 }
 
 async function openDoc(id) {
@@ -652,7 +661,10 @@ function fillForm(doc) {
         ];
       }
       const dateEl = document.getElementById("billing-pay-date");
-      if (dateEl && !dateEl.value) dateEl.value = Admin.todayIso();
+      if (dateEl) dateEl.value = Admin.todayIso();
+      document.querySelectorAll("[data-pay-method]").forEach((btn) => {
+        btn.classList.remove("is-active");
+      });
       renderPayments();
     } else {
       paymentRows = [];
@@ -942,16 +954,41 @@ function paymentsTotal() {
   return round2(paymentRows.reduce((sum, p) => sum + (Number(p.amount) || 0), 0));
 }
 
+function invoiceBalanceDue() {
+  const total = Number(currentBill?.totals?.totalIncl) || invoiceTotalIncl();
+  return round2(Math.max(0, total - paymentsTotal()));
+}
+
+function selectedPayMethod() {
+  return (
+    document.querySelector("[data-pay-method].is-active")?.dataset.payMethod || ""
+  );
+}
+
+function requirePayMethod() {
+  const method = selectedPayMethod();
+  if (method) return method;
+  alert("Choose Cash or EFTPOS.");
+  return "";
+}
+
 function updatePaymentSummary() {
   const el = document.getElementById("billing-payment-summary");
   if (!el || currentBill?.kind !== "invoice") return;
   const total = Number(currentBill.totals?.totalIncl) || invoiceTotalIncl();
   const paid = paymentsTotal();
-  const due = round2(Math.max(0, total - paid));
+  const due = invoiceBalanceDue();
   let status =
     paid <= 0 ? "Unpaid" : due <= 0 ? "Paid" : "Deposit / partial";
   if (due > 0 && currentBill.overdue) status = "Overdue";
   el.textContent = `Status: ${status} · Paid ${money(paid)} · Balance due ${money(due)} · Invoice ${money(total)}`;
+  const hint = document.getElementById("billing-pay-full-hint");
+  if (hint) {
+    hint.textContent =
+      due > 0
+        ? `Add payment records the full balance due (${money(due)}).`
+        : "Nothing left to pay.";
+  }
 }
 
 function renderPayments() {
@@ -984,20 +1021,16 @@ function renderPayments() {
 function addPaymentRow(amount, note) {
   const amt = round2(Number(amount) || 0);
   if (amt <= 0) {
-    alert("Enter a payment amount greater than zero.");
+    alert("Nothing left to pay.");
     return false;
   }
   const dateEl = document.getElementById("billing-pay-date");
-  const noteEl = document.getElementById("billing-pay-note");
   paymentRows.push({
     id: crypto.randomUUID(),
     amount: amt,
     paidAt: dateEl?.value || Admin.todayIso(),
-    note: String(note != null ? note : noteEl?.value || "").trim(),
+    note: String(note || "").trim(),
   });
-  if (noteEl) noteEl.value = "";
-  const amountEl = document.getElementById("billing-pay-amount");
-  if (amountEl) amountEl.value = "";
   renderPayments();
   scheduleBillAutosave();
   return true;
@@ -1115,6 +1148,10 @@ async function showList(opts = {}) {
   if (opts.filter) listFilter = opts.filter;
   else if (opts.kind) listFilter = "all";
   applyPartyOpts(opts);
+  if (opts.kind) {
+    if (billingSearch) billingSearch.value = "";
+    resetBillingPartyFields();
+  }
   billingEditView.hidden = true;
   billingListView.hidden = false;
   Admin.setSection(listKind === "invoice" ? "invoices" : "quotes");
@@ -1320,27 +1357,27 @@ document.getElementById("btn-billing-delete").addEventListener("click", async ()
   }
 });
 
+document.querySelectorAll("[data-pay-method]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("[data-pay-method]").forEach((other) => {
+      other.classList.toggle("is-active", other === btn);
+    });
+  });
+});
+
 document.getElementById("btn-add-payment")?.addEventListener("click", () => {
   if (currentBill?.kind !== "invoice") return;
-  const amountEl = document.getElementById("billing-pay-amount");
-  addPaymentRow(amountEl?.value);
+  const method = requirePayMethod();
+  if (!method) return;
+  addPaymentRow(invoiceBalanceDue(), method);
 });
 
 document.getElementById("btn-add-deposit-30")?.addEventListener("click", () => {
   if (currentBill?.kind !== "invoice") return;
+  const method = requirePayMethod();
+  if (!method) return;
   const total = Number(currentBill.totals?.totalIncl) || invoiceTotalIncl();
-  addPaymentRow(round2(total * 0.3), "30% deposit");
-});
-
-document.getElementById("btn-add-balance")?.addEventListener("click", () => {
-  if (currentBill?.kind !== "invoice") return;
-  const total = Number(currentBill.totals?.totalIncl) || invoiceTotalIncl();
-  const due = round2(Math.max(0, total - paymentsTotal()));
-  if (due <= 0) {
-    alert("Nothing left to pay.");
-    return;
-  }
-  addPaymentRow(due, "Balance");
+  addPaymentRow(round2(total * 0.3), method);
 });
 
 window.addEventListener("beforeunload", () => {

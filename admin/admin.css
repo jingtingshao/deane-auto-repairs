@@ -710,6 +710,46 @@ label.check input {
   margin-top: 0.7rem;
 }
 
+.pay-entry {
+  display: grid;
+  grid-template-columns: minmax(10rem, 14rem) minmax(12rem, 1fr);
+  gap: 0.75rem 1rem;
+  align-items: end;
+  margin-top: 0.75rem;
+}
+
+.pay-method-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.pay-method-label {
+  margin: 0;
+  font-weight: 700;
+}
+
+.pay-method-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.pay-method-row button {
+  min-width: 6.5rem;
+}
+
+.pay-method-row button.is-active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+#billing-pay-full-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
 .line-table-wrap {
   overflow-x: auto;
 }
@@ -1152,7 +1192,8 @@ label.check input {
 }
 
 @media (max-width: 640px) {
-  .vehicle-row {
+  .vehicle-row,
+  .pay-entry {
     grid-template-columns: 1fr;
   }
 }
