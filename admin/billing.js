@@ -785,6 +785,7 @@ async function saveBill(opts = {}) {
     body: JSON.stringify(collectBill()),
   });
   if (opts.refresh !== false) fillForm(currentBill);
+  updateActionButtons();
   const msg =
     opts.autosave
       ? "Autosaved"
@@ -792,7 +793,6 @@ async function saveBill(opts = {}) {
         ? "Saved — send email again if the customer needs the update"
         : "Saved";
   Admin.showBillingStatus(msg);
-  if (opts.refresh !== false) updateActionButtons();
   return currentBill;
 }
 
@@ -999,19 +999,19 @@ document.getElementById("btn-billing-job")?.addEventListener("click", async () =
   if (!currentBill) return;
   try {
     await billAutosave.flush();
-    if (currentBill.jobId) {
-      Admin.setSection("jobs");
-      await window.DeaneJobs.openJob(currentBill.jobId);
-      return;
+    if (!currentBill.jobId) {
+      const job = await Admin.api(`/api/jobs/from-quote/${currentBill.id}`, {
+        method: "POST",
+        body: "{}",
+      });
+      currentBill.jobId = job.id;
+      updateActionButtons();
     }
-    const job = await Admin.api(`/api/jobs/from-quote/${currentBill.id}`, {
-      method: "POST",
-      body: "{}",
-    });
-    currentBill.jobId = job.id;
-    updateActionButtons();
     Admin.setSection("jobs");
-    await window.DeaneJobs.openJob(job.id);
+    if (!window.DeaneJobs?.openJob) {
+      throw new Error("Jobs page did not load. Refresh Admin and try Open job card again.");
+    }
+    await window.DeaneJobs.openJob(currentBill.jobId);
   } catch (err) {
     alert(err.message);
   }

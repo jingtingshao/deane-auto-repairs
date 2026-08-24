@@ -372,7 +372,12 @@ function customerFieldsForJob(source = {}) {
   const name = fields.customerName.toLowerCase();
 
   let match = null;
-  const directory = listCustomers();
+  let directory = [];
+  try {
+    directory = listCustomers();
+  } catch (err) {
+    console.error("Could not match job to customer directory:", err);
+  }
   if (plate) {
     match =
       directory.find((row) => {
@@ -456,6 +461,12 @@ function ensureJobFromAcceptedQuote(docs, quote, invoice) {
     if (index >= 0) {
       const existing = jobs[index];
       let changed = applyCustomerFieldsToJob(existing, fields, true);
+      if (jobsLib.stripPackageParts(existing)) changed = true;
+      const cleanedWork = jobsLib.stripPackageWorkRequested(existing.workRequested);
+      if (cleanedWork !== String(existing.workRequested || "").trim()) {
+        existing.workRequested = cleanedWork;
+        changed = true;
+      }
       const preferred = jobNumberFromBilling(
         invoice?.number || quote?.quotedNumber || quote?.number || source.number
       );
@@ -514,13 +525,17 @@ function ensureJobFromAcceptedQuote(docs, quote, invoice) {
   return { job, created: true };
 }
 
-/** After an invoice is saved: extra lines (not WOF/Standard/Premium) go onto the job card. */
+/** After an invoice is saved: create the job card if needed, then add extra parts. */
 function syncJobFromInvoiceExtras(docs, invoice) {
   if (!invoice || invoice.kind !== "invoice" || invoice.status === "void") return null;
-  const extras = jobsLib.partsFromQuoteLines(invoice.lines || [], () => randomUUID());
-  if (!extras.length) return null;
-  const ensured = ensureJobFromAcceptedQuote(docs, invoice, invoice);
+  const quote =
+    (invoice.quoteId &&
+      docs.find((d) => d.id === invoice.quoteId && d.kind === "quote")) ||
+    null;
+  const ensured = ensureJobFromAcceptedQuote(docs, quote || invoice, invoice);
   if (!ensured?.job) return null;
+  const extras = jobsLib.partsFromQuoteLines(invoice.lines || [], () => randomUUID());
+  if (!extras.length) return ensured;
   const jobs = readJobs();
   const index = jobs.findIndex((j) => j.id === ensured.job.id);
   if (index < 0) return ensured;
@@ -3158,6 +3173,12 @@ app.post("/api/billing/:id/convert", requireAdmin, (req, res) => {
     requireCustomerSnapshot(quote);
     const invoice = convertQuoteToInvoice(docs, quote);
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+    try {
+      ensureJobFromAcceptedQuote(docs, quote, invoice);
+      syncJobFromInvoiceExtras(docs, invoice);
+    } catch (err) {
+      console.error("Could not create job card from converted invoice:", err);
+    }
     writeBilling(docs);
     res.json(withBillingTotals(invoice, true));
   } catch (err) {

@@ -28,17 +28,23 @@ function normalizeJobStatus(status, parts) {
   return suggestStatusFromParts(next, parts);
 }
 
-function isServiceOrLabourLine(description) {
+function isPackageServiceLine(description) {
   const d = String(description || "")
     .trim()
     .toLowerCase();
-  if (!d) return true;
+  if (!d) return false;
   return (
     /^wof\b/.test(d) ||
-    /wof inspection/.test(d) ||
-    /standard service/.test(d) ||
-    /premium service/.test(d)
+    d.includes("wof inspection") ||
+    d.includes("standard service") ||
+    d.includes("premium service")
   );
+}
+
+function isServiceOrLabourLine(description) {
+  const d = String(description || "").trim();
+  if (!d) return true;
+  return isPackageServiceLine(d);
 }
 
 function normalizePart(part = {}, idFallback = "") {
@@ -85,7 +91,10 @@ function partsFromQuoteLines(lines, newId) {
 
 function mergeNewParts(job, incoming) {
   if (!job) return false;
-  const extra = (incoming || []).filter((p) => String(p.description || "").trim());
+  const extra = (incoming || []).filter((p) => {
+    const desc = String(p.description || "").trim();
+    return desc && !isPackageServiceLine(desc);
+  });
   if (!extra.length) return false;
   const parts = Array.isArray(job.parts) ? [...job.parts] : [];
   let changed = false;
@@ -115,12 +124,41 @@ function mergeNewParts(job, incoming) {
 function workRequestedFromQuote(quote) {
   const notes = String(quote?.notes || "").trim();
   const lines = (quote?.lines || [])
-    .filter((line) => String(line?.description || "").trim())
+    .filter((line) => {
+      const desc = String(line?.description || "").trim();
+      return desc && !isPackageServiceLine(desc);
+    })
     .map((line) => {
       const qty = Number(line.qty) || 1;
       return `${qty} × ${String(line.description).trim()}`;
     });
   return [notes, lines.join("\n")].filter(Boolean).join("\n\n");
+}
+
+function stripPackageWorkRequested(text) {
+  const next = String(text || "")
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return true;
+      const body = trimmed.replace(/^\d+\s*[x×]\s*/i, "").trim();
+      return !isPackageServiceLine(body);
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return next;
+}
+
+function stripPackageParts(job) {
+  if (!job || !Array.isArray(job.parts)) return false;
+  const next = job.parts.filter(
+    (part) => !isPackageServiceLine(part.description)
+  );
+  if (next.length === job.parts.length) return false;
+  job.parts = next;
+  job.status = normalizeJobStatus(job.status, job.parts);
+  return true;
 }
 
 function partsSummary(parts) {
@@ -154,6 +192,7 @@ module.exports = {
   statusLabel,
   statusLabel: statusLabel,
   normalizeJobStatus,
+  isPackageServiceLine,
   isServiceOrLabourLine,
   isServiceOrLabourLine: isServiceOrLabourLine,
   normalizePart,
@@ -165,6 +204,8 @@ module.exports = {
   mergeNewParts,
   workRequestedFromQuote,
   workRequestedFromQuote: workRequestedFromQuote,
+  stripPackageParts,
+  stripPackageWorkRequested,
   partsSummary,
   partsSummary: partsSummary,
   suggestStatusFromParts,

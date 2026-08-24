@@ -101,7 +101,7 @@ function renderJobList() {
   if (!jobsList) return;
   if (!jobRows.length) {
     jobsList.innerHTML =
-      '<div class="empty">No job cards yet. They appear when a customer accepts a quote — open the invoice and click <strong>Open job card</strong> if needed.</div>';
+      '<div class="empty">No job cards yet. Saving an invoice creates one automatically — or open the invoice and click <strong>Open job card</strong>.</div>';
     return;
   }
 
@@ -322,23 +322,39 @@ async function saveJob(opts = {}) {
   return currentJob;
 }
 
-const jobAutosave = Admin.createAutosave({
-  isReady: () => Boolean(currentJob && jobsEditView && !jobsEditView.hidden),
-  save: () => saveJob({ autosave: true }),
-  onSaving: (msg) => {
-    const el = document.getElementById("jobs-save-status");
-    if (!el || !msg) return;
-    el.hidden = false;
-    el.textContent = msg;
+const jobAutosave = Admin?.createAutosave
+  ? Admin.createAutosave({
+      isReady: () => Boolean(currentJob && jobsEditView && !jobsEditView.hidden),
+      save: () => saveJob({ autosave: true }),
+      onSaving: (msg) => {
+        const el = document.getElementById("jobs-save-status");
+        if (!el || !msg) return;
+        el.hidden = false;
+        el.textContent = msg;
+      },
+      onError: (err) => {
+        const el = document.getElementById("jobs-save-status");
+        if (el) {
+          el.hidden = false;
+          el.textContent = err.message || "Save failed";
+        }
+      },
+    })
+  : { schedule() {}, cancel() {}, async flush() {} };
+
+window.DeaneJobs = {
+  showList,
+  openJob,
+  createJob,
+  filterBy(status) {
+    jobFilter = status || "all";
+    const filter = document.getElementById("jobs-filter");
+    filter?.querySelectorAll("[data-filter]").forEach((el) => {
+      el.classList.toggle("is-active", el.dataset.filter === jobFilter);
+    });
+    renderJobList();
   },
-  onError: (err) => {
-    const el = document.getElementById("jobs-save-status");
-    if (el) {
-      el.hidden = false;
-      el.textContent = err.message || "Save failed";
-    }
-  },
-});
+};
 
 function scheduleJobAutosave() {
   jobAutosave.schedule();
@@ -441,18 +457,4 @@ jobsForm?.addEventListener("change", scheduleJobAutosave);
 window.addEventListener("beforeunload", () => {
   jobAutosave.flush();
 });
-
-window.DeaneJobs = {
-  showList,
-  openJob,
-  createJob,
-  filterBy(status) {
-    jobFilter = status || "all";
-    const filter = document.getElementById("jobs-filter");
-    filter?.querySelectorAll("[data-filter]").forEach((el) => {
-      el.classList.toggle("is-active", el.dataset.filter === jobFilter);
-    });
-    renderJobList();
-  },
-};
 })();
