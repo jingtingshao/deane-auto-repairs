@@ -26,6 +26,7 @@ let jobRows = [];
 let partRows = [];
 let jobFilter = "active";
 let jobYear = String(new Date().getFullYear());
+let jobMonth = "";
 
 function statusLabel(id) {
   return JOB_STATUSES.find((s) => s.id === id)?.label || id || "";
@@ -65,6 +66,7 @@ function renderFilters() {
     jobsFilter.querySelectorAll("[data-filter]").forEach((btn) => {
       btn.addEventListener("click", () => {
         jobFilter = btn.dataset.filter;
+        if (jobFilter === "collected_month") jobMonth = Admin.todayIso().slice(0, 7);
         renderFilters();
         Admin.setViewTitle(jobListTitle());
         renderJobList();
@@ -83,14 +85,23 @@ function archiveDate(job) {
 }
 
 function currentMonthKey() {
-  return Admin.todayIso().slice(0, 7);
+  return jobMonth || Admin.todayIso().slice(0, 7);
+}
+
+function activityMonthLabel() {
+  const [year, month] = currentMonthKey().split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, 15)).toLocaleString("en-NZ", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 function jobListTitle() {
   if (jobFilter === "waiting_parts") return "Waiting parts";
   if (jobFilter === "in_progress") return "Jobs in progress";
   if (jobFilter === "completed") return "Ready to collect";
-  if (jobFilter === "collected_month") return "Collected this month";
+  if (jobFilter === "collected_month") return `Collected · ${activityMonthLabel()}`;
   if (jobFilter === "collected") return `Job history · ${jobYear}`;
   return "Active jobs";
 }
@@ -129,6 +140,17 @@ function normalizeSearch(value) {
   return String(value || "")
     .toLowerCase()
     .replace(/[\s-]/g, "");
+}
+
+function formatJobDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || "").slice(0, 10) || "—";
+  return new Intl.DateTimeFormat("en-NZ", {
+    timeZone: "Pacific/Auckland",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
 }
 
 function matchesJobSearch(job, query) {
@@ -188,35 +210,42 @@ function renderJobList() {
     return;
   }
 
-  jobsList.innerHTML = jobs
-    .map((job) => {
-      const parts = partsLabel(job);
-      const waiting = Math.max(0, (Number(job.partsTotal) || 0) - (Number(job.partsReceived) || 0));
-      const waitHint =
-        job.status === "waiting_parts" && waiting
-          ? ` · ${waiting} part${waiting === 1 ? "" : "s"} to arrive`
-          : "";
-      const archiveHint =
-        job.status === "collected" && archiveDate(job)
-          ? ` · Collected ${archiveDate(job)}`
-          : "";
-      return `
-      <article class="report-card billing-card" data-id="${job.id}">
-        <div class="billing-number">${Admin.escapeHtml(job.number)}</div>
-        <div>
-          <h2>${Admin.escapeHtml(job.customerName || "Customer")}</h2>
-          <p class="muted">${Admin.escapeHtml(job.registration || "No plate")} · ${Admin.escapeHtml(job.vehicle || "No vehicle")}${job.quoteNumber ? ` · ${Admin.escapeHtml(job.quoteNumber)}` : ""}${job.invoiceNumber ? ` · ${Admin.escapeHtml(job.invoiceNumber)}` : ""}${waitHint}${archiveHint}</p>
-        </div>
-        <div class="job-card-meta">
-          <span class="badge ${Admin.escapeAttr(job.status)}">${Admin.escapeHtml(statusLabel(job.status))}</span>
-          <span class="badge ${parts.cls}">${Admin.escapeHtml(parts.text)}</span>
-        </div>
-      </article>`;
-    })
-    .join("");
+  jobsList.innerHTML = `
+    <div class="billing-table-wrap">
+      <table class="billing-table job-list-table">
+        <thead>
+          <tr>
+            <th>Job number</th>
+            <th>Date</th>
+            <th>Customer name</th>
+            <th>Plate</th>
+            <th>Vehicle</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${jobs
+            .map((job) => {
+              const parts = partsLabel(job);
+              return `<tr class="job-row" data-id="${Admin.escapeAttr(job.id)}">
+                <td class="billing-number">${Admin.escapeHtml(job.number || "—")}</td>
+                <td>${Admin.escapeHtml(formatJobDate(job.createdAt || job.updatedAt))}</td>
+                <td>${Admin.escapeHtml(job.customerName || "—")}</td>
+                <td>${Admin.escapeHtml(job.registration || "—")}</td>
+                <td>${Admin.escapeHtml(job.vehicle || "—")}</td>
+                <td class="job-table-status">
+                  <span class="badge ${Admin.escapeAttr(job.status)}">${Admin.escapeHtml(statusLabel(job.status))}</span>
+                  <span class="badge ${Admin.escapeAttr(parts.cls)}">${Admin.escapeHtml(parts.text)}</span>
+                </td>
+              </tr>`;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>`;
 
-  jobsList.querySelectorAll(".report-card").forEach((card) => {
-    card.addEventListener("click", () => openJob(card.dataset.id));
+  jobsList.querySelectorAll(".job-row").forEach((row) => {
+    row.addEventListener("click", () => openJob(row.dataset.id));
   });
 }
 
@@ -472,6 +501,8 @@ async function showList(opts = {}) {
   if (opts.filter) jobFilter = opts.filter;
   else jobFilter = "active";
   if (opts.year) jobYear = String(opts.year);
+  if (opts.month) jobMonth = String(opts.month);
+  else if (jobFilter === "collected_month") jobMonth = Admin.todayIso().slice(0, 7);
   jobsEditView.hidden = true;
   jobsListView.hidden = false;
   Admin.setViewTitle(jobListTitle());

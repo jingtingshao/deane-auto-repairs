@@ -613,18 +613,38 @@ label.check input {
   cursor: pointer;
 }
 
-.billing-table tbody tr.invoice-row {
+.billing-table tbody tr.invoice-row,
+.billing-table tbody tr.quote-row,
+.billing-table tbody tr.job-row {
   cursor: pointer;
 }
 
-.billing-table tbody tr.invoice-row:hover {
+.billing-table tbody tr.invoice-row:hover,
+.billing-table tbody tr.quote-row:hover,
+.billing-table tbody tr.job-row:hover {
   background: var(--blue-soft);
 }
 
-.billing-table td.invoice-due {
+.billing-table .invoice-money {
   text-align: right;
-  font-weight: 700;
   white-space: nowrap;
+}
+
+.billing-table td.invoice-payment {
+  color: #1565c0;
+  font-weight: 700;
+}
+
+.billing-table td.invoice-due {
+  font-weight: 700;
+}
+
+.billing-table td.job-table-status {
+  white-space: nowrap;
+}
+
+.billing-table td.job-table-status .badge + .badge {
+  margin-left: 0.3rem;
 }
 
 .billing-table .billing-number {
@@ -1046,6 +1066,17 @@ label.check input {
   text-transform: uppercase;
 }
 
+.dash-month-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.dash-month-nav button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .dash-kpi-grid {
   grid-column: 1 / -1;
   display: grid;
@@ -1054,6 +1085,10 @@ label.check input {
 
 .dash-kpi-grid-3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dash-kpi-grid-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .dash-kpi-grid-4 {
@@ -1390,6 +1425,161 @@ label.check input {
   min-width: 7rem;
 }
 
+.financial-window-toolbar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.financial-window-toolbar strong {
+  text-align: center;
+  font-family: var(--display);
+  font-size: 1.15rem;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.financial-window-toolbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.financial-combo-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.2rem;
+  margin-bottom: 0.65rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.financial-combo-scroll {
+  overflow-x: auto;
+  padding: 0.4rem 0 0.25rem;
+}
+
+.financial-combo-chart {
+  min-width: 660px;
+  font-variant-numeric: tabular-nums;
+}
+
+.financial-combo-plot {
+  position: relative;
+  height: 180px;
+  border-bottom: 1px solid var(--line);
+  background:
+    linear-gradient(to top, transparent 49%, rgba(215, 224, 234, 0.55) 50%, transparent 51%);
+}
+
+.financial-combo-bars {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.financial-combo-column {
+  display: flex;
+  height: 180px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.financial-combo-column span {
+  position: relative;
+  z-index: 3;
+  padding: 0 0.2rem;
+  margin-bottom: 0.2rem;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #c62828;
+  font-family: var(--display);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.financial-invoice-bar {
+  width: min(42px, 46%);
+  border-radius: 5px 5px 0 0;
+  background: linear-gradient(180deg, #ef5350, #c62828);
+}
+
+.financial-received-line {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 180px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.financial-received-line polyline {
+  fill: none;
+  stroke: #1565c0;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.financial-received-line circle {
+  fill: #fff;
+  stroke: #1565c0;
+  stroke-width: 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.financial-combo-months,
+.financial-combo-received {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  text-align: center;
+}
+
+.financial-combo-months {
+  padding-top: 0.45rem;
+}
+
+.financial-combo-months strong {
+  font-family: var(--display);
+  font-size: 0.95rem;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.financial-combo-received span {
+  color: #1565c0;
+  font-family: var(--display);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.financial-dot {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  vertical-align: 1px;
+}
+
+.financial-dot.invoiced {
+  background: #c62828;
+}
+
+.financial-dot.received {
+  background: #1565c0;
+}
+
+.financial-dot.outstanding {
+  background: #ef6c00;
+}
+
 .dash-tree {
   list-style: none;
   margin: 0;
@@ -1474,6 +1664,7 @@ label.check input {
     align-items: flex-start;
   }
 
+  .dash-kpi-grid-2,
   .dash-kpi-grid-3,
   .dash-kpi-grid-4 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1481,6 +1672,7 @@ label.check input {
 }
 
 @media (max-width: 640px) {
+  .dash-kpi-grid-2,
   .dash-kpi-grid-3,
   .dash-kpi-grid-4,
   .dash-financial-totals,
@@ -1493,6 +1685,8 @@ label.check input {
   }
 
   .dash-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
     margin-top: 0.8rem;
   }
 }

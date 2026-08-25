@@ -19,6 +19,7 @@ let billingDocs = [];
 let customerDirectory = [];
 let listKind = "quote";
 let listFilter = "all";
+let listMonth = "";
 let partyFilter = { customerId: "", customerName: "", customerEmail: "" };
 const billingSearch = document.getElementById("billing-search");
 const billingFilterEl = document.getElementById("billing-filter");
@@ -171,15 +172,26 @@ function quoteFilters() {
 }
 
 function invoiceFilters() {
+  const monthLabel = billingMonthLabel();
   return [
     { id: "all", label: "All invoices" },
     { id: "outstanding", label: "Awaiting payment" },
     { id: "overdue", label: "Overdue" },
     { id: "paid_month", label: "Payments this month" },
-    { id: "service_month", label: "Services this month" },
-    { id: "wof_month", label: "WOFs this month" },
+    { id: "service_month", label: `Services · ${monthLabel}` },
+    { id: "wof_month", label: `WOFs · ${monthLabel}` },
     { id: "paid", label: "Paid" },
   ];
+}
+
+function billingMonthLabel() {
+  const key = listMonth || Admin.todayIso().slice(0, 7);
+  const [year, month] = key.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, 15)).toLocaleString("en-NZ", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 function matchesPartyFilter(d) {
@@ -253,9 +265,7 @@ function matchesListFilter(d) {
     if (d.status === "void") return false;
     if (listFilter === "all") return true;
     if (listFilter === "outstanding") {
-      const issued = d.status !== "draft" || Number(d.amountPaid) > 0;
       return (
-        issued &&
         (d.paymentStatus === "unpaid" || d.paymentStatus === "deposit") &&
         Number(d.balanceDue) > 0
       );
@@ -266,7 +276,7 @@ function matchesListFilter(d) {
       return (d.paymentDates || []).some((day) => String(day).startsWith(month));
     }
     if (listFilter === "service_month" || listFilter === "wof_month") {
-      const month = Admin.todayIso().slice(0, 7);
+      const month = listMonth || Admin.todayIso().slice(0, 7);
       const issuedMonth = String(d.sentAt || d.createdAt || d.updatedAt || "").slice(0, 7);
       if (issuedMonth !== month) return false;
       return listFilter === "service_month" ? Boolean(d.hasService) : Boolean(d.hasWof);
@@ -301,6 +311,9 @@ function renderBillingFilters() {
   billingFilterEl.querySelectorAll("[data-filter]").forEach((btn) => {
     btn.addEventListener("click", () => {
       listFilter = btn.dataset.filter;
+      if (listFilter === "service_month" || listFilter === "wof_month") {
+        listMonth = Admin.todayIso().slice(0, 7);
+      }
       renderBillingFilters();
       renderBillingList();
     });
@@ -341,7 +354,9 @@ function renderBillingList() {
               <th>Invoice number</th>
               <th>Date</th>
               <th>Customer name</th>
-              <th>Due $</th>
+              <th class="invoice-money">Invoice amount</th>
+              <th class="invoice-money">Payment</th>
+              <th class="invoice-money">Due</th>
             </tr>
           </thead>
           <tbody>
@@ -353,7 +368,9 @@ function renderBillingList() {
                   <td class="billing-number">${Admin.escapeHtml(d.number || "—")}</td>
                   <td>${Admin.escapeHtml(when)}</td>
                   <td>${Admin.escapeHtml(d.customerName || "—")}</td>
-                  <td class="invoice-due">${money(d.balanceDue)}</td>
+                  <td class="invoice-money">${money(d.totalIncl)}</td>
+                  <td class="invoice-money invoice-payment">${money(d.amountPaid)}</td>
+                  <td class="invoice-money invoice-due">${money(d.balanceDue)}</td>
                 </tr>`;
               })
               .join("")}
@@ -366,51 +383,50 @@ function renderBillingList() {
     return;
   }
 
-  billingList.innerHTML = docs
-    .map((d) => {
-      const payStatus = d.overdue ? "overdue" : d.paymentStatus;
-      const payBadge =
-        d.kind === "invoice" && payStatus
-          ? `<span class="badge pay-${Admin.escapeAttr(payStatus)}">${Admin.escapeHtml(paymentLabel(payStatus))}</span>`
-          : "";
-      const payHint =
-        d.kind === "invoice" && d.overdue
-          ? ` · overdue ${money(d.balanceDue)}`
-          : d.kind === "invoice" && d.paymentStatus && d.paymentStatus !== "paid"
-            ? ` · due ${money(d.balanceDue)}`
-            : d.kind === "invoice" && d.paymentStatus === "paid"
-              ? ` · paid ${money(d.amountPaid)}`
-              : "";
-      const viewedBadge =
-        d.kind === "quote" && d.viewedAt
-          ? `<span class="badge viewed" title="${Admin.escapeAttr(
-              d.lastViewedAt || d.viewedAt
-            )}">Viewed</span>`
-          : "";
-      const when = formatListDate(d.sortAt || d.sentAt || d.createdAt || d.updatedAt);
-      return `
-      <article class="report-card billing-card" data-id="${d.id}">
-        <div class="billing-number">${Admin.escapeHtml(d.number)}</div>
-        <div>
-          <h2><button type="button" class="customer-name-link" data-party-id="${Admin.escapeAttr(d.customerId || "")}" data-party-name="${Admin.escapeAttr(d.customerName || "")}" data-party-email="${Admin.escapeAttr(d.customerEmail || "")}">${Admin.escapeHtml(d.customerName || "Customer")}</button></h2>
-          <p class="muted">${when ? `${Admin.escapeHtml(when)} · ` : ""}${Admin.escapeHtml(d.registration || "No plate")} · ${Admin.escapeHtml(kindLabel(d.kind))} · ${Admin.escapeHtml(d.vehicle || "")} · ${money(d.totalIncl)}${payHint}</p>
-        </div>
-        <div class="job-card-meta">
-          <span class="badge ${d.status}">${Admin.escapeHtml(d.status)}</span>
-          ${viewedBadge}
-          ${payBadge}
-        </div>
-      </article>`;
-    })
-    .join("");
-  billingList.querySelectorAll(".report-card").forEach((card) => {
-    card.addEventListener("click", () => openDoc(card.dataset.id));
+  billingList.innerHTML = `
+    <div class="billing-table-wrap">
+      <table class="billing-table quote-list-table">
+        <thead>
+          <tr>
+            <th>Quote number</th>
+            <th>Date</th>
+            <th>Customer name</th>
+            <th>Plate</th>
+            <th>Total</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${docs
+            .map((d) => {
+              const when =
+                formatListDate(d.sortAt || d.sentAt || d.createdAt || d.updatedAt) || "—";
+              const statusText =
+                d.status === "sent" && d.viewedAt
+                  ? "Viewed"
+                  : String(d.status || "draft").replace(/^./, (ch) => ch.toUpperCase());
+              const statusClass = d.status === "sent" && d.viewedAt ? "viewed" : d.status;
+              return `<tr class="quote-row" data-id="${Admin.escapeAttr(d.id)}">
+                <td class="billing-number">${Admin.escapeHtml(d.number || "—")}</td>
+                <td>${Admin.escapeHtml(when)}</td>
+                <td><button type="button" class="customer-name-link" data-party-id="${Admin.escapeAttr(d.customerId || "")}" data-party-name="${Admin.escapeAttr(d.customerName || "")}" data-party-email="${Admin.escapeAttr(d.customerEmail || "")}">${Admin.escapeHtml(d.customerName || "—")}</button></td>
+                <td>${Admin.escapeHtml(d.registration || "—")}</td>
+                <td class="invoice-due">${money(d.totalIncl)}</td>
+                <td><span class="badge ${Admin.escapeAttr(statusClass || "draft")}">${Admin.escapeHtml(statusText)}</span></td>
+              </tr>`;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>`;
+  billingList.querySelectorAll(".quote-row").forEach((row) => {
+    row.addEventListener("click", () => openDoc(row.dataset.id));
   });
   billingList.querySelectorAll(".customer-name-link").forEach((btn) => {
     btn.addEventListener("click", (event) => {
       event.stopPropagation();
       showList({
-        kind: "invoice",
+        kind: listKind,
         filter: "all",
         customerId: btn.dataset.partyId || "",
         customerName: btn.dataset.partyName || "",
@@ -1165,6 +1181,8 @@ async function showList(opts = {}) {
   if (opts.kind === "invoice" || opts.kind === "quote") listKind = opts.kind;
   if (opts.filter) listFilter = opts.filter;
   else if (opts.kind) listFilter = "all";
+  if (opts.month) listMonth = String(opts.month);
+  else if (opts.kind) listMonth = "";
   applyPartyOpts(opts);
   if (opts.kind) {
     if (billingSearch) billingSearch.value = "";

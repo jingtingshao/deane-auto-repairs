@@ -15,94 +15,152 @@
   }
 
   let selectedFinancialYear = "";
+  let financialWindowStart = null;
+  let selectedActivityMonth = "";
+
+  function shiftMonthKey(yearMonth, delta) {
+    const [year, month] = String(yearMonth).split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1 + Number(delta), 1));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+  }
 
   function renderFinancialChart(history) {
     const rows = Array.isArray(history?.monthly) ? history.monthly : [];
     if (!rows.length) {
       return '<p class="muted small">No financial history for this year.</p>';
     }
+    const windowSize = Math.min(6, rows.length);
+    const maxStart = Math.max(0, rows.length - windowSize);
+    if (!Number.isInteger(financialWindowStart)) {
+      let lastActivity = rows.findLastIndex(
+        (row) => Number(row.invoiced) > 0 || Number(row.received) > 0
+      );
+      if (lastActivity < 0) {
+        const currentYear = Admin.todayIso().slice(0, 4);
+        lastActivity =
+          String(history.year) === currentYear
+            ? Number(Admin.todayIso().slice(5, 7)) - 1
+            : rows.length - 1;
+      }
+      financialWindowStart = Math.max(0, Math.min(maxStart, lastActivity - windowSize + 1));
+    }
+    financialWindowStart = Math.max(0, Math.min(maxStart, financialWindowStart));
+    const shown = rows.slice(financialWindowStart, financialWindowStart + windowSize);
     const max = Math.max(
       1,
-      ...rows.map((m) =>
-        Math.max(
-          Number(m.invoiced) || 0,
-          Number(m.received) || 0,
-          Number(m.outstanding) || 0
-        )
+      ...shown.map((row) =>
+        Math.max(Number(row.invoiced) || 0, Number(row.received) || 0)
       )
     );
-    const bars = rows
-      .map((m) => {
-        const invoiced = Number(m.invoiced) || 0;
-        const received = Number(m.received) || 0;
-        const outstanding = Number(m.outstanding) || 0;
-        const invoicedH = Math.max(
-          invoiced > 0 ? 8 : 0,
-          Math.round((invoiced / max) * 140)
-        );
-        const receivedH = Math.max(
-          received > 0 ? 8 : 0,
-          Math.round((received / max) * 140)
-        );
-        const outH = Math.max(
-          outstanding > 0 ? 8 : 0,
-          Math.round((outstanding / max) * 140)
-        );
-        return `<div class="dash-bar-group" title="${Admin.escapeAttr(
-          `${m.label}: invoiced ${money(invoiced)}, received ${money(received)}, outstanding ${money(outstanding)}`
-        )}">
-          <div class="dash-bars">
-            <div class="dash-bar invoiced" style="height:${invoicedH}px"></div>
-            <div class="dash-bar received" style="height:${receivedH}px"></div>
-            <div class="dash-bar outstanding" style="height:${outH}px"></div>
-          </div>
-          <div class="dash-bar-values">
-            <span>${Admin.escapeHtml(moneyShort(invoiced))}</span>
-            <span>${Admin.escapeHtml(moneyShort(received))}</span>
-            <span>${Admin.escapeHtml(moneyShort(outstanding))}</span>
-          </div>
-          <div class="dash-bar-label">${Admin.escapeHtml(m.label)}</div>
-        </div>`;
+    const plotWidth = 600;
+    const plotHeight = 180;
+    const lineTop = 18;
+    const lineBottom = 164;
+    const points = shown
+      .map((row, index) => {
+        const x = ((index + 0.5) / shown.length) * plotWidth;
+        const y =
+          lineBottom -
+          ((Number(row.received) || 0) / max) * (lineBottom - lineTop);
+        return `${x},${y}`;
+      })
+      .join(" ");
+    const circles = shown
+      .map((row, index) => {
+        const x = ((index + 0.5) / shown.length) * plotWidth;
+        const y =
+          lineBottom -
+          ((Number(row.received) || 0) / max) * (lineBottom - lineTop);
+        return `<circle cx="${x}" cy="${y}" r="5"><title>${Admin.escapeHtml(
+          `${row.label}: received ${money(row.received)}`
+        )}</title></circle>`;
       })
       .join("");
-
+    const first = shown[0]?.label || "";
+    const last = shown[shown.length - 1]?.label || "";
     return `
-      <div class="dash-chart-legend">
-        <span><i class="swatch invoiced"></i> Invoiced</span>
-        <span><i class="swatch received"></i> Payments received</span>
-        <span><i class="swatch outstanding"></i> Still outstanding</span>
+      <div class="financial-window-toolbar">
+        <button type="button" class="ghost" id="financial-window-prev" ${
+          financialWindowStart <= 0 ? "disabled" : ""
+        } aria-label="Previous month">← Previous</button>
+        <strong>${Admin.escapeHtml(`${first}–${last} ${history.year || ""}`)}</strong>
+        <button type="button" class="ghost" id="financial-window-next" ${
+          financialWindowStart >= maxStart ? "disabled" : ""
+        } aria-label="Next month">Next →</button>
       </div>
-      <div class="dash-chart-scroll">
-        <div class="dash-chart financial">${bars}</div>
+      <div class="financial-combo-legend">
+        <span><i class="financial-dot invoiced"></i>Invoiced — bars</span>
+        <span><i class="financial-dot received"></i>Received — line</span>
       </div>
-      <p class="muted small">Drafts with no payment are excluded. Received uses each payment date; outstanding is the balance still due on issued invoices.</p>
+      <div class="financial-combo-scroll">
+        <div class="financial-combo-chart">
+          <div class="financial-combo-plot">
+            <div class="financial-combo-bars">
+              ${shown
+                .map((row) => {
+                  const value = Number(row.invoiced) || 0;
+                  const height = Math.max(value > 0 ? 7 : 0, Math.round((value / max) * 140));
+                  return `<div class="financial-combo-column" title="${Admin.escapeAttr(
+                    `${row.label}: invoiced ${money(value)}`
+                  )}">
+                    <span>${Admin.escapeHtml(moneyShort(value))}</span>
+                    <div class="financial-invoice-bar" style="height:${height}px"></div>
+                  </div>`;
+                })
+                .join("")}
+            </div>
+            <svg class="financial-received-line" viewBox="0 0 ${plotWidth} ${plotHeight}" preserveAspectRatio="none" aria-label="Payments received line">
+              <polyline points="${points}"></polyline>
+              ${circles}
+            </svg>
+          </div>
+          <div class="financial-combo-months">
+            ${shown.map((row) => `<strong>${Admin.escapeHtml(row.label || "")}</strong>`).join("")}
+          </div>
+          <div class="financial-combo-received">
+            ${shown
+              .map(
+                (row) =>
+                  `<span title="${Admin.escapeAttr(money(row.received))}">${Admin.escapeHtml(
+                    moneyShort(row.received)
+                  )}</span>`
+              )
+              .join("")}
+          </div>
+        </div>
+      </div>
+      <p class="muted small">Red bars include all invoices, including drafts and converted quotes. The blue line and values show payments received in each month.</p>
     `;
   }
 
-  function renderJobYear(monthly) {
-    const rows = Array.isArray(monthly) ? monthly : [];
-    if (!rows.length) return '<p class="muted small">No collected-job history yet.</p>';
-    return `<div class="dash-job-year">${rows
-      .map(
-        (row) => `<div title="${Admin.escapeAttr(
-          `${row.label}: ${Number(row.count) || 0} collected`
-        )}">
-          <strong>${Number(row.count) || 0}</strong>
-          <span>${Admin.escapeHtml(row.label || "")}</span>
-        </div>`
-      )
-      .join("")}</div>`;
+  function renderFinancialWindow(history) {
+    const root = document.getElementById("financial-chart-root");
+    if (!root) return;
+    root.innerHTML = renderFinancialChart(history);
+    root.querySelector("#financial-window-prev")?.addEventListener("click", () => {
+      financialWindowStart -= 1;
+      renderFinancialWindow(history);
+    });
+    root.querySelector("#financial-window-next")?.addEventListener("click", () => {
+      financialWindowStart += 1;
+      renderFinancialWindow(history);
+    });
   }
 
-  async function load(year = selectedFinancialYear) {
+  async function load(
+    year = selectedFinancialYear,
+    activityMonth = selectedActivityMonth
+  ) {
     const root = document.getElementById("dashboard-root");
     if (!root || !Admin) return;
     root.innerHTML = '<p class="muted">Loading dashboard…</p>';
     try {
-      const suffix = year ? `?year=${encodeURIComponent(year)}` : "";
+      const params = new URLSearchParams();
+      if (year) params.set("year", year);
+      if (activityMonth) params.set("month", activityMonth);
+      const suffix = params.size ? `?${params.toString()}` : "";
       const data = await Admin.api(`/api/admin/dashboard${suffix}`);
       const jobs = data.jobs || {};
-      const jobHistory = data.jobHistory || {};
       const quotes = data.quotesAwaitingAcceptance || {};
       const invoices = data.invoicesOutstanding || {};
       const overdue = data.invoicesOverdue || {};
@@ -110,6 +168,7 @@
       const financial = data.financialHistory || {};
       selectedFinancialYear = String(financial.year || new Date().getFullYear());
       const thisMonth = data.thisMonth || {};
+      selectedActivityMonth = String(thisMonth.key || Admin.todayIso().slice(0, 7));
       root.innerHTML = `
         <section class="dash-section-heading dash-section-heading-first">
           <div>
@@ -152,7 +211,7 @@
           <button type="button" class="dash-kpi dash-kpi-money tone-due" data-billing="invoices">
             <span class="dash-kpi-label">Awaiting payment</span>
             <strong>${money(invoices.totalIncl)}</strong>
-            <small>${Number(invoices.count) || 0} issued invoice${Number(invoices.count) === 1 ? "" : "s"}</small>
+            <small>${Number(invoices.count) || 0} invoice${Number(invoices.count) === 1 ? "" : "s"}, including drafts</small>
           </button>
           <button type="button" class="dash-kpi dash-kpi-money tone-overdue" data-billing="overdue">
             <span class="dash-kpi-label">Overdue</span>
@@ -168,56 +227,28 @@
 
         <section class="dash-section-heading">
           <div>
-            <p class="dash-eyebrow">This month</p>
+            <p class="dash-eyebrow">Monthly activity</p>
             <h2>${Admin.escapeHtml(thisMonth.label || "Workshop activity")}</h2>
-            <p>Completed work recorded from invoices and collected job cards.</p>
+            <p>Completed work recorded from invoices.</p>
+          </div>
+          <div class="dash-month-nav" aria-label="Choose activity month">
+            <button type="button" class="ghost" id="activity-month-prev">← Previous</button>
+            <button type="button" class="ghost" id="activity-month-next" ${
+              selectedActivityMonth >= Admin.todayIso().slice(0, 7) ? "disabled" : ""
+            }>Next →</button>
           </div>
         </section>
-        <section class="dash-kpi-grid dash-kpi-grid-3">
-          <button type="button" class="dash-kpi tone-service" data-billing="services">
+        <section class="dash-kpi-grid dash-kpi-grid-2">
+          <button type="button" class="dash-kpi tone-service" data-billing="services" data-activity-month="${Admin.escapeAttr(thisMonth.key || "")}">
             <span class="dash-kpi-label">Services</span>
             <strong>${Number(thisMonth.services) || 0}</strong>
             <small>Open matching invoices</small>
           </button>
-          <button type="button" class="dash-kpi tone-wof" data-billing="wofs">
+          <button type="button" class="dash-kpi tone-wof" data-billing="wofs" data-activity-month="${Admin.escapeAttr(thisMonth.key || "")}">
             <span class="dash-kpi-label">WOFs</span>
             <strong>${Number(thisMonth.wofs) || 0}</strong>
             <small>Open matching invoices</small>
           </button>
-          <button type="button" class="dash-kpi tone-collected" data-jobs="collected_month">
-            <span class="dash-kpi-label">Collected jobs</span>
-            <strong>${Number(jobHistory.month) || 0}</strong>
-            <small>Vehicles collected this month</small>
-          </button>
-        </section>
-
-        <section class="dash-section-heading">
-          <div>
-            <p class="dash-eyebrow">History</p>
-            <h2>Workshop performance</h2>
-            <p>Yearly job and financial records.</p>
-          </div>
-        </section>
-        <section class="dash-card dash-card-wide">
-          <div class="dash-card-heading">
-            <h2>Collected jobs · ${Number(jobHistory.yearLabel) || new Date().getFullYear()}</h2>
-            <button type="button" class="ghost" data-jobs="collected" data-job-year="${Number(jobHistory.yearLabel) || new Date().getFullYear()}">View full history</button>
-          </div>
-          <div class="dash-month-stats dash-job-stats">
-            <div>
-              <strong>${Number(jobHistory.week) || 0}</strong>
-              <span>This week</span>
-            </div>
-            <div>
-              <strong>${Number(jobHistory.month) || 0}</strong>
-              <span>This month</span>
-            </div>
-            <div>
-              <strong>${Number(jobHistory.year) || 0}</strong>
-              <span>This year</span>
-            </div>
-          </div>
-          ${renderJobYear(jobHistory.monthly)}
         </section>
         <section class="dash-card dash-card-wide">
           <div class="dash-card-heading">
@@ -239,7 +270,7 @@
             <div><strong>${moneyShort(financial.totals?.received)}</strong><span>Received this year</span></div>
             <div><strong>${moneyShort(financial.totals?.outstanding)}</strong><span>Still outstanding</span></div>
           </div>
-          ${renderFinancialChart(financial)}
+          <div id="financial-chart-root"></div>
         </section>
         <section class="dash-backup-bar" id="dash-backup-card">
           <div class="dash-backup-copy">
@@ -255,6 +286,7 @@
           window.DeaneJobs?.showList?.({
             filter: btn.dataset.jobs,
             year: btn.dataset.jobYear || "",
+            month: btn.dataset.activityMonth || "",
           });
         });
       });
@@ -277,13 +309,29 @@
                     ? "wof_month"
                 : "outstanding";
           Admin.setSection("invoices");
-          window.DeaneBilling?.showList?.({ kind: "invoice", filter });
+          window.DeaneBilling?.showList?.({
+            kind: "invoice",
+            filter,
+            month: btn.dataset.activityMonth || "",
+          });
         });
       });
       document.getElementById("financial-history-year")?.addEventListener("change", (event) => {
         selectedFinancialYear = event.target.value;
-        load(selectedFinancialYear);
+        financialWindowStart = null;
+        load(selectedFinancialYear, selectedActivityMonth);
       });
+      document.getElementById("activity-month-prev")?.addEventListener("click", () => {
+        selectedActivityMonth = shiftMonthKey(selectedActivityMonth, -1);
+        load(selectedFinancialYear, selectedActivityMonth);
+      });
+      document.getElementById("activity-month-next")?.addEventListener("click", () => {
+        const next = shiftMonthKey(selectedActivityMonth, 1);
+        const current = Admin.todayIso().slice(0, 7);
+        selectedActivityMonth = next > current ? current : next;
+        load(selectedFinancialYear, selectedActivityMonth);
+      });
+      renderFinancialWindow(financial);
       wireBackupCard();
     } catch (err) {
       root.innerHTML = `<p class="error">${Admin.escapeHtml(err.message)}</p>`;

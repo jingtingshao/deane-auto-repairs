@@ -2177,6 +2177,10 @@ app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
     const daysSinceMonday = (todayUtc.getUTCDay() + 6) % 7;
     const weekStart = plusDays(today, -daysSinceMonday);
     const thisMonthKey = monthKey();
+    const requestedActivityMonth = String(req.query.month || "").trim();
+    const activityMonthKey = /^\d{4}-(0[1-9]|1[0-2])$/.test(requestedActivityMonth)
+      ? requestedActivityMonth
+      : thisMonthKey;
     const thisYear = Number(thisMonthKey.slice(0, 4));
     const collectedByMonth = Array.from({ length: 12 }, (_row, index) => {
       const key = `${thisYear}-${String(index + 1).padStart(2, "0")}`;
@@ -2189,6 +2193,7 @@ app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
     let collectedThisWeek = 0;
     let collectedThisMonth = 0;
     let collectedThisYear = 0;
+    let collectedActivityMonth = 0;
     for (const job of jobs) {
       const status = jobsLib.normalizeJobStatus(job.status, job.parts || []);
       if (status !== "collected") continue;
@@ -2196,6 +2201,7 @@ app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
       if (!day) continue;
       if (day >= weekStart && day <= today) collectedThisWeek += 1;
       if (day.startsWith(thisMonthKey)) collectedThisMonth += 1;
+      if (day.startsWith(activityMonthKey)) collectedActivityMonth += 1;
       if (day.startsWith(`${thisYear}-`)) {
         collectedThisYear += 1;
         const monthIndex = Number(day.slice(5, 7)) - 1;
@@ -2241,7 +2247,6 @@ app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
       }
       if (doc.kind === "invoice") {
         const payment = normalizeInvoicePayment(doc, {}, totals);
-        const issued = doc.status !== "draft" || payment.amountPaid > 0;
         if (isInvoiceOverdue(doc, payment)) {
           invoicesOverdueCount += 1;
           invoicesOverdueTotal = catalog.round2(
@@ -2249,7 +2254,6 @@ app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
           );
         }
         if (
-          issued &&
           (payment.paymentStatus === "unpaid" || payment.paymentStatus === "deposit") &&
           payment.balanceDue > 0
         ) {
@@ -2263,7 +2267,7 @@ app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
         const docMonthKey = anchor.slice(0, 7);
         const docYear = Number(docMonthKey.slice(0, 4));
         if (Number.isInteger(docYear)) financialYears.add(docYear);
-        const invoiceBucket = issued ? monthBuckets.get(docMonthKey) : null;
+        const invoiceBucket = monthBuckets.get(docMonthKey);
         if (invoiceBucket) {
           invoiceBucket.invoiced = catalog.round2(
             invoiceBucket.invoiced + totals.totalIncl
@@ -2302,7 +2306,7 @@ app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
       const day = String(
         invoice.sentAt || invoice.createdAt || invoice.updatedAt || ""
       ).slice(0, 10);
-      if (!day.startsWith(thisMonthKey)) continue;
+      if (!day.startsWith(activityMonthKey)) continue;
       const lines = invoice.lines || [];
       const isService = lines.some(
         (line) =>
@@ -2316,7 +2320,7 @@ app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
     }
 
     const financialMonthly = [...monthBuckets.values()];
-    const thisMonthLabel = monthLongLabel(thisMonthKey);
+    const activityMonthLabel = monthLongLabel(activityMonthKey);
 
     res.json({
       jobs: {
@@ -2362,10 +2366,11 @@ app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
         ),
       },
       thisMonth: {
-        key: thisMonthKey,
-        label: thisMonthLabel,
+        key: activityMonthKey,
+        label: activityMonthLabel,
         services: servicesThisMonth,
         wofs: wofsThisMonth,
+        collected: collectedActivityMonth,
       },
     });
   } catch (err) {
