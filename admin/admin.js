@@ -1,5 +1,3 @@
-const PIN_KEY = "deane_admin_pin";
-
 const loginView = document.getElementById("login-view");
 const app = document.getElementById("app");
 const loginForm = document.getElementById("login-form");
@@ -16,7 +14,6 @@ const viewTitle = document.getElementById("view-title");
 const vehiclePhotosEl = document.getElementById("vehicle-photos");
 const photoInput = document.getElementById("photo-input");
 
-let pin = sessionStorage.getItem(PIN_KEY) || "";
 let current = null;
 let checklistMeta = null;
 let reportDocs = [];
@@ -25,13 +22,16 @@ const reportCustomerSelect = document.getElementById("report-customer-id");
 const reportVehicleSelect = document.getElementById("report-vehicle-id");
 
 async function api(path, options = {}) {
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-  };
-  if (pin) headers["X-Admin-Pin"] = pin;
-  const res = await fetch(path, { ...options, headers });
+  const headers = { ...(options.headers || {}) };
+  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+  const res = await fetch(path, { ...options, headers, credentials: "include" });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    showLogin();
+    throw new Error(data.error || "Please sign in again.");
+  }
   if (!res.ok) throw new Error(data.error || "Request failed");
   return data;
 }
@@ -306,8 +306,8 @@ window.DeaneAdmin = {
 function showLogin() {
   loginView.hidden = false;
   app.hidden = true;
-  pin = "";
-  sessionStorage.removeItem(PIN_KEY);
+  const pinInput = document.getElementById("pin");
+  if (pinInput) pinInput.value = "";
 }
 
 loginForm.addEventListener("submit", async (e) => {
@@ -323,19 +323,22 @@ loginForm.addEventListener("submit", async (e) => {
     const res = await fetch("/api/admin/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ pin: value }),
     });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 429) {
+      throw new Error(data.error || "Too many sign-in attempts. Try again later.");
+    }
     if (res.status === 401) {
-      throw new Error("Wrong PIN. Default is deane123 — start with: npm start");
+      throw new Error("Wrong PIN");
     }
     if (!res.ok) {
-      throw new Error(`Server error (${res.status}). Is npm start running?`);
+      throw new Error(data.error || `Server error (${res.status}). Is npm start running?`);
     }
-    pin = value;
-    sessionStorage.setItem(PIN_KEY, pin);
     showApp();
     setSection("dashboard");
-    await loadList();
+    await window.DeaneDashboard?.load?.();
   } catch (err) {
     loginError.hidden = false;
     const msg = err instanceof Error ? err.message : String(err);
@@ -350,7 +353,14 @@ loginForm.addEventListener("submit", async (e) => {
   }
 });
 
-document.getElementById("btn-logout").addEventListener("click", showLogin);
+document.getElementById("btn-logout").addEventListener("click", async () => {
+  try {
+    await fetch("/api/admin/logout", { method: "POST", credentials: "include" });
+  } catch {
+    /* still sign out locally */
+  }
+  showLogin();
+});
 
 document.getElementById("nav-dashboard")?.addEventListener("click", () => {
   setSection("dashboard");
@@ -863,7 +873,9 @@ document.getElementById("btn-publish").addEventListener("click", async () => {
     await saveReport();
     current = await api(`/api/reports/${current.id}/publish`, { method: "POST", body: "{}" });
     reportForm.elements.namedItem("status").value = current.status;
-    const url = `${location.origin}/r/${current.id}`;
+    const url = current.viewToken
+      ? `${location.origin}/r/${current.id}?v=${encodeURIComponent(current.viewToken)}`
+      : `${location.origin}/r/${current.id}`;
     await navigator.clipboard.writeText(url);
     showStatus("Published — link copied");
     alert(`Report published.\n\nCustomer link:\n${url}\n\n(Link copied to clipboard)`);
@@ -920,14 +932,10 @@ photoInput?.addEventListener("change", async () => {
     body.append("photos", file);
   }
   try {
-    const res = await fetch(`/api/reports/${current.id}/photo`, {
+    current = await api(`/api/reports/${current.id}/photo`, {
       method: "POST",
-      headers: { "X-Admin-Pin": pin },
       body,
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Upload failed");
-    current = data;
     updatePhotos(current);
     showStatus(photoInput.files.length > 1 ? "Photos uploaded" : "Photo uploaded");
   } catch (err) {
@@ -991,9 +999,8 @@ function escapeAttr(str) {
 }
 
 (async function boot() {
-  if (!pin) return;
   try {
-    await api("/api/reports");
+    await api("/api/admin/session");
     showApp();
     setSection("dashboard");
     await window.DeaneDashboard?.load?.();

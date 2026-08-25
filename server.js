@@ -23,7 +23,32 @@ const { todayIso, plusDays, nowIso, monthKey, monthShortLabel, monthLongLabel } 
 const driveBackup = require("./data/drive-backup");
 
 const PORT = Number(process.env.PORT) || 5173;
-const ADMIN_PIN = process.env.ADMIN_PIN || "deane123";
+const KNOWN_WEAK_PINS = new Set(["deane123", "12345678", "password", "admin", "1234", "0000"]);
+
+function isProduction() {
+  return process.env.NODE_ENV === "production" || Boolean(process.env.RENDER);
+}
+
+function resolveAdminPin() {
+  const pin = String(process.env.ADMIN_PIN || "").trim();
+  if (!pin) {
+    console.error(
+      isProduction()
+        ? "ADMIN_PIN is not set. Refusing to start in production."
+        : "ADMIN_PIN is not set. Copy .env.example to .env, set a strong PIN, then restart."
+    );
+    process.exit(1);
+  }
+  if (KNOWN_WEAK_PINS.has(pin.toLowerCase()) || pin.length < 8) {
+    console.error(
+      "ADMIN_PIN is too weak or matches a published default. Set a strong PIN (8+ characters) in the environment and restart."
+    );
+    process.exit(1);
+  }
+  return pin;
+}
+
+const ADMIN_PIN = resolveAdminPin();
 const ROOT = __dirname;
 
 function isWritableDir(dir) {
@@ -945,6 +970,13 @@ function wofMeta(expiry) {
   return { wofStatus, daysUntil: days };
 }
 
+function nextWofReminderVehicle(vehicles) {
+  return (vehicles || [])
+    .map((v) => ({ v, meta: wofMeta(v.wofExpiry) }))
+    .filter((row) => row.meta.wofStatus === "due_soon" && !row.v.wofReminderSentAt)
+    .sort((a, b) => String(a.v.wofExpiry).localeCompare(String(b.v.wofExpiry)))[0]?.v || null;
+}
+
 function mergeCustomer(map, incoming) {
   const key = customerRecordKey(incoming);
   if (!key) return;
@@ -1150,10 +1182,21 @@ function listCustomers() {
         vehicles: row.vehicles,
         registration: row.registration,
       });
+      const reminderVehicle = nextWofReminderVehicle(row.vehicles || []);
+      const latestVehicleReminder = (row.vehicles || [])
+        .map((v) => v.wofReminderSentAt)
+        .filter(Boolean)
+        .sort()
+        .at(-1) || "";
       const seq = row.customerId ? Number(seqById.get(row.customerId)) || 0 : 0;
       return {
         ...row,
         ...wofMeta(row.wofExpiry),
+        wofReminderSentAt: reminderVehicle
+          ? ""
+          : latestVehicleReminder || row.wofReminderSentAt || "",
+        wofReminderVehicleId: reminderVehicle?.id || "",
+        canWofReminder: Boolean(reminderVehicle && row.customerEmail),
         customerSeq: seq,
         dailySeq: seq,
         hasReport,
@@ -1350,6 +1393,22 @@ function requireCustomerSnapshot(body) {
 
 function newAcceptToken() {
   return randomBytes(24).toString("hex");
+}
+
+function newViewToken() {
+  return randomBytes(24).toString("hex");
+}
+
+function ensureViewToken(doc) {
+  if (!doc || typeof doc !== "object") return "";
+  if (!doc.viewToken) doc.viewToken = newViewToken();
+  return doc.viewToken;
+}
+
+function publicViewTokenOk(doc, raw) {
+  const token = String(raw || "");
+  if (!doc?.viewToken) return true;
+  return Boolean(token && token === doc.viewToken);
 }
 
 function normalizeLines(lines) {
@@ -1628,6 +1687,7 @@ function withBillingTotals(doc, isAdmin) {
   }
   if (!isAdmin) {
     delete payload.acceptToken;
+    delete payload.viewToken;
     delete payload.history;
   } else if (Array.isArray(payload.history)) {
     payload.history = [...payload.history].sort((a, b) =>
@@ -1649,10 +1709,22 @@ function publicOrigin(req, body) {
 
 function billingPublicUrl(req, body, doc) {
   const origin = publicOrigin(req, body);
+  const params = new URLSearchParams();
+  const view = ensureViewToken(doc);
+  if (view) params.set("v", view);
   if (doc.kind === "quote" && doc.acceptToken) {
-    return `${origin}/b/${doc.id}?t=${encodeURIComponent(doc.acceptToken)}`;
+    params.set("t", doc.acceptToken);
   }
-  return `${origin}/b/${doc.id}`;
+  const query = params.toString();
+  return query ? `${origin}/b/${doc.id}?${query}` : `${origin}/b/${doc.id}`;
+}
+
+function reportPublicUrl(req, body, report) {
+  const origin = publicOrigin(req, body);
+  const view = ensureViewToken(report);
+  return view
+    ? `${origin}/r/${report.id}?v=${encodeURIComponent(view)}`
+    : `${origin}/r/${report.id}`;
 }
 
 function isLockedBilling(doc) {
@@ -1680,6 +1752,7 @@ function issueBillingDoc(doc, req, body) {
   if (doc.kind === "quote" && !doc.acceptToken) {
     doc.acceptToken = newAcceptToken();
   }
+  ensureViewToken(doc);
   if (doc.status === "draft") {
     doc.status = "sent";
     doc.sentAt = nowIso();
@@ -1700,12 +1773,120 @@ function nextJobNumber(reports) {
   return `${prefix}${String(next).padStart(4, "0")}`;
 }
 
+const ADMIN_SESSION_COOKIE = "deane_admin";
+const ADMIN_SESSION_MS = 12 * 60 * 60 * 1000;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_FAILS = 8;
+const LOGIN_BLOCK_MS = 15 * 60 * 1000;
+const adminSessions = new Map();
+const loginAttempts = new Map();
+
+function clientIp(req) {
+  return String(req.ip || req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "")
+    .split(",")[0]
+    .trim();
+}
+
+function parseCookies(header) {
+  const out = {};
+  for (const part of String(header || "").split(";")) {
+    const idx = part.indexOf("=");
+    if (idx < 0) continue;
+    const key = part.slice(0, idx).trim();
+    if (!key) continue;
+    try {
+      out[key] = decodeURIComponent(part.slice(idx + 1).trim());
+    } catch {
+      out[key] = part.slice(idx + 1).trim();
+    }
+  }
+  return out;
+}
+
+function cookieSecure(req) {
+  return isProduction() || req.secure || req.get("x-forwarded-proto") === "https";
+}
+
+function sessionCookieHeader(req, token, maxAgeMs) {
+  const parts = [`${ADMIN_SESSION_COOKIE}=${token || ""}`, "Path=/", "HttpOnly", "SameSite=Lax"];
+  if (cookieSecure(req)) parts.push("Secure");
+  parts.push(`Max-Age=${maxAgeMs > 0 ? Math.floor(maxAgeMs / 1000) : 0}`);
+  return parts.join("; ");
+}
+
+function pruneAdminSessions() {
+  const now = Date.now();
+  for (const [token, session] of adminSessions) {
+    if (!session || session.expiresAt < now) adminSessions.delete(token);
+  }
+}
+
+function createAdminSession() {
+  pruneAdminSessions();
+  const token = randomBytes(32).toString("hex");
+  adminSessions.set(token, { expiresAt: Date.now() + ADMIN_SESSION_MS });
+  return token;
+}
+
+function readAdminSession(req) {
+  const token = parseCookies(req.headers.cookie)[ADMIN_SESSION_COOKIE];
+  if (!token) return null;
+  const session = adminSessions.get(token);
+  if (!session || session.expiresAt < Date.now()) {
+    adminSessions.delete(token);
+    return null;
+  }
+  return { token, session };
+}
+
+function isAdminRequest(req) {
+  return Boolean(readAdminSession(req));
+}
+
 function requireAdmin(req, res, next) {
-  const pin = req.headers["x-admin-pin"] || req.query.pin;
-  if (pin !== ADMIN_PIN) {
-    return res.status(401).json({ error: "Invalid admin PIN" });
+  if (!isAdminRequest(req)) {
+    return res.status(401).json({ error: "Please sign in" });
   }
   next();
+}
+
+function loginBlockedSeconds(ip) {
+  const row = loginAttempts.get(ip);
+  if (!row) return 0;
+  if (row.blockedUntil && row.blockedUntil > Date.now()) {
+    return Math.ceil((row.blockedUntil - Date.now()) / 1000);
+  }
+  if (row.windowStart && Date.now() - row.windowStart > LOGIN_WINDOW_MS) {
+    loginAttempts.delete(ip);
+    return 0;
+  }
+  return 0;
+}
+
+function recordLoginFailure(ip) {
+  const now = Date.now();
+  let row = loginAttempts.get(ip);
+  if (!row || now - row.windowStart > LOGIN_WINDOW_MS) {
+    row = { windowStart: now, fails: 0, blockedUntil: 0 };
+  }
+  row.fails += 1;
+  if (row.fails >= LOGIN_MAX_FAILS) {
+    row.blockedUntil = now + LOGIN_BLOCK_MS;
+  }
+  loginAttempts.set(ip, row);
+}
+
+function clearLoginFailures(ip) {
+  loginAttempts.delete(ip);
+}
+
+function patchById(readFn, writeFn, id, patcher) {
+  const rows = readFn();
+  const index = rows.findIndex((row) => row && row.id === id);
+  if (index < 0) return null;
+  rows[index] = patcher(rows[index]);
+  writeFn(rows);
+  return rows[index];
 }
 
 const UPLOAD_MIME_EXT = {
@@ -1859,9 +2040,32 @@ app.get("/api/checklist", (req, res) => {
 });
 
 app.post("/api/admin/login", (req, res) => {
-  if (req.body?.pin !== ADMIN_PIN) {
+  const ip = clientIp(req);
+  const wait = loginBlockedSeconds(ip);
+  if (wait > 0) {
+    res.setHeader("Retry-After", String(wait));
+    return res.status(429).json({
+      error: "Too many sign-in attempts. Try again in 15 minutes.",
+    });
+  }
+  if (String(req.body?.pin || "") !== ADMIN_PIN) {
+    recordLoginFailure(ip);
     return res.status(401).json({ error: "Wrong PIN" });
   }
+  clearLoginFailures(ip);
+  const token = createAdminSession();
+  res.setHeader("Set-Cookie", sessionCookieHeader(req, token, ADMIN_SESSION_MS));
+  res.json({ ok: true });
+});
+
+app.post("/api/admin/logout", (req, res) => {
+  const session = readAdminSession(req);
+  if (session) adminSessions.delete(session.token);
+  res.setHeader("Set-Cookie", sessionCookieHeader(req, "", 0));
+  res.json({ ok: true });
+});
+
+app.get("/api/admin/session", requireAdmin, (_req, res) => {
   res.json({ ok: true });
 });
 
@@ -1984,11 +2188,16 @@ app.get("/api/reports/:id", (req, res) => {
   const report = readReports().find((r) => r.id === req.params.id);
   if (!report) return res.status(404).json({ error: "Report not found" });
 
-  const isAdmin = (req.headers["x-admin-pin"] || req.query.pin) === ADMIN_PIN;
+  const isAdmin = isAdminRequest(req);
   if (report.status !== "published" && !isAdmin) {
     return res.status(404).json({ error: "Report not found" });
   }
-  res.json(withReportPhotos(report));
+  if (!isAdmin && !publicViewTokenOk(report, req.query.v)) {
+    return res.status(404).json({ error: "Report not found" });
+  }
+  const payload = withReportPhotos(report);
+  if (!isAdmin) delete payload.viewToken;
+  res.json(payload);
 });
 
 app.post("/api/reports", requireAdmin, (_req, res) => {
@@ -2064,6 +2273,7 @@ app.post("/api/reports/:id/publish", requireAdmin, (req, res) => {
   reports[index].status = "published";
   reports[index].publishedAt = nowIso();
   reports[index].updatedAt = reports[index].publishedAt;
+  ensureViewToken(reports[index]);
   writeReports(reports);
   res.json(reports[index]);
 });
@@ -2396,30 +2606,48 @@ app.post("/api/customers/wof-reminder", requireAdmin, async (req, res) => {
 
   const names = namesFromCustomer(customer);
   const vehicles = normalizeVehicles(customer, customer);
-  const expiry =
-    vehicles.map((v) => v.wofExpiry).filter(Boolean).sort()[0] ||
-    String(customer.wofExpiry || req.body?.wofExpiry || "").trim();
+  const requestedId = String(req.body?.vehicleId || "").trim();
+  const target =
+    (requestedId && vehicles.find((v) => v.id === requestedId)) ||
+    nextWofReminderVehicle(vehicles);
+  if (!target) {
+    const latestSent = vehicles
+      .map((v) => v.wofReminderSentAt)
+      .filter(Boolean)
+      .sort()
+      .at(-1) || "";
+    if (latestSent) {
+      return res.json({
+        ok: true,
+        alreadySent: true,
+        to: customer.customerEmail,
+        sentAt: latestSent,
+      });
+    }
+    return res.status(400).json({
+      error: "Email reminder is only for a vehicle whose WOF expires in the next 30 days.",
+    });
+  }
+  const expiry = String(target.wofExpiry || "").trim();
   const meta = wofMeta(expiry);
   if (meta.wofStatus !== "due_soon") {
     return res.status(400).json({
-      error: "Email reminder is only for customers whose WOF expires in the next 30 days.",
+      error: "Email reminder is only for a vehicle whose WOF expires in the next 30 days.",
     });
   }
-  if (customer.wofReminderSentAt) {
+  if (target.wofReminderSentAt) {
     return res.json({
       ok: true,
       alreadySent: true,
       to: customer.customerEmail,
-      sentAt: customer.wofReminderSentAt,
+      sentAt: target.wofReminderSentAt,
     });
   }
 
   const to = String(customer.customerEmail || req.body?.to || "").trim();
   const name = names.customerName || "there";
-  const matchVehicle =
-    vehicles.find((v) => v.wofExpiry === expiry) || vehicles[0] || {};
-  const registration = String(matchVehicle.registration || "").trim().toUpperCase();
-  const vehicle = String(matchVehicle.vehicle || "").trim();
+  const registration = String(target.registration || "").trim().toUpperCase();
+  const vehicle = String(target.vehicle || "").trim();
   if (!to) {
     return res.status(400).json({ error: "Customer email is missing." });
   }
@@ -2464,18 +2692,19 @@ app.post("/api/customers/wof-reminder", requireAdmin, async (req, res) => {
       html,
     });
     const sentAt = nowIso();
-    customer.wofReminderSentAt = sentAt;
-    const plate = plateKey(registration);
-    for (const v of vehicles) {
-      if (!plate || plateKey(v.registration) === plate) {
-        v.wofReminderSentAt = sentAt;
-        if (plate) break;
-      }
+    const latestRows = readSavedCustomers();
+    const latest = latestRows.find((c) => c.id === customer.id);
+    if (latest) {
+      const latestVehicles = normalizeVehicles(latest, latest);
+      const hit =
+        latestVehicles.find((v) => v.id === target.id) ||
+        latestVehicles.find((v) => plateKey(v.registration) === plateKey(registration));
+      if (hit) hit.wofReminderSentAt = sentAt;
+      latest.vehicles = latestVehicles;
+      latest.updatedAt = sentAt;
+      writeSavedCustomers(latestRows);
     }
-    customer.vehicles = vehicles;
-    customer.updatedAt = sentAt;
-    writeSavedCustomers(rows);
-    res.json({ ok: true, to, sentAt });
+    res.json({ ok: true, to, sentAt, vehicleId: target.id || "" });
   } catch (err) {
     console.error("WOF reminder email failed:", err);
     res.status(502).json({
@@ -2506,14 +2735,11 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
     report.status = "published";
     report.publishedAt = nowIso();
     report.updatedAt = report.publishedAt;
-    writeReports(reports);
   }
+  ensureViewToken(report);
+  writeReports(reports);
 
-  const origin =
-    PUBLIC_BASE_URL ||
-    String(req.body?.baseUrl || "").replace(/\/$/, "") ||
-    `${req.protocol}://${req.get("host")}`;
-  const url = `${origin}/r/${report.id}`;
+  const url = reportPublicUrl(req, req.body, report);
   const name = report.customerName || "there";
   const vehicle = report.vehicle || "your vehicle";
   const rego = report.registration || "";
@@ -2555,17 +2781,20 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
       html,
     });
 
-    report.lastEmailedAt = nowIso();
-    report.lastEmailedTo = to;
-    report.updatedAt = report.lastEmailedAt;
-    writeReports(reports);
+    const emailedAt = nowIso();
+    const updated = patchById(readReports, writeReports, report.id, (latest) => ({
+      ...latest,
+      lastEmailedAt: emailedAt,
+      lastEmailedTo: to,
+      updatedAt: emailedAt,
+    }));
 
     res.json({
       ok: true,
       to,
       messageId: info.messageId,
       reportUrl: url,
-      report,
+      report: updated || report,
     });
   } catch (err) {
     console.error("Email send failed:", err);
@@ -2746,6 +2975,7 @@ app.post("/api/billing", requireAdmin, (req, res) => {
       ...line,
     })),
     acceptToken: preset.kind === "quote" ? newAcceptToken() : "",
+    viewToken: newViewToken(),
     quoteId: "",
     invoiceId: "",
     jobId: "",
@@ -2778,13 +3008,17 @@ app.get("/api/billing/:id", (req, res) => {
   if (index < 0) return res.status(404).json({ error: "Not found" });
   const doc = docs[index];
 
-  const isAdmin = (req.headers["x-admin-pin"] || req.query.pin) === ADMIN_PIN;
-  const token = String(req.query.t || "");
-  const tokenOk = Boolean(doc.acceptToken && token && token === doc.acceptToken);
+  const isAdmin = isAdminRequest(req);
+  const viewOk = publicViewTokenOk(doc, req.query.v);
+  const acceptToken = String(req.query.t || "");
+  const acceptOk = Boolean(doc.acceptToken && acceptToken && acceptToken === doc.acceptToken);
 
   if (!isAdmin) {
     if (doc.status === "void") return res.status(404).json({ error: "Not found" });
-    if (doc.status === "draft" && !tokenOk) {
+    if (doc.status === "draft" && !acceptOk) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    if (doc.status !== "draft" && !viewOk) {
       return res.status(404).json({ error: "Not found" });
     }
   }
@@ -2859,7 +3093,13 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
   };
 
   if (current.kind === "invoice") {
-    const payment = normalizeInvoicePayment(next, body, catalog.computeTotals(nextLines));
+    const totals = catalog.computeTotals(nextLines);
+    const payment = normalizeInvoicePayment(next, body, totals);
+    if (payment.amountPaid > totals.totalIncl + 0.009) {
+      return res.status(400).json({
+        error: `Payment cannot exceed invoice total ($${totals.totalIncl.toFixed(2)}).`,
+      });
+    }
     next.payments = payment.payments;
     next.paymentStatus = payment.paymentStatus;
     next.amountPaid = payment.amountPaid;
@@ -3081,30 +3321,35 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       attachments: [pdfAttachment],
     });
 
-    doc.lastEmailedAt = nowIso();
-    doc.lastEmailedTo = to;
-    doc.updatedAt = doc.lastEmailedAt;
-    ensureHistory(doc);
-    appendHistory(doc, {
-      type: "sent",
-      summary: wasResend
-        ? doc.kind === "invoice"
-          ? "Updated invoice sent to customer"
-          : "Updated quote sent to customer"
-        : doc.kind === "invoice"
-          ? "Invoice emailed to customer"
-          : "Quote emailed to customer",
-      detail: to,
-      amount: totals.totalIncl,
+    const emailedAt = nowIso();
+    const historySummary = wasResend
+      ? doc.kind === "invoice"
+        ? "Updated invoice sent to customer"
+        : "Updated quote sent to customer"
+      : doc.kind === "invoice"
+        ? "Invoice emailed to customer"
+        : "Quote emailed to customer";
+    const updated = patchById(readBilling, writeBilling, doc.id, (latest) => {
+      const next = { ...latest };
+      next.lastEmailedAt = emailedAt;
+      next.lastEmailedTo = to;
+      next.updatedAt = emailedAt;
+      ensureHistory(next);
+      appendHistory(next, {
+        type: "sent",
+        summary: historySummary,
+        detail: to,
+        amount: totals.totalIncl,
+      });
+      return next;
     });
-    writeBilling(docs);
 
     res.json({
       ok: true,
       to,
       messageId: info.messageId,
       url,
-      doc: withBillingTotals(doc, true),
+      doc: withBillingTotals(updated || doc, true),
     });
   } catch (err) {
     console.error("Billing email failed:", err);
@@ -3262,6 +3507,7 @@ function emptyReportRecord(now, extra = {}) {
     technicianComments: extra.technicianComments || "",
     vehiclePhoto: extra.vehiclePhoto || "",
     vehiclePhotos: Array.isArray(extra.vehiclePhotos) ? extra.vehiclePhotos : extra.vehiclePhoto ? [extra.vehiclePhoto] : [],
+    viewToken: extra.viewToken || newViewToken(),
   };
 }
 
@@ -3345,8 +3591,7 @@ async function notifyWorkshopQuoteAccepted(quote, invoice, job, req) {
   const vehicle = quote.vehicle || "vehicle";
   const rego = quote.registration || "";
   const vehicleBit = `${vehicle}${rego ? ` (${rego})` : ""}`;
-  const origin = publicOrigin(req, {});
-  const quoteUrl = `${origin}/b/${quote.id}`;
+  const quoteUrl = billingPublicUrl(req, {}, quote);
   const invoiceNumber = invoice?.number || "";
   const jobNumber = job?.number || "";
   const subject = `Quote ${quote.number} accepted — ${rego || vehicle} — ${business.name}`;
@@ -3544,6 +3789,7 @@ app.post("/api/billing/:id/revise", requireAdmin, (req, res) => {
       id: randomUUID(),
     })),
     acceptToken: newAcceptToken(),
+    viewToken: newViewToken(),
     quoteId: "",
     invoiceId: "",
     jobId: "",
@@ -3746,12 +3992,9 @@ function lanIPv4s() {
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Deane Auto Repairs running at http://localhost:${PORT}`);
-  if (process.env.NODE_ENV === "production") {
+  if (isProduction()) {
     console.log(`Public URL: ${PUBLIC_BASE_URL || "(set PUBLIC_BASE_URL)"}`);
     console.log(`Data dir: ${DATA_DIR}`);
-    if (!process.env.ADMIN_PIN || process.env.ADMIN_PIN === "deane123") {
-      console.warn("Set a strong ADMIN_PIN in production.");
-    }
   } else {
     console.log(`Admin (this PC): http://localhost:${PORT}/admin/`);
     const ips = lanIPv4s().filter(
@@ -3765,7 +4008,7 @@ app.listen(PORT, "0.0.0.0", () => {
     } else {
       console.log("Admin (phone): use this PC's Wi-Fi IPv4 from ipconfig, port " + PORT);
     }
-    console.log(`Admin PIN: ${ADMIN_PIN}`);
+    console.log("Admin PIN: set in .env (ADMIN_PIN)");
   }
   console.log(
     smtpConfigured()

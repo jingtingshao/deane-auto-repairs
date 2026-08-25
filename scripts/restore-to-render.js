@@ -1,6 +1,6 @@
 /**
  * Push local workshop JSON onto the live Render disk.
- * Uses ADMIN_PIN from .env. Does not print secrets.
+ * Uses ADMIN_PIN from .env to sign in. Does not print secrets.
  *
  *   node scripts/restore-to-render.js
  */
@@ -22,18 +22,36 @@ function readJson(file, fallback) {
   return JSON.parse(fs.readFileSync(full, "utf8"));
 }
 
+function cookieFromLogin(res) {
+  const list =
+    typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [];
+  const header = list.length ? list.join(",") : String(res.headers.get("set-cookie") || "");
+  const match = header.match(/deane_admin=([^;]+)/);
+  return match ? `deane_admin=${match[1]}` : "";
+}
+
 async function health() {
   const res = await fetch(`${BASE}/api/health`);
   const data = await res.json().catch(() => ({}));
   return { status: res.status, data };
 }
 
-async function restore(body) {
+async function login() {
+  const res = await fetch(`${BASE}/api/admin/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pin: PIN }),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { status: res.status, data, cookie: cookieFromLogin(res) };
+}
+
+async function restore(cookie, body) {
   const res = await fetch(`${BASE}/api/admin/restore-workshop`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Admin-Pin": PIN,
+      Cookie: cookie,
     },
     body: JSON.stringify(body),
   });
@@ -73,7 +91,18 @@ async function main() {
   );
   const live = await waitForRestoreEndpoint();
   console.log(`Render dataDir: ${live.dataDir}`);
-  const result = await restore({
+  const session = await login();
+  if (session.status === 401 || session.status === 429) {
+    console.error(
+      "Could not sign in to Render. Set the same strong ADMIN_PIN in Render Environment, restart, then run this script again."
+    );
+    process.exit(1);
+  }
+  if (!session.cookie) {
+    console.error("Sign-in did not return a session cookie.");
+    process.exit(1);
+  }
+  const result = await restore(session.cookie, {
     replace: true,
     customers,
     billing,
@@ -84,7 +113,9 @@ async function main() {
       customersSeq && typeof customersSeq === "object" ? customersSeq : undefined,
   });
   if (result.status === 401) {
-    console.error("Render ADMIN_PIN does not match this PC. Set the same PIN in Render Environment, restart, then run this script again.");
+    console.error(
+      "Restore was rejected. Sign in failed or the session expired. Try again."
+    );
     process.exit(1);
   }
   if (!result.data?.ok) {

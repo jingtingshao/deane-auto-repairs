@@ -52,7 +52,10 @@ async function load() {
   }
 
   try {
-    const reportRes = await fetch(`/api/reports/${id}`);
+    const view = new URLSearchParams(location.search).get("v") || "";
+    const reportRes = await fetch(
+      `/api/reports/${id}${view ? `?v=${encodeURIComponent(view)}` : ""}`
+    );
     const report = await reportRes.json();
     if (!reportRes.ok) throw new Error(report.error || "Not found");
 

@@ -14,6 +14,10 @@ function acceptToken() {
   return new URLSearchParams(location.search).get("t") || "";
 }
 
+function viewToken() {
+  return new URLSearchParams(location.search).get("v") || "";
+}
+
 function escapeHtml(str) {
   return String(str ?? "")
     .replaceAll("&", "&amp;")
@@ -51,10 +55,13 @@ async function load() {
   }
 
   try {
+    const params = new URLSearchParams();
+    const view = viewToken();
     const token = acceptToken();
-    const res = await fetch(
-      `/api/billing/${id}${token ? `?t=${encodeURIComponent(token)}` : ""}`
-    );
+    if (view) params.set("v", view);
+    if (token) params.set("t", token);
+    const query = params.toString();
+    const res = await fetch(`/api/billing/${id}${query ? `?${query}` : ""}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Not found");
     render(data);

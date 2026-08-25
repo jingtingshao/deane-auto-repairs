@@ -14,13 +14,10 @@ Then open:
 
 - Website: http://localhost:5173/
 - Admin: http://localhost:5173/admin/
-- Default admin PIN: `deane123`
 
-Change the PIN anytime:
+Copy `.env.example` to `.env` and set a strong `ADMIN_PIN` (8+ characters) before `npm start`. The server will not start without it. Do not use the old published default.
 
-```powershell
-$env:ADMIN_PIN="your-pin"; npm start
-```
+On Render, set `ADMIN_PIN` in Environment (not in Git). If it is missing or too weak, the service will refuse to start.
 
 ## Workshop flow
 

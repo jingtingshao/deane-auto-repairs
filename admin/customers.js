@@ -34,8 +34,7 @@ function canSendWofReminder(row) {
   return Boolean(
     row?.customerId &&
       row.customerEmail &&
-      row.wofStatus === "due_soon" &&
-      !row.wofReminderSentAt
+      (row.canWofReminder || (row.wofStatus === "due_soon" && !row.wofReminderSentAt))
   );
 }
 
@@ -381,11 +380,11 @@ function renderCustomers() {
                     : ""
                 }
                 ${
-                  row.wofReminderSentAt
+                  row.canWofReminder || canSendWofReminder(row)
+                    ? `<button type="button" class="primary" data-remind-key="${Admin.escapeAttr(row.key)}">Email reminder</button>`
+                    : row.wofReminderSentAt
                     ? `<span class="reminder-sent">Sent ${Admin.escapeHtml(formatReminderSent(row.wofReminderSentAt))}</span>`
-                    : canSendWofReminder(row)
-                      ? `<button type="button" class="primary" data-remind-key="${Admin.escapeAttr(row.key)}">Email reminder</button>`
-                      : ""
+                    : ""
                 }
               </td>
             </tr>`
@@ -721,6 +720,7 @@ async function sendReminder(key, btn) {
       method: "POST",
       body: JSON.stringify({
         customerId: row.customerId,
+        vehicleId: row.wofReminderVehicleId || "",
       }),
     });
     if (result.alreadySent) {
