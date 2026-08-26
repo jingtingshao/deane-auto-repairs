@@ -37,6 +37,7 @@
         <nav>
           <button type="button" id="nav-dashboard" class="active"><b>▦</b> Today</button>
           <button type="button" id="nav-jobs"><b>▤</b> Job board <i id="nav-jobs-count" hidden>0</i></button>
+          <button type="button" id="nav-supplier-invoices"><b>◫</b> Parts invoices</button>
           <button type="button" id="nav-quotes"><b>$</b> Quotes <i id="nav-quotes-count" hidden>0</i></button>
           <button type="button" id="nav-invoices"><b>$</b> Invoices <i id="nav-invoices-count" hidden>0</i></button>
           <button type="button" id="nav-customers"><b>◉</b> Customers</button>
@@ -46,6 +47,7 @@
           <span class="online-dot"></span> Workshop online
           <br /><small>Live workshop data</small>
           <br /><a href="/" target="_blank" rel="noopener">Website</a>
+          <br /><a href="/tech/" target="_blank" rel="noopener">Technician uploads</a>
         </div>
       </aside>
       <main>
@@ -260,11 +262,17 @@
                   <table class="line-table parts-table">
                     <thead>
                       <tr>
+                        <th>Part #</th>
                         <th>Part</th>
                         <th>Qty</th>
+                        <th>Cost</th>
+                        <th>Markup %</th>
+                        <th>Sell</th>
                         <th>Ordered</th>
                         <th>Received</th>
                         <th>Supplier</th>
+                        <th>Invoice #</th>
+                        <th>Status</th>
                         <th>ETA</th>
                         <th></th>
                       </tr>
@@ -280,6 +288,103 @@
               <fieldset>
                 <legend>Workshop notes</legend>
                 <label>Internal notes<textarea name="notes" rows="2" placeholder="Not shown to the customer"></textarea></label>
+              </fieldset>
+
+              <fieldset>
+                <legend>Technician uploads</legend>
+                <div class="photo-row">
+                  <label class="file-label">
+                    Work photos
+                    <input id="job-work-photos-input" type="file" accept="image/*" capture="environment" multiple />
+                  </label>
+                  <p class="muted small">Technicians can upload worksite photos from phone.</p>
+                  <div id="job-work-photos" class="photo-thumbs"></div>
+                </div>
+                <div class="photo-row">
+                  <label class="file-label">
+                    Supplier invoice photos
+                    <input id="job-supplier-photos-input" type="file" accept="image/*" capture="environment" multiple />
+                  </label>
+                  <p class="muted small">Upload supplier invoice photos for office matching.</p>
+                  <div id="job-supplier-photos" class="photo-thumbs"></div>
+                </div>
+              </fieldset>
+            </form>
+          </section>
+        </section>
+
+        <section id="supplier-invoices-section" hidden>
+          <section id="supplier-invoices-list-view">
+            <p class="muted small">Upload supplier invoices, parse parts candidates, then confirm lines onto a job card.</p>
+            <label class="list-search">
+              Search supplier invoices
+              <input
+                id="supplier-invoices-search"
+                type="search"
+                placeholder="Supplier or invoice number"
+                autocomplete="off"
+              />
+            </label>
+            <div class="line-actions supplier-invoice-actions">
+              <button type="button" id="btn-supplier-invoice-new" class="primary">+ New supplier invoice</button>
+              <button type="button" id="btn-supplier-invoice-import" class="ghost">Import PDF / Image</button>
+              <input id="supplier-invoice-import-file" type="file" accept=".pdf,application/pdf,image/*" hidden />
+              <button type="button" id="btn-supplier-invoice-refresh" class="ghost">Refresh</button>
+            </div>
+            <div id="supplier-invoices-list" class="report-list"></div>
+          </section>
+
+          <section id="supplier-invoices-edit-view" hidden>
+            <div class="edit-toolbar">
+              <button type="button" id="btn-supplier-invoice-back" class="ghost">← All supplier invoices</button>
+              <div class="edit-actions">
+                <button type="button" id="btn-supplier-invoice-save" class="primary">Save invoice</button>
+                <button type="button" id="btn-supplier-invoice-auto-match" class="ghost">Auto match</button>
+              </div>
+            </div>
+            <p id="supplier-invoice-save-status" class="status-line" hidden></p>
+
+            <form id="supplier-invoice-form" class="report-form">
+              <fieldset>
+                <legend>Supplier invoice</legend>
+                <div class="grid-3">
+                  <label>Supplier<input name="supplier" required /></label>
+                  <label>Invoice #<input name="invoiceNo" required /></label>
+                  <label>Invoice date<input name="invoiceDate" type="date" /></label>
+                  <label>Subtotal<input name="subtotal" type="number" min="0" step="0.01" /></label>
+                  <label>Tax<input name="tax" type="number" min="0" step="0.01" /></label>
+                  <label>Total<input name="total" type="number" min="0" step="0.01" /></label>
+                  <label>
+                    Linked job
+                    <select name="linkedJobId" id="supplier-invoice-job-select">
+                      <option value="">Not linked</option>
+                    </select>
+                  </label>
+                  <label>Currency<input name="currency" value="NZD" /></label>
+                </div>
+                <label>Notes<textarea name="notes" rows="2"></textarea></label>
+              </fieldset>
+
+              <fieldset>
+                <legend>Invoice photos</legend>
+                <div class="photo-row">
+                  <label class="file-label">
+                    Add invoice photos
+                    <input id="supplier-invoice-images" type="file" accept="image/*" multiple />
+                  </label>
+                  <p class="muted small">Upload first, then parse OCR text or candidates.</p>
+                  <div id="supplier-invoice-photos" class="photo-thumbs"></div>
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend>Parse candidates</legend>
+                <label>OCR raw text<textarea id="supplier-invoice-raw-text" rows="6" placeholder="Paste OCR text here, then click Parse OCR text"></textarea></label>
+                <div class="line-actions">
+                  <button type="button" id="btn-supplier-invoice-parse" class="ghost">Parse OCR text</button>
+                </div>
+                <p class="muted small">Each pending line can be accepted into a job part, edited then accepted, or rejected.</p>
+                <div id="supplier-candidates-list" class="supplier-candidates"></div>
               </fieldset>
             </form>
           </section>
@@ -528,7 +633,8 @@
 
     <script src="admin.js?v=20260826preview"></script>
     <script src="dashboard.js?v=20260826greencomplete"></script>
-    <script src="jobs.js?v=20260826datefmt"></script>
+    <script src="jobs.js?v=20260827mobilephotos"></script>
+    <script src="supplier-invoices.js?v=20260827partsflow"></script>
     <script src="billing.js?v=20260826quoteinvoice"></script>
     <script src="customers.js?v=20260826datefmt"></script>
   </body>

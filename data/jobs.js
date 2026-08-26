@@ -13,8 +13,14 @@ const LEGACY_STATUS_MAP = {
   ready: "completed",
 };
 
+const PART_LINE_STATUSES = ["draft", "matched", "approved", "billed", "rejected"];
+
 function isJobStatus(value) {
   return JOB_STATUSES.some((s) => s.id === value);
+}
+
+function isPartLineStatus(value) {
+  return PART_LINE_STATUSES.includes(String(value || "").trim());
 }
 
 function statusLabel(id) {
@@ -49,15 +55,68 @@ function isServiceOrLabourLine(description) {
 }
 
 function normalizePart(part = {}, idFallback = "") {
+  const toNumber = (value, fallback = 0) => {
+    const next = Number(value);
+    return Number.isFinite(next) ? next : fallback;
+  };
+  const clampMoney = (value) => Math.round(Math.max(0, toNumber(value, 0)) * 100) / 100;
+  const clampRatio = (value) => {
+    if (value == null || value === "") return null;
+    const next = toNumber(value, NaN);
+    if (!Number.isFinite(next)) return null;
+    if (next < 0) return 0;
+    if (next > 1) return 1;
+    return Math.round(next * 1000) / 1000;
+  };
+  const normalizePhotoRefs = (input) => {
+    if (!Array.isArray(input)) return [];
+    return input.map((row) => String(row || "").trim()).filter(Boolean).slice(0, 12);
+  };
+  const qtyRaw = toNumber(part.qty, NaN);
+  const qty = Number.isFinite(qtyRaw) && qtyRaw >= 0 ? qtyRaw : 1;
+  const costPrice = clampMoney(part.costPrice);
+  const markupPercent = part.markupPercent == null ? 0 : Math.max(0, toNumber(part.markupPercent, 0));
+  const sellPrice =
+    part.sellPrice != null && part.sellPrice !== ""
+      ? clampMoney(part.sellPrice)
+      : clampMoney(costPrice * (1 + markupPercent / 100));
   const received = Boolean(part.received);
+  const ordered = received ? true : Boolean(part.ordered);
+  const partNumber = String(part.partNumber || "").trim();
+  const description = String(part.description || "").trim();
+  const supplier = String(part.supplier || "").trim();
+  const note = String(part.note || part.notes || "").trim();
+  const status = isPartLineStatus(part.status) ? String(part.status).trim() : "draft";
+  const source = String(part.source || "").trim().toLowerCase() === "ocr" ? "ocr" : "manual";
+
   return {
     id: part.id || idFallback,
-    description: String(part.description || "").trim(),
-    qty: Math.max(0, Number(part.qty) || 0) || (String(part.description || "").trim() ? 1 : 1),
-    ordered: received ? true : Boolean(part.ordered),
+    partNumber,
+    description,
+    qty,
+    uom: String(part.uom || "ea").trim() || "ea",
+    ordered,
     received,
-    supplier: String(part.supplier || "").trim(),
-    note: String(part.note || "").trim(),
+    supplier,
+    costPrice,
+    markupPercent: Math.round(markupPercent * 100) / 100,
+    sellPrice,
+    lineCostTotal: clampMoney(qty * costPrice),
+    lineSellTotal: clampMoney(qty * sellPrice),
+    supplierInvoiceNo: String(part.supplierInvoiceNo || "").trim(),
+    supplierInvoiceDate: String(part.supplierInvoiceDate || "").trim(),
+    status,
+    source,
+    ocrConfidence: clampRatio(part.ocrConfidence),
+    matchScore: clampRatio(part.matchScore),
+    linkedInvoiceId: String(part.linkedInvoiceId || "").trim(),
+    photoRefs: normalizePhotoRefs(part.photoRefs),
+    note,
+    notes: note,
+    createdAt: String(part.createdAt || "").trim(),
+    createdBy: String(part.createdBy || "").trim(),
+    updatedAt: String(part.updatedAt || "").trim(),
+    updatedBy: String(part.updatedBy || "").trim(),
   };
 }
 
@@ -65,7 +124,15 @@ function normalizeParts(parts, newId) {
   if (!Array.isArray(parts)) return [];
   return parts
     .map((part) => normalizePart(part, newId ? newId() : part.id || ""))
-    .filter((part) => part.description || part.supplier || part.note);
+    .filter(
+      (part) =>
+        part.description ||
+        part.partNumber ||
+        part.supplier ||
+        part.note ||
+        Number(part.qty) > 0 ||
+        Number(part.costPrice) > 0
+    );
 }
 
 function lineDescription(line) {
@@ -166,7 +233,8 @@ function partsSummary(parts) {
   const rows = (parts || []).filter((p) => p.description);
   return {
     total: rows.length,
-    received: rows.filter((p) => p.received).length,
+    received: rows.filter((p) => p.received || p.status === "approved" || p.status === "billed")
+      .length,
   };
 }
 
@@ -190,8 +258,12 @@ function suggestStatusFromParts(currentStatus, parts) {
 module.exports = {
   JOB_STATUSES,
   JOB_STATUSES: JOB_STATUSES,
+  PART_LINE_STATUSES,
+  PART_LINE_STATUSES: PART_LINE_STATUSES,
   isJobStatus,
   isJobStatus: isJobStatus,
+  isPartLineStatus,
+  isPartLineStatus: isPartLineStatus,
   statusLabel,
   statusLabel: statusLabel,
   normalizeJobStatus,

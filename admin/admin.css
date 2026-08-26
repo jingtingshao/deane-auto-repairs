@@ -1005,6 +1005,14 @@ label.check input {
   color: #555;
 }
 
+.badge.uploaded,
+.badge.parsed,
+.badge.partially_matched,
+.badge.archived {
+  background: #e8f1fb;
+  color: var(--blue);
+}
+
 .job-card-meta {
   display: flex;
   flex-direction: column;
@@ -1027,6 +1035,82 @@ label.check input {
 
 .parts-table .part-note {
   min-width: 7rem;
+}
+
+.parts-table .price {
+  min-width: 6rem;
+}
+
+.parts-table select {
+  min-width: 7rem;
+}
+
+.supplier-invoice-actions {
+  margin-bottom: 0.75rem;
+}
+
+.supplier-candidates {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.supplier-candidate-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem 0.9rem;
+  background: #fff;
+}
+
+.supplier-candidate-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.supplier-candidate-head strong {
+  font-family: var(--display);
+  letter-spacing: 0.03em;
+}
+
+.supplier-candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem 0.75rem;
+}
+
+.supplier-candidate-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.7rem;
+  align-items: center;
+  margin-bottom: 0.65rem;
+}
+
+.candidate-select {
+  margin: 0;
+  font-weight: 600;
+}
+
+.supplier-duplicate-hint {
+  margin: 0.2rem 0 0;
+}
+
+.supplier-duplicate-hint.warn {
+  color: var(--attention);
+  font-weight: 700;
+}
+
+.supplier-duplicate-hint.ok {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .supplier-candidate-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .billing-history {

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en-NZ">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Cache-Control" content="no-store" />
+    <title>Technician Uploads · Deane Auto Repairs</title>
+    <link rel="stylesheet" href="tech.css?v=20260827mobilephotos" />
+  </head>
+  <body>
+    <main class="wrap">
+      <section id="login-view" class="card">
+        <h1>Technician uploads</h1>
+        <p class="muted">Deane Auto Repairs · Upload work photos and supplier invoices.</p>
+        <form id="login-form" class="stack">
+          <label>
+            Admin PIN
+            <input id="pin" type="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit">Sign in</button>
+          <p id="login-error" class="error" hidden></p>
+        </form>
+      </section>
+
+      <section id="jobs-view" class="card" hidden>
+        <div class="toolbar">
+          <h1>Technician uploads</h1>
+          <button type="button" id="btn-logout" class="ghost">Sign out</button>
+        </div>
+        <label>
+          Search jobs
+          <input id="search" type="search" placeholder="Job number, customer, plate" />
+        </label>
+        <p class="muted small">Open a job, then upload work photos or supplier invoice photos.</p>
+        <div id="jobs-list" class="stack"></div>
+      </section>
+
+      <section id="job-view" class="card" hidden>
+        <div class="toolbar">
+          <button type="button" id="btn-back" class="ghost">← Back</button>
+          <button type="button" id="btn-refresh" class="ghost">Refresh</button>
+        </div>
+        <h2 id="job-title">Job</h2>
+        <p id="job-subtitle" class="muted small"></p>
+        <p id="status" class="status" hidden></p>
+
+        <div class="upload-group">
+          <label class="file-label">
+            Work photos
+            <input id="work-input" type="file" accept="image/*" capture="environment" multiple />
+          </label>
+          <div id="work-photos" class="thumbs"></div>
+        </div>
+
+        <div class="upload-group">
+          <label class="file-label">
+            Supplier invoice photos
+            <input id="supplier-input" type="file" accept="image/*" capture="environment" multiple />
+          </label>
+          <div id="supplier-photos" class="thumbs"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="tech.js?v=20260827mobilephotos"></script>
+  </body>
+</html>

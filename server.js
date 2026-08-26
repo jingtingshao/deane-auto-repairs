@@ -4,6 +4,8 @@ const path = require("path");
 const fs = require("fs");
 const express = require("express");
 const multer = require("multer");
+const pdfParse = require("pdf-parse");
+const Tesseract = require("tesseract.js");
 const nodemailer = require("nodemailer");
 const { randomUUID, randomBytes } = require("crypto");
 const {
@@ -100,6 +102,9 @@ const BILLING_SEQ_FILE = path.join(DATA_DIR, "billing-seq.json");
 const CUSTOMERS_FILE = path.join(DATA_DIR, "customers.json");
 const CUSTOMERS_SEQ_FILE = path.join(DATA_DIR, "customers-seq.json");
 const JOBS_FILE = path.join(DATA_DIR, "jobs.json");
+const SUPPLIER_INVOICES_FILE = path.join(DATA_DIR, "supplier-invoices.json");
+const INVOICE_CANDIDATES_FILE = path.join(DATA_DIR, "invoice-candidates.json");
+const PART_AUDIT_FILE = path.join(DATA_DIR, "part-audit-log.json");
 const UPLOADS_DIR = (() => {
   const raw = String(process.env.UPLOADS_DIR || "").trim();
   if (raw && isWritableDir(path.resolve(raw))) return path.resolve(raw);
@@ -145,7 +150,15 @@ function createMailer() {
 for (const dir of [DATA_DIR, UPLOADS_DIR]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
-for (const file of [REPORTS_FILE, BILLING_FILE, CUSTOMERS_FILE, JOBS_FILE]) {
+for (const file of [
+  REPORTS_FILE,
+  BILLING_FILE,
+  CUSTOMERS_FILE,
+  JOBS_FILE,
+  SUPPLIER_INVOICES_FILE,
+  INVOICE_CANDIDATES_FILE,
+  PART_AUDIT_FILE,
+]) {
   if (!fs.existsSync(file)) writeJsonArray(file, []);
 }
 
@@ -198,6 +211,24 @@ function readJobs() {
   const jobs = readJsonArray(JOBS_FILE, "jobs");
   let changed = false;
   for (const job of jobs) {
+    const workPhotos = sanitizePhotoRefs(job.workPhotos);
+    if (JSON.stringify(workPhotos) !== JSON.stringify(job.workPhotos || [])) {
+      job.workPhotos = workPhotos;
+      changed = true;
+    }
+    const supplierInvoicePhotos = sanitizePhotoRefs(job.supplierInvoicePhotos);
+    if (
+      JSON.stringify(supplierInvoicePhotos) !==
+      JSON.stringify(job.supplierInvoicePhotos || [])
+    ) {
+      job.supplierInvoicePhotos = supplierInvoicePhotos;
+      changed = true;
+    }
+    const normalizedParts = jobsLib.normalizeParts(job.parts, () => randomUUID());
+    if (JSON.stringify(normalizedParts) !== JSON.stringify(job.parts || [])) {
+      job.parts = normalizedParts;
+      changed = true;
+    }
     const next = jobsLib.normalizeJobStatus(job.status, job.parts);
     if (next !== job.status) {
       job.status = next;
@@ -221,6 +252,30 @@ function ensureJobStatuses(jobs) {
 
 function writeJobs(jobs) {
   writeJsonArray(JOBS_FILE, jobs);
+}
+
+function readSupplierInvoices() {
+  return readJsonArray(SUPPLIER_INVOICES_FILE, "supplier invoices");
+}
+
+function writeSupplierInvoices(rows) {
+  writeJsonArray(SUPPLIER_INVOICES_FILE, rows);
+}
+
+function readInvoiceCandidates() {
+  return readJsonArray(INVOICE_CANDIDATES_FILE, "invoice candidates");
+}
+
+function writeInvoiceCandidates(rows) {
+  writeJsonArray(INVOICE_CANDIDATES_FILE, rows);
+}
+
+function readPartAuditLogs() {
+  return readJsonArray(PART_AUDIT_FILE, "part audit logs");
+}
+
+function writePartAuditLogs(rows) {
+  writeJsonArray(PART_AUDIT_FILE, rows);
 }
 
 function nextJobCardNumber(jobs) {
@@ -326,6 +381,8 @@ function alignLinkedJobNumbers(jobs) {
 function summarizeJob(job) {
   const status = jobsLib.normalizeJobStatus(job.status, job.parts);
   const parts = jobsLib.partsSummary(job.parts);
+  const workPhotos = sanitizePhotoRefs(job.workPhotos);
+  const supplierInvoicePhotos = sanitizePhotoRefs(job.supplierInvoicePhotos);
   return {
     id: job.id,
     number: job.number,
@@ -340,6 +397,8 @@ function summarizeJob(job) {
     invoiceNumber: job.invoiceNumber || "",
     partsTotal: parts.total,
     partsReceived: parts.received,
+    workPhotosCount: workPhotos.length,
+    supplierInvoicePhotosCount: supplierInvoicePhotos.length,
     readyAt: job.readyAt || "",
     collectedAt: job.collectedAt || "",
     updatedAt: job.updatedAt,
@@ -606,6 +665,8 @@ function emptyJob(now) {
     technicianName: "",
     notes: "",
     parts: [],
+    workPhotos: [],
+    supplierInvoicePhotos: [],
     quoteId: "",
     quoteNumber: "",
     invoiceId: "",
@@ -677,6 +738,526 @@ function applyJobFields(job, body = {}) {
     notes: body.notes != null ? String(body.notes) : job.notes,
     parts,
     updatedAt: changedAt,
+  };
+}
+
+function toMoney(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) return 0;
+  return Math.round(num * 100) / 100;
+}
+
+function toRatio(value) {
+  if (value == null || value === "") return null;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  if (num < 0) return 0;
+  if (num > 1) return 1;
+  return Math.round(num * 1000) / 1000;
+}
+
+function normalizeSupplierName(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function normalizeInvoiceNo(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+}
+
+function normalizePartNumber(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase();
+}
+
+function sanitizePhotoRefs(input) {
+  if (!Array.isArray(input)) return [];
+  return input.map((row) => String(row || "").trim()).filter(Boolean).slice(0, 12);
+}
+
+function nowActor(req) {
+  const session = readAdminSession(req);
+  if (session) return "admin";
+  return "system";
+}
+
+function writePartAudit(entityType, entityId, action, beforeSnapshot, afterSnapshot, req, reason) {
+  const logs = readPartAuditLogs();
+  logs.push({
+    id: randomUUID(),
+    entityType: String(entityType || "").trim(),
+    entityId: String(entityId || "").trim(),
+    action: String(action || "").trim(),
+    beforeSnapshot: beforeSnapshot || null,
+    afterSnapshot: afterSnapshot || null,
+    actor: nowActor(req),
+    reason: String(reason || "").trim(),
+    timestamp: nowIso(),
+  });
+  if (logs.length > 5000) logs.splice(0, logs.length - 5000);
+  writePartAuditLogs(logs);
+}
+
+function validateSupplierInvoiceInput(body = {}) {
+  const supplier = String(body.supplier || "").trim();
+  const invoiceNo = String(body.invoiceNo || "").trim();
+  if (!supplier) {
+    const err = new Error("Supplier is required.");
+    err.status = 400;
+    throw err;
+  }
+  if (!invoiceNo) {
+    const err = new Error("Supplier invoice number is required.");
+    err.status = 400;
+    throw err;
+  }
+  return {
+    supplier,
+    invoiceNo,
+    invoiceDate: String(body.invoiceDate || "").trim(),
+    subtotal: toMoney(body.subtotal),
+    tax: toMoney(body.tax),
+    total: toMoney(body.total),
+    currency: String(body.currency || "NZD").trim().toUpperCase() || "NZD",
+    linkedJobId: String(body.linkedJobId || "").trim(),
+    notes: String(body.notes || "").trim(),
+  };
+}
+
+function normalizeSupplierInvoice(row = {}) {
+  return {
+    id: String(row.id || "").trim(),
+    supplier: String(row.supplier || "").trim(),
+    invoiceNo: String(row.invoiceNo || "").trim(),
+    invoiceDate: String(row.invoiceDate || "").trim(),
+    subtotal: toMoney(row.subtotal),
+    tax: toMoney(row.tax),
+    total: toMoney(row.total),
+    currency: String(row.currency || "NZD").trim().toUpperCase() || "NZD",
+    status: String(row.status || "uploaded").trim() || "uploaded",
+    linkedJobId: String(row.linkedJobId || "").trim(),
+    notes: String(row.notes || "").trim(),
+    imageRefs: sanitizePhotoRefs(row.imageRefs),
+    ocrRawTextRef: String(row.ocrRawTextRef || "").trim(),
+    parseVersion: String(row.parseVersion || "v1").trim(),
+    createdAt: String(row.createdAt || "").trim(),
+    createdBy: String(row.createdBy || "").trim(),
+    updatedAt: String(row.updatedAt || "").trim(),
+    updatedBy: String(row.updatedBy || "").trim(),
+  };
+}
+
+function normalizeCandidate(row = {}) {
+  const decision = String(row.decision || "pending").trim() || "pending";
+  return {
+    id: String(row.id || "").trim(),
+    supplierInvoiceId: String(row.supplierInvoiceId || "").trim(),
+    lineNo: Number(row.lineNo) || 0,
+    rawLineText: String(row.rawLineText || "").trim(),
+    partNumberCandidate: String(row.partNumberCandidate || "").trim(),
+    descriptionCandidate: String(row.descriptionCandidate || "").trim(),
+    qtyCandidate: Number.isFinite(Number(row.qtyCandidate)) ? Number(row.qtyCandidate) : 1,
+    costPriceCandidate: toMoney(row.costPriceCandidate),
+    supplierCandidate: String(row.supplierCandidate || "").trim(),
+    confidence: toRatio(row.confidence),
+    suggestedJobId: String(row.suggestedJobId || "").trim(),
+    suggestedPartId: String(row.suggestedPartId || "").trim(),
+    matchReason: String(row.matchReason || "").trim(),
+    matchScore: toRatio(row.matchScore),
+    decision,
+    decidedAt: String(row.decidedAt || "").trim(),
+    decidedBy: String(row.decidedBy || "").trim(),
+    createdAt: String(row.createdAt || "").trim(),
+    updatedAt: String(row.updatedAt || "").trim(),
+  };
+}
+
+function parseCandidatesFromRawText(rawText, supplier) {
+  const rows = String(rawText || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 150);
+  const items = [];
+  for (let i = 0; i < rows.length; i += 1) {
+    const line = rows[i];
+    if (line.length < 3) continue;
+    const tokens = line.split(/\s+/).filter(Boolean);
+    const partNumberCandidate =
+      tokens.find((t) => /^[A-Za-z0-9-]{4,}$/.test(t) && /[A-Za-z]/.test(t)) || "";
+    const qtyMatch = line.match(/(?:^|\s)(\d+(?:\.\d+)?)\s*(?:x|qty\b)/i);
+    const qtyCandidate = qtyMatch ? Math.max(0, Number(qtyMatch[1]) || 0) : 1;
+    const moneyMatches = [...line.matchAll(/\$?\s*(\d+(?:\.\d{1,2})?)/g)];
+    const costPriceCandidate = moneyMatches.length
+      ? toMoney(moneyMatches[moneyMatches.length - 1][1])
+      : 0;
+    const descriptionCandidate = line
+      .replace(partNumberCandidate, "")
+      .replace(/(?:^|\s)\d+(?:\.\d+)?\s*(?:x|qty\b)/gi, " ")
+      .replace(/\$?\s*\d+(?:\.\d{1,2})?/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    let confidence = 0.3;
+    if (partNumberCandidate) confidence += 0.2;
+    if (descriptionCandidate) confidence += 0.2;
+    if (costPriceCandidate > 0) confidence += 0.2;
+    if (qtyCandidate > 0) confidence += 0.1;
+    items.push({
+      lineNo: i + 1,
+      rawLineText: line,
+      partNumberCandidate,
+      descriptionCandidate,
+      qtyCandidate: qtyCandidate || 1,
+      costPriceCandidate,
+      supplierCandidate: supplier,
+      confidence: Math.min(0.99, confidence),
+    });
+  }
+  return items;
+}
+
+function parseCandidatesFromPayload(body = {}, supplier) {
+  if (Array.isArray(body.lines) && body.lines.length) {
+    return body.lines.slice(0, 200).map((line, idx) => ({
+      lineNo: Number(line.lineNo) || idx + 1,
+      rawLineText: String(line.rawLineText || line.description || "").trim(),
+      partNumberCandidate: String(line.partNumberCandidate || line.partNumber || "").trim(),
+      descriptionCandidate: String(line.descriptionCandidate || line.description || "").trim(),
+      qtyCandidate: Number.isFinite(Number(line.qtyCandidate ?? line.qty))
+        ? Number(line.qtyCandidate ?? line.qty)
+        : 1,
+      costPriceCandidate: toMoney(line.costPriceCandidate ?? line.costPrice),
+      supplierCandidate: String(line.supplierCandidate || supplier).trim(),
+      confidence: toRatio(line.confidence) ?? 0.6,
+    }));
+  }
+  return parseCandidatesFromRawText(body.rawText || "", supplier);
+}
+
+function normalizeInvoiceDateInput(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const m = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (!m) return raw;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  let year = Number(m[3]);
+  if (year < 100) year += 2000;
+  if (!day || !month || !year) return raw;
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(
+    2,
+    "0"
+  )}`;
+}
+
+function parseSupplierInvoiceText(rawText) {
+  const text = String(rawText || "");
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const supplierLine =
+    lines.find((line) => /repco|bnt|supercheap|napa|partsmaster|autoparts/i.test(line)) ||
+    lines.find((line) => /^[A-Z][A-Z\s&.'-]{2,}$/.test(line) && !/invoice|bill to|date/i.test(line)) ||
+    "";
+  const supplier = supplierLine.replace(/\s+sample.*$/i, "").trim();
+
+  const invoiceNo =
+    (text.match(
+      /(?:sample\s*no|invoice\s*(?:number|no|#)|tax\s*invoice\s*(?:number|no|#)|inv\s*#)\s*[:\-]?\s*([A-Z0-9-]+)/i
+    ) || [])[1] || "";
+  const dateRaw = (text.match(/(?:invoice\s*)?date\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i) || [])[1] || "";
+  const invoiceDate = normalizeInvoiceDateInput(dateRaw);
+  const subtotal = Number((text.match(/subtotal[^\d$]*\$?\s*(\d+(?:\.\d{1,2})?)/i) || [])[1] || 0);
+  const tax = Number((text.match(/(?:gst|tax)[^\d$]*\$?\s*(\d+(?:\.\d{1,2})?)/i) || [])[1] || 0);
+  const total = Number((text.match(/(?:^|\n)\s*total[^\d$]*\$?\s*(\d+(?:\.\d{1,2})?)/im) || [])[1] || 0);
+
+  let candidates = [];
+  const headerIndex = lines.findIndex((line) =>
+    /qty.*description.*(?:part\s*no|part\s*number).*unit.*total/i.test(line)
+  );
+  if (headerIndex >= 0) {
+    for (let i = headerIndex + 1; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (/subtotal|gst|tax|total/i.test(line)) break;
+      const m = line.match(
+        /^(\d+(?:\.\d+)?)\s+(.+?)\s+([A-Za-z0-9-]{3,})\s+\$?\s*(\d+(?:\.\d{1,2})?)\s+\$?\s*(\d+(?:\.\d{1,2})?)$/
+      );
+      if (!m) continue;
+      candidates.push({
+        lineNo: i + 1,
+        rawLineText: line,
+        qtyCandidate: Number(m[1]) || 1,
+        descriptionCandidate: String(m[2] || "").trim(),
+        partNumberCandidate: String(m[3] || "").trim(),
+        costPriceCandidate: toMoney(m[4]),
+        supplierCandidate: supplier,
+        confidence: 0.92,
+      });
+    }
+  }
+  if (!candidates.length) {
+    candidates = parseCandidatesFromRawText(text, supplier);
+  }
+  return {
+    supplier,
+    invoiceNo: String(invoiceNo || "").trim(),
+    invoiceDate,
+    subtotal: toMoney(subtotal),
+    tax: toMoney(tax),
+    total: toMoney(total),
+    rawText: text,
+    candidates,
+  };
+}
+
+async function extractTextFromImportFile(file) {
+  if (!file?.buffer?.length) return "";
+  if (file.mimetype === "application/pdf") {
+    const parsed = await pdfParse(file.buffer);
+    return String(parsed?.text || "").trim();
+  }
+  if (file.mimetype.startsWith("image/")) {
+    const result = await Tesseract.recognize(file.buffer, "eng", {
+      logger: () => {},
+    });
+    return String(result?.data?.text || "").trim();
+  }
+  return "";
+}
+
+function suggestCandidateMatch(candidate, jobs, invoice) {
+  const partNoKey = normalizePartNumber(candidate.partNumberCandidate);
+  const supplierKey = normalizeSupplierName(
+    candidate.supplierCandidate || invoice?.supplier || ""
+  );
+  const invoiceNoKey = normalizeInvoiceNo(invoice?.invoiceNo || "");
+  const descKey = String(candidate.descriptionCandidate || "")
+    .trim()
+    .toLowerCase();
+  let best = { jobId: "", partId: "", score: 0, reason: "" };
+
+  for (const job of jobs) {
+    const rows = Array.isArray(job.parts) ? job.parts : [];
+    for (const part of rows) {
+      let score = 0;
+      const partSupplierKey = normalizeSupplierName(part.supplier);
+      const partInvoiceKey = normalizeInvoiceNo(part.supplierInvoiceNo);
+      const partNumberKey = normalizePartNumber(part.partNumber);
+      const partDescKey = String(part.description || "").trim().toLowerCase();
+      if (supplierKey && supplierKey === partSupplierKey) score += 0.25;
+      if (invoiceNoKey && invoiceNoKey === partInvoiceKey) score += 0.35;
+      if (partNoKey && partNoKey === partNumberKey) score += 0.35;
+      if (
+        descKey &&
+        partDescKey &&
+        (partDescKey.includes(descKey) || descKey.includes(partDescKey))
+      ) {
+        score += 0.2;
+      }
+      if (score > best.score) {
+        best = {
+          jobId: String(job.id || ""),
+          partId: String(part.id || ""),
+          score: Math.min(1, score),
+          reason:
+            score >= 0.95
+              ? "supplier+invoice+part number match"
+              : score >= 0.7
+                ? "strong supplier/part match"
+                : "description similarity",
+        };
+      }
+    }
+  }
+
+  if (!best.jobId && invoice?.linkedJobId) {
+    best = {
+      jobId: invoice.linkedJobId,
+      partId: "",
+      score: Math.max(best.score, 0.5),
+      reason: "linked supplier invoice job",
+    };
+  }
+  return best;
+}
+
+function rematchCandidatesForInvoice(invoiceId) {
+  const invoices = readSupplierInvoices();
+  const invoice = invoices.find((row) => row.id === invoiceId);
+  if (!invoice) {
+    const err = new Error("Supplier invoice not found");
+    err.status = 404;
+    throw err;
+  }
+  const candidates = readInvoiceCandidates();
+  const jobs = readJobs();
+  const now = nowIso();
+  let changed = false;
+  for (const row of candidates) {
+    if (row.supplierInvoiceId !== invoiceId) continue;
+    if (row.decision && row.decision !== "pending") continue;
+    const hit = suggestCandidateMatch(row, jobs, invoice);
+    const nextScore = toRatio(hit.score);
+    const nextJob = hit.jobId || "";
+    const nextPart = hit.partId || "";
+    const nextReason = hit.reason || "";
+    if (
+      row.suggestedJobId !== nextJob ||
+      row.suggestedPartId !== nextPart ||
+      row.matchReason !== nextReason ||
+      row.matchScore !== nextScore
+    ) {
+      row.suggestedJobId = nextJob;
+      row.suggestedPartId = nextPart;
+      row.matchReason = nextReason;
+      row.matchScore = nextScore;
+      row.updatedAt = now;
+      changed = true;
+    }
+  }
+  if (changed) writeInvoiceCandidates(candidates);
+  return candidates.filter((row) => row.supplierInvoiceId === invoiceId);
+}
+
+function refreshSupplierInvoiceStatus(invoiceId) {
+  const invoices = readSupplierInvoices();
+  const idx = invoices.findIndex((row) => row.id === invoiceId);
+  if (idx < 0) return null;
+  const invoice = invoices[idx];
+  const candidates = readInvoiceCandidates().filter((row) => row.supplierInvoiceId === invoiceId);
+  const total = candidates.length;
+  const accepted = candidates.filter(
+    (row) => row.decision === "accepted" || row.decision === "edited_then_accepted"
+  ).length;
+  const rejected = candidates.filter((row) => row.decision === "rejected").length;
+  let nextStatus = invoice.status || "uploaded";
+  if (!total) nextStatus = invoice.imageRefs?.length ? "uploaded" : "uploaded";
+  else if (accepted === total || accepted + rejected === total) nextStatus = "approved";
+  else if (accepted > 0) nextStatus = "partially_matched";
+  else nextStatus = "parsed";
+  if (nextStatus !== invoice.status) {
+    invoice.status = nextStatus;
+    invoice.updatedAt = nowIso();
+    invoices[idx] = invoice;
+    writeSupplierInvoices(invoices);
+  }
+  return invoice;
+}
+
+function acceptInvoiceCandidate(candidateId, req, decisionMode = "accepted") {
+  const candidateRows = readInvoiceCandidates();
+  const candidateIndex = candidateRows.findIndex((row) => row.id === candidateId);
+  if (candidateIndex < 0) {
+    const err = new Error("Candidate not found");
+    err.status = 404;
+    throw err;
+  }
+  const currentCandidate = normalizeCandidate(candidateRows[candidateIndex]);
+  if (currentCandidate.decision !== "pending") {
+    const err = new Error("Candidate has already been decided.");
+    err.status = 400;
+    throw err;
+  }
+  const invoice = readSupplierInvoices().find((row) => row.id === currentCandidate.supplierInvoiceId);
+  if (!invoice) {
+    const err = new Error("Supplier invoice not found");
+    err.status = 404;
+    throw err;
+  }
+  const jobs = readJobs();
+  const body = req.body || {};
+  const jobId =
+    String(body.jobId || "").trim() ||
+    currentCandidate.suggestedJobId ||
+    String(invoice.linkedJobId || "").trim();
+  const jobIndex = jobs.findIndex((row) => row.id === jobId);
+  if (jobIndex < 0) {
+    const err = new Error("No target job selected. Provide jobId or run auto-match again.");
+    err.status = 400;
+    throw err;
+  }
+  const now = nowIso();
+  const incoming = body.part || {};
+  const part = jobsLib.normalizePart(
+    {
+      id: randomUUID(),
+      partNumber: incoming.partNumber ?? currentCandidate.partNumberCandidate,
+      description: incoming.description ?? currentCandidate.descriptionCandidate,
+      supplier: incoming.supplier ?? currentCandidate.supplierCandidate ?? invoice.supplier,
+      qty: incoming.qty ?? currentCandidate.qtyCandidate ?? 1,
+      costPrice: incoming.costPrice ?? currentCandidate.costPriceCandidate ?? 0,
+      markupPercent: incoming.markupPercent ?? 25,
+      sellPrice: incoming.sellPrice,
+      supplierInvoiceNo:
+        incoming.supplierInvoiceNo ?? invoice.invoiceNo ?? currentCandidate.supplierInvoiceNo,
+      supplierInvoiceDate: incoming.supplierInvoiceDate ?? invoice.invoiceDate,
+      ordered: incoming.ordered ?? true,
+      received: incoming.received ?? true,
+      source: "ocr",
+      status: "approved",
+      ocrConfidence: incoming.ocrConfidence ?? currentCandidate.confidence,
+      matchScore: incoming.matchScore ?? currentCandidate.matchScore,
+      photoRefs: sanitizePhotoRefs(invoice.imageRefs),
+      createdAt: now,
+      createdBy: nowActor(req),
+      updatedAt: now,
+      updatedBy: nowActor(req),
+    },
+    randomUUID()
+  );
+  const beforeJob = { ...(jobs[jobIndex] || {}) };
+  const parts = Array.isArray(jobs[jobIndex].parts) ? [...jobs[jobIndex].parts] : [];
+  parts.push(part);
+  jobs[jobIndex].parts = jobsLib.normalizeParts(parts, () => randomUUID());
+  jobs[jobIndex].status = jobsLib.normalizeJobStatus(jobs[jobIndex].status, jobs[jobIndex].parts);
+  jobs[jobIndex].updatedAt = now;
+  writeJobs(jobs);
+
+  const beforeCandidate = { ...candidateRows[candidateIndex] };
+  candidateRows[candidateIndex] = normalizeCandidate({
+    ...currentCandidate,
+    decision: decisionMode === "edited_then_accepted" ? "edited_then_accepted" : "accepted",
+    decidedAt: now,
+    decidedBy: nowActor(req),
+    suggestedJobId: jobs[jobIndex].id,
+    matchReason: currentCandidate.matchReason || "accepted by user",
+    updatedAt: now,
+  });
+  writeInvoiceCandidates(candidateRows);
+  const invoiceAfter = refreshSupplierInvoiceStatus(currentCandidate.supplierInvoiceId);
+  writePartAudit("jobPart", part.id, "approve", null, part, req, "candidate accepted");
+  writePartAudit(
+    "invoiceCandidate",
+    currentCandidate.id,
+    "approve",
+    beforeCandidate,
+    candidateRows[candidateIndex],
+    req,
+    decisionMode === "edited_then_accepted" ? "candidate edited+accepted" : "candidate accepted"
+  );
+  writePartAudit(
+    "job",
+    jobs[jobIndex].id,
+    "update",
+    beforeJob,
+    jobs[jobIndex],
+    req,
+    "part imported from supplier invoice"
+  );
+  return {
+    candidate: candidateRows[candidateIndex],
+    jobPart: part,
+    jobId: jobs[jobIndex].id,
+    supplierInvoice: invoiceAfter || invoice,
   };
 }
 
@@ -1912,6 +2493,14 @@ const UPLOAD_MIME_EXT = {
   "image/gif": ".gif",
   "image/webp": ".webp",
 };
+const OCR_IMPORT_MIME = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
@@ -1928,6 +2517,18 @@ const upload = multer({
     const extOk = UPLOAD_EXTS.has(path.extname(file.originalname || "").toLowerCase());
     if (!mimeOk || !extOk) {
       const err = new Error("Please upload a JPEG, PNG, GIF, or WebP photo.");
+      err.status = 400;
+      return cb(err);
+    }
+    cb(null, true);
+  },
+});
+const ocrImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!OCR_IMPORT_MIME.has(file.mimetype)) {
+      const err = new Error("Upload a PDF or image file.");
       err.status = 400;
       return cb(err);
     }
@@ -4108,7 +4709,72 @@ app.get("/api/jobs/:id", requireAdmin, (req, res) => {
       }
     }
   }
-  res.json(job);
+  res.json({
+    ...job,
+    workPhotos: sanitizePhotoRefs(job.workPhotos),
+    supplierInvoicePhotos: sanitizePhotoRefs(job.supplierInvoicePhotos),
+  });
+});
+
+app.post("/api/jobs/:id/work-photos", requireAdmin, upload.array("photos", 12), (req, res) => {
+  const jobs = readJobs();
+  const index = jobs.findIndex((j) => j.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: "Job not found" });
+  const files = req.files || [];
+  if (!files.length) return res.status(400).json({ error: "No photo uploaded" });
+  const added = files.map((file) => `/uploads/${file.filename}`);
+  const next = sanitizePhotoRefs([...(jobs[index].workPhotos || []), ...added]);
+  jobs[index].workPhotos = next;
+  jobs[index].updatedAt = nowIso();
+  writeJobs(jobs);
+  res.json({ workPhotos: next });
+});
+
+app.delete("/api/jobs/:id/work-photos", requireAdmin, (req, res) => {
+  const jobs = readJobs();
+  const index = jobs.findIndex((j) => j.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: "Job not found" });
+  const url = String(req.body?.url || req.query.url || "").trim();
+  if (!url) return res.status(400).json({ error: "Photo URL is required." });
+  const next = sanitizePhotoRefs((jobs[index].workPhotos || []).filter((src) => src !== url));
+  jobs[index].workPhotos = next;
+  jobs[index].updatedAt = nowIso();
+  writeJobs(jobs);
+  res.json({ workPhotos: next });
+});
+
+app.post(
+  "/api/jobs/:id/supplier-invoice-photos",
+  requireAdmin,
+  upload.array("photos", 12),
+  (req, res) => {
+    const jobs = readJobs();
+    const index = jobs.findIndex((j) => j.id === req.params.id);
+    if (index < 0) return res.status(404).json({ error: "Job not found" });
+    const files = req.files || [];
+    if (!files.length) return res.status(400).json({ error: "No photo uploaded" });
+    const added = files.map((file) => `/uploads/${file.filename}`);
+    const next = sanitizePhotoRefs([...(jobs[index].supplierInvoicePhotos || []), ...added]);
+    jobs[index].supplierInvoicePhotos = next;
+    jobs[index].updatedAt = nowIso();
+    writeJobs(jobs);
+    res.json({ supplierInvoicePhotos: next });
+  }
+);
+
+app.delete("/api/jobs/:id/supplier-invoice-photos", requireAdmin, (req, res) => {
+  const jobs = readJobs();
+  const index = jobs.findIndex((j) => j.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: "Job not found" });
+  const url = String(req.body?.url || req.query.url || "").trim();
+  if (!url) return res.status(400).json({ error: "Photo URL is required." });
+  const next = sanitizePhotoRefs(
+    (jobs[index].supplierInvoicePhotos || []).filter((src) => src !== url)
+  );
+  jobs[index].supplierInvoicePhotos = next;
+  jobs[index].updatedAt = nowIso();
+  writeJobs(jobs);
+  res.json({ supplierInvoicePhotos: next });
 });
 
 app.put("/api/jobs/:id", requireAdmin, (req, res) => {
@@ -4145,6 +4811,605 @@ app.delete("/api/jobs/:id", requireAdmin, (req, res) => {
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
   }
+});
+
+app.get("/api/jobs/:jobId/parts", requireAdmin, (req, res) => {
+  const jobs = readJobs();
+  const job = jobs.find((row) => row.id === req.params.jobId);
+  if (!job) return res.status(404).json({ error: "Job not found" });
+  res.json(jobsLib.normalizeParts(job.parts, () => randomUUID()));
+});
+
+app.post("/api/jobs/:jobId/parts", requireAdmin, (req, res) => {
+  const jobs = readJobs();
+  const index = jobs.findIndex((row) => row.id === req.params.jobId);
+  if (index < 0) return res.status(404).json({ error: "Job not found" });
+  const before = { ...(jobs[index] || {}) };
+  const now = nowIso();
+  const payload = jobsLib.normalizePart(
+    {
+      ...req.body,
+      source: req.body?.source || "manual",
+      status: req.body?.status || "draft",
+      createdAt: req.body?.createdAt || now,
+      createdBy: req.body?.createdBy || nowActor(req),
+      updatedAt: now,
+      updatedBy: nowActor(req),
+    },
+    randomUUID()
+  );
+  const rows = Array.isArray(jobs[index].parts) ? [...jobs[index].parts] : [];
+  rows.push(payload);
+  jobs[index].parts = jobsLib.normalizeParts(rows, () => randomUUID());
+  jobs[index].status = jobsLib.normalizeJobStatus(jobs[index].status, jobs[index].parts);
+  jobs[index].updatedAt = now;
+  writeJobs(jobs);
+  writePartAudit(
+    "jobPart",
+    payload.id,
+    "create",
+    null,
+    { jobId: jobs[index].id, part: payload },
+    req,
+    "manual part create"
+  );
+  writePartAudit(
+    "job",
+    jobs[index].id,
+    "update",
+    before,
+    jobs[index],
+    req,
+    "part added to job"
+  );
+  res.status(201).json(payload);
+});
+
+app.patch("/api/jobs/:jobId/parts/:partId", requireAdmin, (req, res) => {
+  const jobs = readJobs();
+  const index = jobs.findIndex((row) => row.id === req.params.jobId);
+  if (index < 0) return res.status(404).json({ error: "Job not found" });
+  const parts = Array.isArray(jobs[index].parts) ? [...jobs[index].parts] : [];
+  const partIndex = parts.findIndex((row) => row.id === req.params.partId);
+  if (partIndex < 0) return res.status(404).json({ error: "Part not found" });
+  const existing = parts[partIndex];
+  const now = nowIso();
+  const merged = jobsLib.normalizePart(
+    {
+      ...existing,
+      ...req.body,
+      id: existing.id,
+      updatedAt: now,
+      updatedBy: nowActor(req),
+    },
+    existing.id
+  );
+  parts[partIndex] = merged;
+  jobs[index].parts = jobsLib.normalizeParts(parts, () => randomUUID());
+  jobs[index].status = jobsLib.normalizeJobStatus(jobs[index].status, jobs[index].parts);
+  jobs[index].updatedAt = now;
+  writeJobs(jobs);
+  writePartAudit("jobPart", merged.id, "update", existing, merged, req, "part patched");
+  res.json(merged);
+});
+
+app.delete("/api/jobs/:jobId/parts/:partId", requireAdmin, (req, res) => {
+  const jobs = readJobs();
+  const index = jobs.findIndex((row) => row.id === req.params.jobId);
+  if (index < 0) return res.status(404).json({ error: "Job not found" });
+  const parts = Array.isArray(jobs[index].parts) ? [...jobs[index].parts] : [];
+  const partIndex = parts.findIndex((row) => row.id === req.params.partId);
+  if (partIndex < 0) return res.status(404).json({ error: "Part not found" });
+  const removed = parts[partIndex];
+  parts.splice(partIndex, 1);
+  jobs[index].parts = jobsLib.normalizeParts(parts, () => randomUUID());
+  jobs[index].status = jobsLib.normalizeJobStatus(jobs[index].status, jobs[index].parts);
+  jobs[index].updatedAt = nowIso();
+  writeJobs(jobs);
+  writePartAudit("jobPart", removed.id, "delete", removed, null, req, "part deleted");
+  res.json({ ok: true });
+});
+
+app.post("/api/jobs/:jobId/parts/recalculate", requireAdmin, (req, res) => {
+  const jobs = readJobs();
+  const index = jobs.findIndex((row) => row.id === req.params.jobId);
+  if (index < 0) return res.status(404).json({ error: "Job not found" });
+  const rows = Array.isArray(jobs[index].parts) ? jobs[index].parts : [];
+  const updated = rows.map((part) => {
+    const incomingMarkup = req.body?.markupPercent;
+    const markupPercent =
+      incomingMarkup != null && incomingMarkup !== ""
+        ? Math.max(0, Number(incomingMarkup) || 0)
+        : Number(part.markupPercent) || 0;
+    const qty = Number(part.qty) || 0;
+    const cost = toMoney(part.costPrice);
+    const sell = toMoney(cost * (1 + markupPercent / 100));
+    return jobsLib.normalizePart(
+      {
+        ...part,
+        markupPercent,
+        sellPrice: sell,
+        lineCostTotal: toMoney(qty * cost),
+        lineSellTotal: toMoney(qty * sell),
+        updatedAt: nowIso(),
+        updatedBy: nowActor(req),
+      },
+      part.id
+    );
+  });
+  jobs[index].parts = updated;
+  jobs[index].updatedAt = nowIso();
+  writeJobs(jobs);
+  res.json(updated);
+});
+
+app.post("/api/jobs/:jobId/parts/:partId/mark-billed", requireAdmin, (req, res) => {
+  const jobs = readJobs();
+  const index = jobs.findIndex((row) => row.id === req.params.jobId);
+  if (index < 0) return res.status(404).json({ error: "Job not found" });
+  const parts = Array.isArray(jobs[index].parts) ? [...jobs[index].parts] : [];
+  const partIndex = parts.findIndex((row) => row.id === req.params.partId);
+  if (partIndex < 0) return res.status(404).json({ error: "Part not found" });
+  const previous = parts[partIndex];
+  const next = jobsLib.normalizePart(
+    {
+      ...previous,
+      linkedInvoiceId: String(req.body?.linkedInvoiceId || jobs[index].invoiceId || "").trim(),
+      status: "billed",
+      updatedAt: nowIso(),
+      updatedBy: nowActor(req),
+    },
+    previous.id
+  );
+  parts[partIndex] = next;
+  jobs[index].parts = jobsLib.normalizeParts(parts, () => randomUUID());
+  jobs[index].updatedAt = nowIso();
+  writeJobs(jobs);
+  writePartAudit("jobPart", next.id, "update", previous, next, req, "mark billed");
+  res.json(next);
+});
+
+app.post("/api/jobs/:jobId/invoices/:invoiceId/attach-parts", requireAdmin, (req, res) => {
+  const jobs = readJobs();
+  const index = jobs.findIndex((row) => row.id === req.params.jobId);
+  if (index < 0) return res.status(404).json({ error: "Job not found" });
+  const onlyApproved = req.body?.onlyApproved !== false;
+  let attached = 0;
+  const rows = (jobs[index].parts || []).map((part) => {
+    if (onlyApproved && part.status !== "approved") return part;
+    attached += 1;
+    return jobsLib.normalizePart(
+      {
+        ...part,
+        linkedInvoiceId: req.params.invoiceId,
+        status: "billed",
+        updatedAt: nowIso(),
+        updatedBy: nowActor(req),
+      },
+      part.id
+    );
+  });
+  jobs[index].parts = rows;
+  jobs[index].invoiceId = jobs[index].invoiceId || req.params.invoiceId;
+  jobs[index].updatedAt = nowIso();
+  writeJobs(jobs);
+  res.json({ ok: true, attached, invoiceId: req.params.invoiceId });
+});
+
+app.post(
+  "/api/supplier-invoices/import-file",
+  requireAdmin,
+  ocrImportUpload.single("file"),
+  async (req, res) => {
+    try {
+      const file = req.file;
+      if (!file) return res.status(400).json({ error: "No file uploaded" });
+      const rawText = await extractTextFromImportFile(file);
+      if (!rawText) {
+        return res.status(400).json({
+          error: "Could not read text from file. Try a clearer image or higher resolution photo.",
+        });
+      }
+
+      const parsedInvoice = parseSupplierInvoiceText(rawText);
+      const supplier = String(req.body?.supplier || parsedInvoice.supplier || "").trim();
+      const invoiceNo = String(req.body?.invoiceNo || parsedInvoice.invoiceNo || "").trim();
+      if (!supplier) {
+        return res.status(400).json({ error: "Could not detect supplier. Enter supplier manually." });
+      }
+      if (!invoiceNo) {
+        return res
+          .status(400)
+          .json({ error: "Could not detect invoice number. Enter invoice number manually." });
+      }
+
+      const invoices = readSupplierInvoices();
+      const duplicate = invoices.find(
+        (row) =>
+          normalizeSupplierName(row.supplier) === normalizeSupplierName(supplier) &&
+          normalizeInvoiceNo(row.invoiceNo) === normalizeInvoiceNo(invoiceNo)
+      );
+      if (duplicate) {
+        return res.status(409).json({
+          error: "Duplicate supplier invoice number for this supplier.",
+          duplicateInvoiceId: duplicate.id,
+        });
+      }
+
+      const now = nowIso();
+      const created = normalizeSupplierInvoice({
+        id: randomUUID(),
+        supplier,
+        invoiceNo,
+        invoiceDate: normalizeInvoiceDateInput(req.body?.invoiceDate || parsedInvoice.invoiceDate),
+        subtotal: toMoney(req.body?.subtotal ?? parsedInvoice.subtotal),
+        tax: toMoney(req.body?.tax ?? parsedInvoice.tax),
+        total: toMoney(req.body?.total ?? parsedInvoice.total),
+        currency: String(req.body?.currency || "NZD").trim().toUpperCase() || "NZD",
+        linkedJobId: String(req.body?.linkedJobId || "").trim(),
+        notes: String(req.body?.notes || "").trim(),
+        status: "parsed",
+        imageRefs: [],
+        ocrRawTextRef: "",
+        parseVersion: "pdf-v1",
+        createdAt: now,
+        createdBy: nowActor(req),
+        updatedAt: now,
+        updatedBy: nowActor(req),
+      });
+      invoices.push(created);
+      writeSupplierInvoices(invoices);
+
+      const allCandidates = readInvoiceCandidates();
+      const parsedCandidates = (parsedInvoice.candidates || []).slice(0, 200).map((line) =>
+        normalizeCandidate({
+          id: randomUUID(),
+          supplierInvoiceId: created.id,
+          lineNo: line.lineNo,
+          rawLineText: line.rawLineText,
+          partNumberCandidate: line.partNumberCandidate,
+          descriptionCandidate: line.descriptionCandidate,
+          qtyCandidate: line.qtyCandidate,
+          costPriceCandidate: line.costPriceCandidate,
+          supplierCandidate: line.supplierCandidate || created.supplier,
+          confidence: line.confidence ?? 0.7,
+          decision: "pending",
+          createdAt: now,
+          updatedAt: now,
+        })
+      );
+      for (const row of parsedCandidates) allCandidates.push(row);
+      writeInvoiceCandidates(allCandidates);
+
+      const rematched = rematchCandidatesForInvoice(created.id).map((row) => normalizeCandidate(row));
+      const invoiceAfter = refreshSupplierInvoiceStatus(created.id) || created;
+      writePartAudit(
+        "supplierInvoice",
+        invoiceAfter.id,
+        "create",
+        null,
+        invoiceAfter,
+        req,
+        "imported from pdf"
+      );
+      res.status(201).json({
+        invoice: invoiceAfter,
+        candidates: rematched,
+        parsed: {
+          sourceType: file.mimetype === "application/pdf" ? "pdf" : "image",
+          supplier: parsedInvoice.supplier,
+          invoiceNo: parsedInvoice.invoiceNo,
+          invoiceDate: parsedInvoice.invoiceDate,
+        },
+      });
+    } catch (err) {
+      console.error("Could not import supplier invoice file:", err);
+      res.status(err.status || 400).json({ error: err.message || "Failed to import file." });
+    }
+  }
+);
+
+app.post("/api/supplier-invoices", requireAdmin, (req, res) => {
+  try {
+    const payload = validateSupplierInvoiceInput(req.body || {});
+    const rows = readSupplierInvoices();
+    const duplicate = rows.find(
+      (row) =>
+        normalizeSupplierName(row.supplier) === normalizeSupplierName(payload.supplier) &&
+        normalizeInvoiceNo(row.invoiceNo) === normalizeInvoiceNo(payload.invoiceNo)
+    );
+    if (duplicate) {
+      return res.status(409).json({
+        error: "Duplicate supplier invoice number for this supplier.",
+        duplicateInvoiceId: duplicate.id,
+      });
+    }
+    const now = nowIso();
+    const invoice = normalizeSupplierInvoice({
+      id: randomUUID(),
+      ...payload,
+      status: "uploaded",
+      imageRefs: [],
+      ocrRawTextRef: "",
+      parseVersion: "v1",
+      createdAt: now,
+      createdBy: nowActor(req),
+      updatedAt: now,
+      updatedBy: nowActor(req),
+    });
+    rows.push(invoice);
+    writeSupplierInvoices(rows);
+    writePartAudit("supplierInvoice", invoice.id, "create", null, invoice, req, "invoice created");
+    res.status(201).json(invoice);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.get("/api/supplier-invoices", requireAdmin, (_req, res) => {
+  const candidateRows = readInvoiceCandidates();
+  const rows = readSupplierInvoices()
+    .map((row) => normalizeSupplierInvoice(row))
+    .map((row) => {
+      const candidates = candidateRows.filter((c) => c.supplierInvoiceId === row.id);
+      const accepted = candidates.filter(
+        (c) => c.decision === "accepted" || c.decision === "edited_then_accepted"
+      ).length;
+      const pending = candidates.filter((c) => c.decision === "pending").length;
+      return {
+        ...row,
+        candidatesTotal: candidates.length,
+        candidatesAccepted: accepted,
+        candidatesPending: pending,
+      };
+    })
+    .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+  res.json(rows);
+});
+
+app.get("/api/supplier-invoices/:invoiceId", requireAdmin, (req, res) => {
+  const rows = readSupplierInvoices();
+  const invoice = rows.find((row) => row.id === req.params.invoiceId);
+  if (!invoice) return res.status(404).json({ error: "Supplier invoice not found" });
+  const candidates = readInvoiceCandidates().filter(
+    (row) => row.supplierInvoiceId === req.params.invoiceId
+  );
+  res.json({
+    ...normalizeSupplierInvoice(invoice),
+    candidatesTotal: candidates.length,
+    candidatesPending: candidates.filter((row) => row.decision === "pending").length,
+    candidatesAccepted: candidates.filter(
+      (row) => row.decision === "accepted" || row.decision === "edited_then_accepted"
+    ).length,
+  });
+});
+
+app.put("/api/supplier-invoices/:invoiceId", requireAdmin, (req, res) => {
+  try {
+    const rows = readSupplierInvoices();
+    const index = rows.findIndex((row) => row.id === req.params.invoiceId);
+    if (index < 0) return res.status(404).json({ error: "Supplier invoice not found" });
+    const payload = validateSupplierInvoiceInput(req.body || {});
+    const duplicate = rows.find(
+      (row) =>
+        row.id !== req.params.invoiceId &&
+        normalizeSupplierName(row.supplier) === normalizeSupplierName(payload.supplier) &&
+        normalizeInvoiceNo(row.invoiceNo) === normalizeInvoiceNo(payload.invoiceNo)
+    );
+    if (duplicate) {
+      return res.status(409).json({
+        error: "Duplicate supplier invoice number for this supplier.",
+        duplicateInvoiceId: duplicate.id,
+      });
+    }
+    const before = normalizeSupplierInvoice(rows[index]);
+    const next = normalizeSupplierInvoice({
+      ...rows[index],
+      ...payload,
+      updatedAt: nowIso(),
+      updatedBy: nowActor(req),
+    });
+    rows[index] = next;
+    writeSupplierInvoices(rows);
+    writePartAudit("supplierInvoice", next.id, "update", before, next, req, "invoice updated");
+    res.json(next);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post(
+  "/api/supplier-invoices/:invoiceId/images",
+  requireAdmin,
+  upload.array("images", 12),
+  (req, res) => {
+    const rows = readSupplierInvoices();
+    const index = rows.findIndex((row) => row.id === req.params.invoiceId);
+    if (index < 0) return res.status(404).json({ error: "Supplier invoice not found" });
+    const files = req.files || [];
+    if (!files.length) return res.status(400).json({ error: "No image uploaded" });
+    const added = files.map((file) => `/uploads/${file.filename}`);
+    const prev = normalizeSupplierInvoice(rows[index]);
+    const next = normalizeSupplierInvoice({
+      ...rows[index],
+      imageRefs: [...(rows[index].imageRefs || []), ...added].slice(0, 12),
+      updatedAt: nowIso(),
+      updatedBy: nowActor(req),
+    });
+    rows[index] = next;
+    writeSupplierInvoices(rows);
+    writePartAudit("supplierInvoice", next.id, "update", prev, next, req, "images uploaded");
+    res.json(next);
+  }
+);
+
+app.post("/api/supplier-invoices/:invoiceId/parse", requireAdmin, (req, res) => {
+  const invoices = readSupplierInvoices();
+  const invoiceIndex = invoices.findIndex((row) => row.id === req.params.invoiceId);
+  if (invoiceIndex < 0) return res.status(404).json({ error: "Supplier invoice not found" });
+  const invoice = normalizeSupplierInvoice(invoices[invoiceIndex]);
+  const parsedRows = parseCandidatesFromPayload(req.body || {}, invoice.supplier);
+  if (!parsedRows.length) {
+    return res.status(400).json({
+      error:
+        "No candidate rows parsed. Provide body.lines[] or body.rawText from OCR output.",
+    });
+  }
+  const allCandidates = readInvoiceCandidates();
+  const now = nowIso();
+  const created = parsedRows.map((row) =>
+    normalizeCandidate({
+      id: randomUUID(),
+      supplierInvoiceId: invoice.id,
+      lineNo: row.lineNo,
+      rawLineText: row.rawLineText,
+      partNumberCandidate: row.partNumberCandidate,
+      descriptionCandidate: row.descriptionCandidate,
+      qtyCandidate: row.qtyCandidate,
+      costPriceCandidate: row.costPriceCandidate,
+      supplierCandidate: row.supplierCandidate || invoice.supplier,
+      confidence: row.confidence,
+      decision: "pending",
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+  for (const row of created) allCandidates.push(row);
+  writeInvoiceCandidates(allCandidates);
+  invoices[invoiceIndex] = normalizeSupplierInvoice({
+    ...invoice,
+    status: "parsed",
+    ocrRawTextRef: String(req.body?.ocrRawTextRef || req.body?.rawTextRef || "").trim(),
+    parseVersion: "v1",
+    updatedAt: now,
+    updatedBy: nowActor(req),
+  });
+  writeSupplierInvoices(invoices);
+  const matched = rematchCandidatesForInvoice(invoice.id).map((row) => normalizeCandidate(row));
+  const refreshed = refreshSupplierInvoiceStatus(invoice.id);
+  writePartAudit(
+    "supplierInvoice",
+    invoice.id,
+    "update",
+    invoice,
+    refreshed || invoice,
+    req,
+    "invoice parsed"
+  );
+  res.status(201).json({ invoice: refreshed || invoices[invoiceIndex], candidates: matched });
+});
+
+app.get("/api/supplier-invoices/:invoiceId/candidates", requireAdmin, (req, res) => {
+  const invoice = readSupplierInvoices().find((row) => row.id === req.params.invoiceId);
+  if (!invoice) return res.status(404).json({ error: "Supplier invoice not found" });
+  const rows = readInvoiceCandidates()
+    .filter((row) => row.supplierInvoiceId === req.params.invoiceId)
+    .map((row) => normalizeCandidate(row))
+    .sort((a, b) => Number(a.lineNo) - Number(b.lineNo));
+  res.json(rows);
+});
+
+app.post("/api/supplier-invoices/:invoiceId/auto-match", requireAdmin, (req, res) => {
+  try {
+    const rows = rematchCandidatesForInvoice(req.params.invoiceId).map((row) =>
+      normalizeCandidate(row)
+    );
+    const invoice = refreshSupplierInvoiceStatus(req.params.invoiceId);
+    res.json({ invoice, candidates: rows });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post("/api/invoice-candidates/:candidateId/accept", requireAdmin, (req, res) => {
+  try {
+    res.json(acceptInvoiceCandidate(req.params.candidateId, req, "accepted"));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post("/api/invoice-candidates/:candidateId/edit-accept", requireAdmin, (req, res) => {
+  try {
+    const nextReq = {
+      ...req,
+      body: {
+        ...(req.body || {}),
+        part: { ...(req.body?.part || {}), ...(req.body || {}) },
+      },
+    };
+    res.json(acceptInvoiceCandidate(req.params.candidateId, nextReq, "edited_then_accepted"));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post("/api/invoice-candidates/:candidateId/reject", requireAdmin, (req, res) => {
+  const rows = readInvoiceCandidates();
+  const index = rows.findIndex((row) => row.id === req.params.candidateId);
+  if (index < 0) return res.status(404).json({ error: "Candidate not found" });
+  const previous = normalizeCandidate(rows[index]);
+  if (previous.decision !== "pending") {
+    return res.status(400).json({ error: "Candidate has already been decided." });
+  }
+  const next = normalizeCandidate({
+    ...previous,
+    decision: "rejected",
+    decidedAt: nowIso(),
+    decidedBy: nowActor(req),
+    matchReason: String(req.body?.reason || previous.matchReason || "rejected by user"),
+    updatedAt: nowIso(),
+  });
+  rows[index] = next;
+  writeInvoiceCandidates(rows);
+  const invoice = refreshSupplierInvoiceStatus(next.supplierInvoiceId);
+  writePartAudit("invoiceCandidate", next.id, "reject", previous, next, req, next.matchReason);
+  res.json({ candidate: next, supplierInvoice: invoice });
+});
+
+app.get("/api/match/part-suggestions", requireAdmin, (req, res) => {
+  const invoiceId = String(req.query.invoiceId || "").trim();
+  if (!invoiceId) return res.status(400).json({ error: "invoiceId is required" });
+  const invoice = readSupplierInvoices().find((row) => row.id === invoiceId);
+  if (!invoice) return res.status(404).json({ error: "Supplier invoice not found" });
+  const jobs = readJobs();
+  const rows = readInvoiceCandidates()
+    .filter((row) => row.supplierInvoiceId === invoiceId && row.decision === "pending")
+    .map((row) => {
+      const hit = suggestCandidateMatch(row, jobs, invoice);
+      return {
+        candidateId: row.id,
+        supplierInvoiceId: row.supplierInvoiceId,
+        lineNo: row.lineNo,
+        suggestedJobId: hit.jobId || row.suggestedJobId || "",
+        suggestedPartId: hit.partId || row.suggestedPartId || "",
+        score: toRatio(hit.score || row.matchScore || 0),
+        reason: hit.reason || row.matchReason || "",
+      };
+    });
+  res.json(rows);
+});
+
+app.get("/api/validation/duplicate-invoice", requireAdmin, (req, res) => {
+  const supplier = normalizeSupplierName(req.query.supplier);
+  const invoiceNo = normalizeInvoiceNo(req.query.invoiceNo);
+  if (!supplier || !invoiceNo) {
+    return res.status(400).json({ error: "supplier and invoiceNo are required" });
+  }
+  const rows = readSupplierInvoices();
+  const duplicate = rows.find(
+    (row) =>
+      normalizeSupplierName(row.supplier) === supplier &&
+      normalizeInvoiceNo(row.invoiceNo) === invoiceNo
+  );
+  if (!duplicate) return res.json({ duplicate: false });
+  res.json({
+    duplicate: true,
+    supplierInvoiceId: duplicate.id,
+    invoiceNo: duplicate.invoiceNo,
+    supplier: duplicate.supplier,
+    createdAt: duplicate.createdAt,
+  });
 });
 
 app.get("/r/:id", (req, res) => {

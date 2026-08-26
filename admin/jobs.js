@@ -7,6 +7,13 @@ const JOB_STATUSES = [
   { id: "completed", label: "Ready to collect" },
   { id: "collected", label: "Collected" },
 ];
+const PART_LINE_STATUSES = [
+  { id: "draft", label: "Draft" },
+  { id: "matched", label: "Matched" },
+  { id: "approved", label: "Approved" },
+  { id: "billed", label: "Billed" },
+  { id: "rejected", label: "Rejected" },
+];
 
 const jobsListView = document.getElementById("jobs-list-view");
 const jobsEditView = document.getElementById("jobs-edit-view");
@@ -20,6 +27,10 @@ const openQuoteBtn = document.getElementById("btn-jobs-open-quote");
 const collectBtn = document.getElementById("btn-jobs-collected");
 const jobsYearSelect = document.getElementById("jobs-year");
 const jobsYearLabel = document.getElementById("jobs-year-label");
+const jobWorkPhotosInput = document.getElementById("job-work-photos-input");
+const jobWorkPhotosEl = document.getElementById("job-work-photos");
+const jobSupplierPhotosInput = document.getElementById("job-supplier-photos-input");
+const jobSupplierPhotosEl = document.getElementById("job-supplier-photos");
 
 let currentJob = null;
 let jobRows = [];
@@ -33,13 +44,27 @@ function statusLabel(id) {
 }
 
 function newPart(partial = {}) {
+  const qty = Number(partial.qty);
+  const costPrice = Number(partial.costPrice);
+  const markupPercent = Number(partial.markupPercent);
+  const sellPrice =
+    partial.sellPrice != null && partial.sellPrice !== ""
+      ? Number(partial.sellPrice)
+      : (Number.isFinite(costPrice) ? costPrice : 0) *
+        (1 + (Number.isFinite(markupPercent) ? markupPercent : 25) / 100);
   return {
     id: partial.id || crypto.randomUUID(),
+    partNumber: partial.partNumber || "",
     description: partial.description || "",
-    qty: partial.qty != null ? partial.qty : 1,
+    qty: Number.isFinite(qty) ? qty : 1,
+    costPrice: Number.isFinite(costPrice) ? costPrice : 0,
+    markupPercent: Number.isFinite(markupPercent) ? markupPercent : 25,
+    sellPrice: Number.isFinite(sellPrice) ? sellPrice : 0,
     ordered: Boolean(partial.ordered) || Boolean(partial.received),
     received: Boolean(partial.received),
     supplier: partial.supplier || "",
+    supplierInvoiceNo: partial.supplierInvoiceNo || "",
+    status: partial.status || "draft",
     note: partial.note || "",
   };
 }
@@ -268,25 +293,38 @@ function renderParts() {
   jobsPartsEl.innerHTML = partRows
     .map(
       (part, index) => `<tr data-index="${index}">
+        <td><input data-field="partNumber" value="${Admin.escapeAttr(part.partNumber || "")}" placeholder="Part #" /></td>
         <td><input data-field="description" value="${Admin.escapeAttr(part.description)}" placeholder="e.g. Front pads" /></td>
         <td><input class="qty" data-field="qty" type="number" min="0" step="1" value="${Admin.escapeAttr(String(part.qty))}" /></td>
+        <td><input class="price" data-field="costPrice" type="number" min="0" step="0.01" value="${Admin.escapeAttr(String(part.costPrice || 0))}" /></td>
+        <td><input class="price" data-field="markupPercent" type="number" min="0" step="0.01" value="${Admin.escapeAttr(String(part.markupPercent || 0))}" /></td>
+        <td><input class="price" data-field="sellPrice" type="number" min="0" step="0.01" value="${Admin.escapeAttr(String(part.sellPrice || 0))}" /></td>
         <td class="check-cell"><input data-field="ordered" type="checkbox" ${part.ordered ? "checked" : ""} /></td>
         <td class="check-cell"><input data-field="received" type="checkbox" ${part.received ? "checked" : ""} /></td>
         <td><input class="part-supplier" data-field="supplier" value="${Admin.escapeAttr(part.supplier)}" placeholder="e.g. Repco" /></td>
+        <td><input class="part-note" data-field="supplierInvoiceNo" value="${Admin.escapeAttr(part.supplierInvoiceNo || "")}" placeholder="Supplier invoice #" /></td>
+        <td>
+          <select data-field="status">
+            ${PART_LINE_STATUSES.map(
+              (status) =>
+                `<option value="${Admin.escapeAttr(status.id)}"${part.status === status.id ? " selected" : ""}>${Admin.escapeHtml(status.label)}</option>`
+            ).join("")}
+          </select>
+        </td>
         <td><input class="part-note" data-field="note" value="${Admin.escapeAttr(part.note)}" placeholder="ETA Friday" /></td>
         <td><button type="button" class="ghost" data-remove="${index}">×</button></td>
       </tr>`
     )
     .join("");
 
-  jobsPartsEl.querySelectorAll("input").forEach((input) => {
+  const bindField = (control) => {
     const apply = () => {
-      const row = input.closest("tr");
+      const row = control.closest("tr");
       const index = Number(row.dataset.index);
-      const field = input.dataset.field;
+      const field = control.dataset.field;
       if (field === "ordered" || field === "received") {
-        partRows[index][field] = input.checked;
-        if (field === "received" && input.checked) {
+        partRows[index][field] = control.checked;
+        if (field === "received" && control.checked) {
           partRows[index].ordered = true;
           const ordered = row.querySelector('[data-field="ordered"]');
           if (ordered) ordered.checked = true;
@@ -295,12 +333,25 @@ function renderParts() {
         scheduleJobAutosave();
         return;
       }
-      partRows[index][field] = field === "qty" ? Number(input.value) || 0 : input.value;
+      if (field === "qty" || field === "costPrice" || field === "markupPercent" || field === "sellPrice") {
+        partRows[index][field] = Number(control.value) || 0;
+        if (field === "costPrice" || field === "markupPercent") {
+          const cost = Number(partRows[index].costPrice) || 0;
+          const markup = Number(partRows[index].markupPercent) || 0;
+          partRows[index].sellPrice = Number((cost * (1 + markup / 100)).toFixed(2));
+          const sellInput = row.querySelector('[data-field="sellPrice"]');
+          if (sellInput) sellInput.value = String(partRows[index].sellPrice);
+        }
+      } else {
+        partRows[index][field] = control.value;
+      }
       scheduleJobAutosave();
     };
-    input.addEventListener("input", apply);
-    input.addEventListener("change", apply);
-  });
+    control.addEventListener("input", apply);
+    control.addEventListener("change", apply);
+  };
+  jobsPartsEl.querySelectorAll("input").forEach(bindField);
+  jobsPartsEl.querySelectorAll("select").forEach(bindField);
   jobsPartsEl.querySelectorAll("[data-remove]").forEach((btn) => {
     btn.addEventListener("click", () => {
       partRows.splice(Number(btn.dataset.remove), 1);
@@ -377,7 +428,75 @@ function fillForm(job) {
       jobsQuoteLink.textContent = "";
     }
   }
+  renderJobPhotos();
   updateCollectedButton();
+}
+
+function photoList(key) {
+  if (!currentJob || !Array.isArray(currentJob[key])) return [];
+  return currentJob[key].map((src) => String(src || "").trim()).filter(Boolean);
+}
+
+function renderPhotoGroup(el, photos, type) {
+  if (!el) return;
+  if (!photos.length) {
+    el.innerHTML = "";
+    return;
+  }
+  el.innerHTML = photos
+    .map(
+      (src) => `
+      <span class="photo-thumb">
+        <img src="${Admin.escapeAttr(src)}" alt="${type === "supplier" ? "Supplier invoice photo" : "Work photo"}" />
+        <button type="button" class="ghost photo-remove" data-photo-type="${Admin.escapeAttr(type)}" data-photo-url="${Admin.escapeAttr(src)}" aria-label="Remove photo">×</button>
+      </span>`
+    )
+    .join("");
+}
+
+function renderJobPhotos() {
+  renderPhotoGroup(jobWorkPhotosEl, photoList("workPhotos"), "work");
+  renderPhotoGroup(jobSupplierPhotosEl, photoList("supplierInvoicePhotos"), "supplier");
+  [jobWorkPhotosEl, jobSupplierPhotosEl].forEach((el) => {
+    el?.querySelectorAll("[data-photo-url]").forEach((btn) => {
+      btn.addEventListener("click", () => removeJobPhoto(btn.dataset.photoType, btn.dataset.photoUrl));
+    });
+  });
+}
+
+async function uploadJobPhotos(type, files) {
+  if (!currentJob || !files?.length) return;
+  const body = new FormData();
+  for (const file of files) body.append("photos", file);
+  const endpoint =
+    type === "supplier" ? "supplier-invoice-photos" : "work-photos";
+  const data = await Admin.api(`/api/jobs/${currentJob.id}/${endpoint}`, {
+    method: "POST",
+    body,
+  });
+  if (type === "supplier") currentJob.supplierInvoicePhotos = data.supplierInvoicePhotos || [];
+  else currentJob.workPhotos = data.workPhotos || [];
+  renderJobPhotos();
+  const msgEl = document.getElementById("jobs-save-status");
+  if (msgEl) {
+    msgEl.hidden = false;
+    msgEl.textContent = files.length > 1 ? "Photos uploaded" : "Photo uploaded";
+    setTimeout(() => {
+      msgEl.hidden = true;
+    }, 2500);
+  }
+}
+
+async function removeJobPhoto(type, url) {
+  if (!currentJob || !url) return;
+  const endpoint = type === "supplier" ? "supplier-invoice-photos" : "work-photos";
+  const data = await Admin.api(
+    `/api/jobs/${currentJob.id}/${endpoint}?url=${encodeURIComponent(url)}`,
+    { method: "DELETE" }
+  );
+  if (type === "supplier") currentJob.supplierInvoicePhotos = data.supplierInvoicePhotos || [];
+  else currentJob.workPhotos = data.workPhotos || [];
+  renderJobPhotos();
 }
 
 function updateCollectedButton() {
@@ -588,6 +707,24 @@ jobsForm?.addEventListener("input", (e) => {
 jobsForm?.addEventListener("change", (event) => {
   if (event.target === jobInput("status")) updateCollectedButton();
   scheduleJobAutosave();
+});
+jobWorkPhotosInput?.addEventListener("change", async () => {
+  try {
+    await uploadJobPhotos("work", jobWorkPhotosInput.files);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    jobWorkPhotosInput.value = "";
+  }
+});
+jobSupplierPhotosInput?.addEventListener("change", async () => {
+  try {
+    await uploadJobPhotos("supplier", jobSupplierPhotosInput.files);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    jobSupplierPhotosInput.value = "";
+  }
 });
 window.addEventListener("beforeunload", () => {
   jobAutosave.flush();

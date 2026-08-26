@@ -72,6 +72,7 @@ function setSection(name) {
   const billingSection = document.getElementById("billing-section");
   const customersSection = document.getElementById("customers-section");
   const jobsSection = document.getElementById("jobs-section");
+  const supplierInvoicesSection = document.getElementById("supplier-invoices-section");
   const btnNew = document.getElementById("btn-new");
   const billingOpen = name === "quotes" || name === "invoices";
   if (app) app.dataset.section = name;
@@ -80,9 +81,14 @@ function setSection(name) {
   if (billingSection) billingSection.hidden = !billingOpen;
   if (customersSection) customersSection.hidden = name !== "customers";
   if (jobsSection) jobsSection.hidden = name !== "jobs";
+  if (supplierInvoicesSection) supplierInvoicesSection.hidden = name !== "supplier_invoices";
   if (btnNew) {
-    btnNew.hidden = false;
-    btnNew.textContent = "+ New customer";
+    if (name === "supplier_invoices") {
+      btnNew.hidden = true;
+    } else {
+      btnNew.hidden = false;
+      btnNew.textContent = "+ New customer";
+    }
   }
   const navMap = {
     dashboard: "nav-dashboard",
@@ -91,6 +97,7 @@ function setSection(name) {
     invoices: "nav-invoices",
     customers: "nav-customers",
     jobs: "nav-jobs",
+    supplier_invoices: "nav-supplier-invoices",
   };
   Object.entries(navMap).forEach(([section, id]) => {
     document.getElementById(id)?.classList.toggle("active", name === section);
@@ -113,6 +120,10 @@ function setSection(name) {
     viewTitle.textContent = "Invoices";
   }
   if (name === "jobs") setOverline("JOB BOARD");
+  if (name === "supplier_invoices") {
+    setOverline("PARTS INVOICES");
+    viewTitle.textContent = "Supplier invoices";
+  }
   if (name === "customers") {
     setOverline("CUSTOMERS");
     viewTitle.textContent = "Customers";
@@ -458,6 +469,11 @@ document.getElementById("nav-reports").addEventListener("click", async () => {
 document.getElementById("nav-jobs")?.addEventListener("click", () => {
   setSection("jobs");
   window.DeaneJobs?.showList();
+});
+
+document.getElementById("nav-supplier-invoices")?.addEventListener("click", () => {
+  setSection("supplier_invoices");
+  window.DeaneSupplierInvoices?.showList?.();
 });
 
 document.getElementById("nav-quotes")?.addEventListener("click", () => {
