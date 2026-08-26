@@ -170,6 +170,24 @@
       const thisMonth = data.thisMonth || {};
       selectedActivityMonth = String(thisMonth.key || Admin.todayIso().slice(0, 7));
       root.innerHTML = `
+        <section class="dash-today-grid" aria-label="Today's workshop overview">
+          <button type="button" class="dash-today-card" data-billing="quotes">
+            <span class="dash-icon">↗</span><span class="dash-kpi-label">QUOTES TO FOLLOW UP</span>
+            <strong>${Number(quotes.count) || 0}</strong><small>${money(quotes.totalIncl)} awaiting reply</small>
+          </button>
+          <button type="button" class="dash-today-card" data-billing="invoices">
+            <span class="dash-icon">$</span><span class="dash-kpi-label">PAYMENT DUE</span>
+            <strong>${Number(invoices.count) || 0}</strong><small>${money(invoices.totalIncl)} outstanding</small>
+          </button>
+          <button type="button" class="dash-today-card" data-billing="wofs" data-activity-month="${Admin.escapeAttr(thisMonth.key || "")}">
+            <span class="dash-icon">✓</span><span class="dash-kpi-label">WOFS THIS MONTH</span>
+            <strong>${Number(thisMonth.wofs) || 0}</strong><small>Recorded on open invoices</small>
+          </button>
+          <button type="button" class="dash-today-card" data-jobs="in_progress">
+            <span class="dash-icon">↻</span><span class="dash-kpi-label">IN PROGRESS</span>
+            <strong>${Number(jobs.in_progress) || 0}</strong><small>${Number(jobs.waiting_parts) || 0} waiting for parts</small>
+          </button>
+        </section>
         <section class="dash-section-heading dash-section-heading-first">
           <div>
             <p class="dash-eyebrow">Workshop now</p>
@@ -339,18 +357,7 @@
   }
 
   function formatBackupWhen(iso) {
-    if (!iso) return "";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return String(iso);
-    return new Intl.DateTimeFormat("en-NZ", {
-      timeZone: "Pacific/Auckland",
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    }).format(d);
+    return Admin.formatDateTimeShort(iso);
   }
 
   async function wireBackupCard() {

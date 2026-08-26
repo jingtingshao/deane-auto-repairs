@@ -94,6 +94,37 @@ function confirmPublicCustomerLink(kind) {
   );
 }
 
+function formatDateShort(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const iso = raw.slice(0, 10);
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[3]}/${m[2]}/${m[1].slice(2)}`;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return iso || raw;
+  return new Intl.DateTimeFormat("en-NZ", {
+    timeZone: "Pacific/Auckland",
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  }).format(d);
+}
+
+function formatDateTimeShort(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return formatDateShort(raw);
+  const date = formatDateShort(raw);
+  const time = new Intl.DateTimeFormat("en-NZ", {
+    timeZone: "Pacific/Auckland",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+  return `${date} ${time}`;
+}
+
 window.DeaneAdmin = {
   api,
   showStatus,
@@ -101,6 +132,8 @@ window.DeaneAdmin = {
   escapeAttr,
   setSection,
   confirmPublicCustomerLink,
+  formatDateShort,
+  formatDateTimeShort,
   NZ_TZ: "Pacific/Auckland",
   todayIso() {
     return new Intl.DateTimeFormat("en-CA", {
@@ -468,7 +501,7 @@ function renderReportList() {
         <div class="billing-number">${escapeHtml(r.jobNumber)}</div>
         <div>
           <h2>${escapeHtml(r.customerName || "Customer")}</h2>
-          <p class="muted">${escapeHtml(r.registration || "No plate")} · ${escapeHtml(r.serviceDate || "")} · ${escapeHtml(labelJob(r.jobType, r.servicePackage))} · ${escapeHtml(r.vehicle || "")}</p>
+          <p class="muted">${escapeHtml(r.registration || "No plate")} · ${escapeHtml(window.DeaneAdmin.formatDateShort(r.serviceDate) || "")} · ${escapeHtml(labelJob(r.jobType, r.servicePackage))} · ${escapeHtml(r.vehicle || "")}</p>
         </div>
         <span class="badge ${r.status}">${r.status}</span>
       </article>`

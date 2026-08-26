@@ -1327,6 +1327,22 @@ function isoDateOnly(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : "";
 }
 
+function formatDateShort(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const iso = raw.slice(0, 10);
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[3]}/${m[2]}/${m[1].slice(2)}`;
+  const t = Date.parse(raw);
+  if (!Number.isFinite(t)) return iso || raw;
+  return new Intl.DateTimeFormat("en-NZ", {
+    timeZone: "Pacific/Auckland",
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  }).format(new Date(t));
+}
+
 function applyInvoiceWofToCustomer(doc) {
   if (!doc || doc.kind !== "invoice" || doc.status === "void") return;
   const expiry = isoDateOnly(doc.wofExpiry);
@@ -2655,9 +2671,10 @@ app.post("/api/customers/wof-reminder", requireAdmin, async (req, res) => {
   const vehicleBit = `${vehicle || "your vehicle"}${registration ? ` (${registration})` : ""}`;
   const site = PUBLIC_BASE_URL || business.website;
   const subject = `WOF reminder for ${registration || vehicle || "your vehicle"} — ${business.name}`;
+  const expiryLabel = formatDateShort(expiry) || expiry;
   const text =
     `Hi ${name},\n\n` +
-    `This is a reminder from ${business.name} that the WOF for ${vehicleBit} expires on ${expiry}.\n\n` +
+    `This is a reminder from ${business.name} that the WOF for ${vehicleBit} expires on ${expiryLabel}.\n\n` +
     `Book a WOF with us:\n` +
     `Phone ${business.phoneDisplay}\n` +
     `${business.email}\n` +
@@ -2667,7 +2684,7 @@ app.post("/api/customers/wof-reminder", requireAdmin, async (req, res) => {
     `\nThank you,\n${business.name}\n`;
   const html = `
     <p>Hi ${escapeHtml(name)},</p>
-    <p>This is a reminder from <strong>${escapeHtml(business.name)}</strong> that the WOF for <strong>${escapeHtml(vehicleBit)}</strong> expires on <strong>${escapeHtml(expiry)}</strong>.</p>
+    <p>This is a reminder from <strong>${escapeHtml(business.name)}</strong> that the WOF for <strong>${escapeHtml(vehicleBit)}</strong> expires on <strong>${escapeHtml(expiryLabel)}</strong>.</p>
     <p>Book a WOF with us:</p>
     <p>
       Phone <a href="tel:${escapeAttr(business.phoneTel)}">${escapeHtml(business.phoneDisplay)}</a><br/>
@@ -3218,6 +3235,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
   const totals = catalog.computeTotals(doc.lines);
   const money = totals.totalIncl.toFixed(2);
   const vehicleBit = `${vehicle}${rego ? ` (${rego})` : ""}`;
+  const validUntilLabel = formatDateShort(doc.validUntil) || doc.validUntil;
 
   let subject;
   let text;
@@ -3230,7 +3248,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       `Total incl. GST: $${money}\n\n` +
       `Please review and accept this quote before we start work:\n${url}\n\n` +
       `A PDF copy is attached for your records.\n\n` +
-      (doc.validUntil ? `This quote is valid until ${doc.validUntil}.\n\n` : "") +
+      (doc.validUntil ? `This quote is valid until ${validUntilLabel}.\n\n` : "") +
       `${business.paymentText()}\n\n` +
       `${business.fullAddress()}\n${business.phoneDisplay}\n${business.email}\n`;
     html = `
@@ -3241,7 +3259,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       <p><a href="${escapeAttr(url)}" style="display:inline-block;background:#1565c0;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:700;">Review &amp; accept quote</a></p>
       <p>Or open this link:<br/><a href="${escapeAttr(url)}">${escapeHtml(url)}</a></p>
       <p>A PDF copy is attached for your records.</p>
-      ${doc.validUntil ? `<p>This quote is valid until ${escapeHtml(doc.validUntil)}.</p>` : ""}
+      ${doc.validUntil ? `<p>This quote is valid until ${escapeHtml(validUntilLabel)}.</p>` : ""}
       <p><strong>How to pay</strong><br/>
       Bank account number: <strong>${escapeHtml(business.bankAccount)}</strong></p>
       <p><strong>Payment terms</strong></p>

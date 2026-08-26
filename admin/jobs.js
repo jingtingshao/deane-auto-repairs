@@ -143,14 +143,7 @@ function normalizeSearch(value) {
 }
 
 function formatJobDate(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value || "").slice(0, 10) || "—";
-  return new Intl.DateTimeFormat("en-NZ", {
-    timeZone: "Pacific/Auckland",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+  return Admin.formatDateShort(value) || "—";
 }
 
 function matchesJobSearch(job, query) {

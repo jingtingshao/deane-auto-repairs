@@ -151,15 +151,7 @@ function paymentLabel(status) {
 }
 
 function formatListDate(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return new Intl.DateTimeFormat("en-NZ", {
-    timeZone: "Pacific/Auckland",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(d);
+  return Admin.formatDateShort(iso);
 }
 
 function quoteFilters() {
@@ -758,17 +750,7 @@ function fillForm(doc) {
 }
 
 function formatHistoryWhen(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return String(iso);
-  return new Intl.DateTimeFormat("en-NZ", {
-    timeZone: "Pacific/Auckland",
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).format(d);
+  return Admin.formatDateTimeShort(iso);
 }
 
 function renderHistory(doc) {
@@ -1034,7 +1016,7 @@ function renderPayments() {
     billingPaymentsEl.innerHTML = paymentRows
       .map(
         (p, index) => `<tr data-index="${index}">
-          <td>${Admin.escapeHtml(p.paidAt || "—")}</td>
+          <td>${Admin.escapeHtml(Admin.formatDateShort(p.paidAt) || "—")}</td>
           <td>${money(p.amount)}</td>
           <td>${Admin.escapeHtml(p.note || "")}</td>
           <td><button type="button" class="ghost" data-remove-pay="${index}">×</button></td>

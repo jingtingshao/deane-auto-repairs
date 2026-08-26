@@ -24,6 +24,22 @@ function escapeHtml(str) {
     .replaceAll('"', "&quot;");
 }
 
+function formatDateShort(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const iso = raw.slice(0, 10);
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[3]}/${m[2]}/${m[1].slice(2)}`;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return iso || raw;
+  return new Intl.DateTimeFormat("en-NZ", {
+    timeZone: "Pacific/Auckland",
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  }).format(d);
+}
+
 function jobLabel(report) {
   const map = {
     standard_service: "Standard Service",
@@ -130,7 +146,7 @@ function render(report, meta) {
         </div>
         <dl class="cover-meta">
           <div><dt>Job</dt><dd>${escapeHtml(report.jobNumber || "—")}</dd></div>
-          <div><dt>Date</dt><dd>${escapeHtml(report.serviceDate || "—")}</dd></div>
+          <div><dt>Date</dt><dd>${escapeHtml(formatDateShort(report.serviceDate) || "—")}</dd></div>
           <div><dt>Customer</dt><dd>${escapeHtml(report.customerName || "—")}</dd></div>
           <div><dt>Odometer</dt><dd>${escapeHtml(report.odometer ? report.odometer + " km" : "—")}</dd></div>
           <div><dt>Technician</dt><dd>${escapeHtml(report.technicianName || "—")}</dd></div>
@@ -149,7 +165,7 @@ function render(report, meta) {
     <section class="hero-card">
       <div>
         <h1>${escapeHtml(report.registration)} · ${escapeHtml(report.vehicle)}</h1>
-        <p class="meta">${escapeHtml(jobLabel(report))} · ${escapeHtml(report.serviceDate || "")}</p>
+        <p class="meta">${escapeHtml(jobLabel(report))} · ${escapeHtml(formatDateShort(report.serviceDate) || "")}</p>
         <p class="meta">Job ${escapeHtml(report.jobNumber)} · ${escapeHtml(report.odometer ? report.odometer + " km" : "")}</p>
         <p class="meta">Customer: ${escapeHtml(report.customerName || "—")}</p>
         <p class="meta">Technician: ${escapeHtml(report.technicianName || "—")}</p>

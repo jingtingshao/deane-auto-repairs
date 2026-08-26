@@ -8,6 +8,22 @@ function money(n) {
   return `$${(Number(n) || 0).toFixed(2)}`;
 }
 
+function formatDateShort(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const iso = raw.slice(0, 10);
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[3]}/${m[2]}/${m[1].slice(2)}`;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return iso || raw;
+  return new Intl.DateTimeFormat("en-NZ", {
+    timeZone: "Pacific/Auckland",
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  }).format(d);
+}
+
 function safeFilename(number, kind) {
   const base = String(number || kind || "document")
     .replace(/[^\w.-]+/g, "-")
@@ -66,7 +82,7 @@ function buildBillingPdf(doc) {
 
       pdf.font("Helvetica").fontSize(10).fillColor("#5b6777");
       if (!isInvoice && doc.validUntil) {
-        pdf.text(`Valid until ${doc.validUntil}`);
+        pdf.text(`Valid until ${formatDateShort(doc.validUntil)}`);
       }
       if (business.gstNumber) {
         pdf.text(`GST number ${business.gstNumber}`);

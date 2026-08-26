@@ -33,6 +33,22 @@ function money(n) {
   }).format(Number(n) || 0);
 }
 
+function formatDateShort(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const iso = raw.slice(0, 10);
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[3]}/${m[2]}/${m[1].slice(2)}`;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return iso || raw;
+  return new Intl.DateTimeFormat("en-NZ", {
+    timeZone: "Pacific/Auckland",
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  }).format(d);
+}
+
 function statusLabel(doc) {
   if (doc.kind === "invoice") {
     return doc.status === "sent" ? "Tax invoice" : "Tax invoice";
@@ -146,7 +162,7 @@ function render(doc) {
     <section class="panel">
       <h1>${escapeHtml(isInvoice ? "Tax Invoice" : "Quote")} ${escapeHtml(doc.number)}</h1>
       <p class="meta">${escapeHtml(statusLabel(doc))}</p>
-      ${doc.validUntil && !isInvoice ? `<p class="meta">Valid until ${escapeHtml(doc.validUntil)}</p>` : ""}
+      ${doc.validUntil && !isInvoice ? `<p class="meta">Valid until ${escapeHtml(formatDateShort(doc.validUntil))}</p>` : ""}
       ${gstLine}
       <div class="grid-2" style="margin-top:1rem">
         <div>

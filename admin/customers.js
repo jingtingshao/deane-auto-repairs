@@ -18,16 +18,7 @@ let customerSortDir = "asc";
 const RECENT_CUSTOMER_LIMIT = 25;
 
 function formatReminderSent(iso) {
-  const raw = String(iso || "").trim();
-  if (!raw) return "";
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return raw.slice(0, 10);
-  return new Intl.DateTimeFormat("en-NZ", {
-    timeZone: "Pacific/Auckland",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(d);
+  return Admin.formatDateShort(iso);
 }
 
 function canSendWofReminder(row) {
@@ -317,7 +308,7 @@ function renderCustomers() {
         : ""
     }</p>
     <div class="billing-table-wrap">
-      <table class="billing-table">
+      <table class="billing-table customer-list-table">
         <thead>
           <tr>
             ${sortHeader("seq", "#")}
@@ -337,7 +328,7 @@ function renderCustomers() {
               (row) => `
             <tr class="customer-row" data-key="${Admin.escapeAttr(row.key)}">
               <td class="billing-number customer-index">${Number(row.customerSeq || row.dailySeq) || "—"}</td>
-              <td>${Admin.escapeHtml(
+              <td class="customer-plate">${Admin.escapeHtml(
                 (Array.isArray(row.registrations) && row.registrations.length
                   ? row.registrations
                   : String(row.registration || "").split(",")
@@ -348,24 +339,24 @@ function renderCustomers() {
               )}</td>
               <td><button type="button" class="customer-name-link" data-invoices="1">${Admin.escapeHtml(namesFromRow(row).firstName || "—")}</button></td>
               <td><button type="button" class="customer-name-link" data-invoices="1">${Admin.escapeHtml(namesFromRow(row).lastName || "—")}</button></td>
-              <td>${Admin.escapeHtml(row.customerAddress || "—")}</td>
-              <td>
+              <td class="customer-address"><span class="customer-address-text">${Admin.escapeHtml(row.customerAddress || "—")}</span></td>
+              <td class="customer-phone">
                 ${
                   row.customerPhone
                     ? `<a href="tel:${Admin.escapeAttr(row.customerPhone)}">${Admin.escapeHtml(row.customerPhone)}</a>`
                     : "—"
                 }
               </td>
-              <td>
+              <td class="customer-email">
                 ${
                   row.customerEmail
                     ? `<a href="mailto:${Admin.escapeAttr(row.customerEmail)}">${Admin.escapeHtml(row.customerEmail)}</a>`
                     : "—"
                 }
               </td>
-              <td>
+              <td class="customer-wof">
                 <span class="badge ${Admin.escapeAttr(row.wofStatus)}">${Admin.escapeHtml(wofLabel(row))}</span>
-                <div class="muted small">${Admin.escapeHtml(row.wofExpiry || "—")}</div>
+                <div class="muted small">${Admin.escapeHtml(Admin.formatDateShort(row.wofExpiry) || "—")}</div>
               </td>
               <td class="customer-actions">
                 <button type="button" class="ghost" data-edit-key="${Admin.escapeAttr(row.key)}">Edit</button>
@@ -381,7 +372,7 @@ function renderCustomers() {
                 }
                 ${
                   row.canWofReminder || canSendWofReminder(row)
-                    ? `<button type="button" class="primary" data-remind-key="${Admin.escapeAttr(row.key)}">Email reminder</button>`
+                    ? `<button type="button" class="primary compact" data-remind-key="${Admin.escapeAttr(row.key)}">Remind</button>`
                     : row.wofReminderSentAt
                     ? `<span class="reminder-sent">Sent ${Admin.escapeHtml(formatReminderSent(row.wofReminderSentAt))}</span>`
                     : ""
@@ -733,7 +724,7 @@ async function sendReminder(key, btn) {
     alert(err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = "Email reminder";
+    btn.textContent = "Remind";
   }
 }
 
