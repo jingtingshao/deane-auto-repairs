@@ -314,28 +314,8 @@ function renderBillingFilters() {
 
 function renderBillingList() {
   const kindDocs = billingDocs.filter((d) => matchesListFilter(d) && matchesPartyFilter(d));
-  if (
-    !billingDocs.filter(
-      (d) => d.kind === listKind && d.status !== "void" && matchesPartyFilter(d)
-    ).length
-  ) {
-    billingList.innerHTML = partyFilterActive()
-      ? `<div class="empty">No ${listKind === "invoice" ? "invoices" : "quotes"} for ${Admin.escapeHtml(partyFilter.customerName || "this customer")}.</div>`
-      : listKind === "invoice"
-        ? '<div class="empty">No invoices yet. Convert an accepted quote, or use Invoice now above.</div>'
-        : '<div class="empty">No quotes yet. Use the buttons above to start.</div>';
-    return;
-  }
-
   const query = billingSearch?.value || "";
   const docs = kindDocs.filter((d) => matchesBillingSearch(d, query));
-  if (!docs.length) {
-    billingList.innerHTML =
-      listKind === "invoice"
-        ? '<div class="empty">No matching invoices.</div>'
-        : '<div class="empty">No matching quotes.</div>';
-    return;
-  }
 
   if (listKind === "invoice") {
     billingList.innerHTML = `
@@ -343,29 +323,33 @@ function renderBillingList() {
         <table class="billing-table invoice-list-table">
           <thead>
             <tr>
-              <th>Invoice number</th>
+              <th>Invoice no</th>
               <th>Date</th>
               <th>Customer name</th>
               <th class="invoice-money">Invoice amount</th>
-              <th class="invoice-money">Payment</th>
-              <th class="invoice-money">Due</th>
+              <th class="invoice-money">Payment made</th>
+              <th class="invoice-money">Balance</th>
             </tr>
           </thead>
           <tbody>
-            ${docs
-              .map((d) => {
-                const when =
-                  formatListDate(d.sortAt || d.sentAt || d.createdAt || d.updatedAt) || "—";
-                return `<tr class="invoice-row" data-id="${Admin.escapeAttr(d.id)}">
-                  <td class="billing-number">${Admin.escapeHtml(d.number || "—")}</td>
-                  <td>${Admin.escapeHtml(when)}</td>
-                  <td>${Admin.escapeHtml(d.customerName || "—")}</td>
-                  <td class="invoice-money">${money(d.totalIncl)}</td>
-                  <td class="invoice-money invoice-payment">${money(d.amountPaid)}</td>
-                  <td class="invoice-money invoice-due">${money(d.balanceDue)}</td>
-                </tr>`;
-              })
-              .join("")}
+            ${
+              docs.length
+                ? docs
+                    .map((d) => {
+                      const when =
+                        formatListDate(d.sortAt || d.sentAt || d.createdAt || d.updatedAt) || "—";
+                      return `<tr class="invoice-row" data-id="${Admin.escapeAttr(d.id)}">
+                        <td class="billing-number">${Admin.escapeHtml(d.number || "—")}</td>
+                        <td>${Admin.escapeHtml(when)}</td>
+                        <td>${Admin.escapeHtml(d.customerName || "—")}</td>
+                        <td class="invoice-money">${money(d.totalIncl)}</td>
+                        <td class="invoice-money invoice-payment">${money(d.amountPaid)}</td>
+                        <td class="invoice-money invoice-due">${money(d.balanceDue)}</td>
+                      </tr>`;
+                    })
+                    .join("")
+                : '<tr><td colspan="6" class="empty-table-cell">No matching invoices.</td></tr>'
+            }
           </tbody>
         </table>
       </div>`;
@@ -380,34 +364,31 @@ function renderBillingList() {
       <table class="billing-table quote-list-table">
         <thead>
           <tr>
-            <th>Quote number</th>
+            <th>Quote no</th>
             <th>Date</th>
             <th>Customer name</th>
-            <th>Plate</th>
-            <th>Total</th>
-            <th>Status</th>
+            <th>Vehicle</th>
+            <th class="invoice-money">Quote amount</th>
           </tr>
         </thead>
         <tbody>
-          ${docs
-            .map((d) => {
-              const when =
-                formatListDate(d.sortAt || d.sentAt || d.createdAt || d.updatedAt) || "—";
-              const statusText =
-                d.status === "sent" && d.viewedAt
-                  ? "Viewed"
-                  : String(d.status || "draft").replace(/^./, (ch) => ch.toUpperCase());
-              const statusClass = d.status === "sent" && d.viewedAt ? "viewed" : d.status;
-              return `<tr class="quote-row" data-id="${Admin.escapeAttr(d.id)}">
-                <td class="billing-number">${Admin.escapeHtml(d.number || "—")}</td>
-                <td>${Admin.escapeHtml(when)}</td>
-                <td><button type="button" class="customer-name-link" data-party-id="${Admin.escapeAttr(d.customerId || "")}" data-party-name="${Admin.escapeAttr(d.customerName || "")}" data-party-email="${Admin.escapeAttr(d.customerEmail || "")}">${Admin.escapeHtml(d.customerName || "—")}</button></td>
-                <td>${Admin.escapeHtml(d.registration || "—")}</td>
-                <td class="invoice-due">${money(d.totalIncl)}</td>
-                <td><span class="badge ${Admin.escapeAttr(statusClass || "draft")}">${Admin.escapeHtml(statusText)}</span></td>
-              </tr>`;
-            })
-            .join("")}
+          ${
+            docs.length
+              ? docs
+                  .map((d) => {
+                    const when =
+                      formatListDate(d.sortAt || d.sentAt || d.createdAt || d.updatedAt) || "—";
+                    return `<tr class="quote-row" data-id="${Admin.escapeAttr(d.id)}">
+                      <td class="billing-number">${Admin.escapeHtml(d.number || "—")}</td>
+                      <td>${Admin.escapeHtml(when)}</td>
+                      <td><button type="button" class="customer-name-link" data-party-id="${Admin.escapeAttr(d.customerId || "")}" data-party-name="${Admin.escapeAttr(d.customerName || "")}" data-party-email="${Admin.escapeAttr(d.customerEmail || "")}">${Admin.escapeHtml(d.customerName || "—")}</button></td>
+                      <td>${Admin.escapeHtml([d.registration, d.vehicle].filter(Boolean).join(" · ") || "—")}</td>
+                      <td class="invoice-money invoice-due">${money(d.totalIncl)}</td>
+                    </tr>`;
+                  })
+                  .join("")
+              : '<tr><td colspan="5" class="empty-table-cell">No matching quotes.</td></tr>'
+          }
         </tbody>
       </table>
     </div>`;

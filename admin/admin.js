@@ -49,6 +49,22 @@ function showApp() {
   app.hidden = false;
 }
 
+function todayOverline() {
+  return new Intl.DateTimeFormat("en-NZ", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "Pacific/Auckland",
+  })
+    .format(new Date())
+    .toUpperCase();
+}
+
+function setOverline(text) {
+  const el = document.getElementById("view-overline");
+  if (el) el.textContent = text || "";
+}
+
 function setSection(name) {
   if (name === "billing") name = "quotes";
   const dashboardSection = document.getElementById("dashboard-section");
@@ -58,30 +74,49 @@ function setSection(name) {
   const jobsSection = document.getElementById("jobs-section");
   const btnNew = document.getElementById("btn-new");
   const billingOpen = name === "quotes" || name === "invoices";
+  if (app) app.dataset.section = name;
   if (dashboardSection) dashboardSection.hidden = name !== "dashboard";
   if (reportsSection) reportsSection.hidden = name !== "reports";
   if (billingSection) billingSection.hidden = !billingOpen;
   if (customersSection) customersSection.hidden = name !== "customers";
   if (jobsSection) jobsSection.hidden = name !== "jobs";
   if (btnNew) {
-    btnNew.hidden = name !== "customers";
-    btnNew.textContent = "New customer";
+    btnNew.hidden = false;
+    btnNew.textContent = "+ New customer";
   }
-  document.getElementById("nav-dashboard")?.classList.toggle("is-active", name === "dashboard");
-  document.getElementById("nav-reports")?.classList.toggle("is-active", name === "reports");
-  document.getElementById("nav-quotes")?.classList.toggle("is-active", name === "quotes");
-  document.getElementById("nav-invoices")?.classList.toggle("is-active", name === "invoices");
-  document.getElementById("nav-customers")?.classList.toggle("is-active", name === "customers");
-  document.getElementById("nav-jobs")?.classList.toggle("is-active", name === "jobs");
-  if (name === "reports" && listView && !listView.hidden) {
-    viewTitle.textContent = "Reports";
+  const navMap = {
+    dashboard: "nav-dashboard",
+    reports: "nav-reports",
+    quotes: "nav-quotes",
+    invoices: "nav-invoices",
+    customers: "nav-customers",
+    jobs: "nav-jobs",
+  };
+  Object.entries(navMap).forEach(([section, id]) => {
+    document.getElementById(id)?.classList.toggle("active", name === section);
+  });
+  if (name === "reports") {
+    setOverline("SERVICE REPORTS");
+    if (listView && !listView.hidden) viewTitle.textContent = "Reports";
   }
   if (name === "dashboard") {
-    viewTitle.textContent = "Dashboard";
+    setOverline(todayOverline());
+    if (viewTitle) viewTitle.innerHTML = "Today in the <em>workshop.</em>";
     window.DeaneDashboard?.load?.();
   }
-  if (name === "quotes") viewTitle.textContent = "Quotes";
-  if (name === "invoices") viewTitle.textContent = "Invoices";
+  if (name === "quotes") {
+    setOverline("QUOTES");
+    viewTitle.textContent = "Quotes";
+  }
+  if (name === "invoices") {
+    setOverline("INVOICES");
+    viewTitle.textContent = "Invoices";
+  }
+  if (name === "jobs") setOverline("JOB BOARD");
+  if (name === "customers") {
+    setOverline("CUSTOMERS");
+    viewTitle.textContent = "Customers";
+  }
 }
 
 function confirmPublicCustomerLink(kind) {
@@ -395,8 +430,19 @@ document.getElementById("btn-logout").addEventListener("click", async () => {
   showLogin();
 });
 
+document.getElementById("sidebar-brand")?.addEventListener("click", () => {
+  setSection("dashboard");
+});
+
 document.getElementById("nav-dashboard")?.addEventListener("click", () => {
   setSection("dashboard");
+});
+
+document.getElementById("btn-search")?.addEventListener("click", () => {
+  setSection("customers");
+  viewTitle.textContent = "Customers";
+  window.DeaneCustomers?.showList?.();
+  document.getElementById("customers-search")?.focus();
 });
 
 document.getElementById("nav-reports").addEventListener("click", async () => {
@@ -447,21 +493,19 @@ document.getElementById("btn-back").addEventListener("click", async () => {
 });
 
 document.getElementById("btn-new").addEventListener("click", async () => {
-  const customersOpen = !document.getElementById("customers-section")?.hidden;
-  if (customersOpen) {
-    if (window.DeaneCustomers?.newCustomer) {
-      window.DeaneCustomers.newCustomer();
-    } else {
-      const form = document.getElementById("customer-form");
-      if (form) {
-        form.hidden = false;
-        form.removeAttribute("hidden");
-        document.getElementById("customer-first-name")?.focus();
-      }
-    }
+  setSection("customers");
+  viewTitle.textContent = "Customers";
+  if (window.DeaneCustomers?.showList) window.DeaneCustomers.showList();
+  if (window.DeaneCustomers?.newCustomer) {
+    window.DeaneCustomers.newCustomer();
     return;
   }
-  alert("Create a report from an invoice. Open the invoice and click Create report.");
+  const form = document.getElementById("customer-form");
+  if (form) {
+    form.hidden = false;
+    form.removeAttribute("hidden");
+    document.getElementById("customer-first-name")?.focus();
+  }
 });
 
 function normalizeSearch(value) {

@@ -1,13 +1,16 @@
 :root {
   --blue: #1565c0;
   --blue-deep: #0d47a1;
+  --blue-soft: #edf5ff;
   --red: #e53935;
   --ink: #1a2332;
   --muted: #5b6777;
   --line: #d7e0ea;
+  --line-strong: #b8c8d8;
   --ok: #2e7d32;
   --attention: #c62828;
   --paper: #f6f8fb;
+  --cream: #fbfaf7;
 }
 
 * {
@@ -115,6 +118,35 @@ main {
   color: var(--muted);
 }
 
+.document-summary {
+  border-top: 5px solid var(--blue);
+}
+
+.document-summary h1 {
+  color: var(--ink);
+}
+
+.detail-card {
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--cream);
+}
+
+.detail-label {
+  margin: 0 0 0.15rem;
+  color: var(--blue-deep);
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.detail-value {
+  margin: 0;
+}
+
 .grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -124,6 +156,7 @@ main {
 .lines {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .lines th,
@@ -138,7 +171,24 @@ main {
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--muted);
+  color: var(--blue-deep);
+}
+
+.lines th:first-child,
+.lines td:first-child {
+  width: 54%;
+}
+
+.lines th:nth-child(2),
+.lines td:nth-child(2) {
+  width: 10%;
+}
+
+.lines th:nth-child(3),
+.lines td:nth-child(3),
+.lines th:nth-child(4),
+.lines td:nth-child(4) {
+  width: 18%;
 }
 
 .lines .num {
@@ -214,8 +264,10 @@ button.primary {
 
 .pay {
   margin-top: 1.25rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--line);
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--blue-soft);
 }
 
 .pay h2 {
@@ -225,6 +277,7 @@ button.primary {
 .pay h3 {
   margin: 0.85rem 0 0.35rem;
   font-size: 1rem;
+  color: var(--blue-deep);
 }
 
 .pay p {
@@ -250,6 +303,13 @@ button.primary {
   display: none;
 }
 
+.letterhead-inner {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.4rem;
+  align-items: flex-start;
+}
+
 .letterhead-brand {
   margin: 0 0 0.35rem;
   display: flex;
@@ -259,14 +319,19 @@ button.primary {
 }
 
 .letterhead-brand .script {
-  font-size: 1.85rem;
-  text-shadow: none;
+  font-size: 2.25rem;
+  text-shadow:
+    -1px -1px 0 #fff,
+    1px -1px 0 #fff,
+    -1px 1px 0 #fff,
+    1px 1px 0 #fff,
+    0 2px 0 rgba(0, 0, 0, 0.12);
   color: var(--red);
 }
 
 .letterhead-brand .sans {
   color: var(--ink);
-  font-size: 1.25rem;
+  font-size: 1.45rem;
 }
 
 .letterhead-contact {
@@ -274,6 +339,10 @@ button.primary {
   color: var(--muted);
   font-size: 0.95rem;
   line-height: 1.45;
+}
+
+.letterhead-contact strong {
+  color: var(--blue-deep);
 }
 
 .letterhead-contact a {
@@ -288,9 +357,31 @@ button.primary {
 }
 
 @media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   body {
     background: #fff;
-    color: #000;
+    color: var(--ink);
+    font-size: 10.5pt;
+    line-height: 1.28;
+  }
+
+  .wrap {
+    width: 182mm;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  main {
+    padding: 0;
   }
 
   .top,
@@ -302,9 +393,9 @@ button.primary {
 
   .letterhead {
     display: block;
-    margin: 0 0 1.25rem;
-    padding: 0 0 0.85rem;
-    border-bottom: 2px solid #1565c0;
+    margin: 0 0 0.9rem;
+    padding: 0 0 0.65rem;
+    border-bottom: 3px solid var(--blue);
   }
 
   .letterhead-brand .script {
@@ -312,16 +403,82 @@ button.primary {
   }
 
   .letterhead-contact {
-    color: #333;
+    color: var(--muted);
+    text-align: right;
+    font-size: 9.5pt;
   }
 
   .panel {
-    border: none;
-    padding: 0;
-    border-radius: 0;
+    border: 1px solid var(--line);
+    padding: 0.7rem 0.8rem;
+    border-radius: 12px;
+    margin-bottom: 0.75rem;
+    box-shadow: none;
+    break-inside: avoid;
   }
 
   .panel + .panel {
-    margin-top: 1rem;
+    margin-top: 0;
+  }
+
+  .document-summary {
+    border-top: 5px solid var(--blue);
+  }
+
+  .panel h1 {
+    font-size: 22pt;
+    line-height: 1;
+    margin-bottom: 0.15rem;
+  }
+
+  .panel h2 {
+    font-size: 14pt;
+    margin-bottom: 0.35rem;
+  }
+
+  .grid-2 {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .detail-card {
+    padding: 0.55rem 0.65rem;
+  }
+
+  .lines th,
+  .lines td {
+    padding: 0.33rem 0.25rem;
+  }
+
+  .totals {
+    margin-top: 0.65rem;
+  }
+
+  .totals p {
+    min-width: 260px;
+  }
+
+  .totals .grand {
+    color: var(--blue-deep);
+    font-size: 12pt;
+  }
+
+  .pay {
+    margin-top: 0.8rem;
+    padding: 0.65rem 0.75rem;
+    border-color: var(--line-strong);
+  }
+
+  .pay h2,
+  .pay h3 {
+    color: var(--blue-deep);
+  }
+
+  .pay-terms {
+    margin-top: 0.2rem;
+  }
+
+  .pay-terms li {
+    margin: 0.12rem 0;
   }
 }

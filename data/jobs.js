@@ -25,7 +25,7 @@ function normalizeJobStatus(status, parts) {
   let next = String(status || "").trim();
   if (LEGACY_STATUS_MAP[next]) next = LEGACY_STATUS_MAP[next];
   if (!isJobStatus(next)) next = "in_progress";
-  if (next === "completed" || next === "collected") return next;
+  if (next === "waiting_parts" || next === "completed" || next === "collected") return next;
   return suggestStatusFromParts(next, parts);
 }
 

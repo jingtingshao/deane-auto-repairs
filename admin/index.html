@@ -8,11 +8,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260826customerfit" />
-    <link rel="stylesheet" href="admin-refresh.css?v=20260826workshop" />
+    <link rel="stylesheet" href="admin.css?v=20260826quoteinvoice" />
+    <link rel="stylesheet" href="admin-refresh.css?v=20260826greencomplete" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -27,28 +27,39 @@
       </form>
     </div>
 
-    <div id="app" class="app" hidden>
+    <div id="app" class="app workshop-app" data-section="dashboard" hidden>
+      <aside class="sidebar" aria-label="Workshop navigation">
+        <button type="button" class="brand" id="sidebar-brand">
+          <span>Deane</span>
+          <strong>AUTO REPAIRS</strong>
+          <small>WORKSHOP SYSTEM</small>
+        </button>
+        <nav>
+          <button type="button" id="nav-dashboard" class="active"><b>▦</b> Today</button>
+          <button type="button" id="nav-jobs"><b>▤</b> Job board <i id="nav-jobs-count" hidden>0</i></button>
+          <button type="button" id="nav-quotes"><b>$</b> Quotes <i id="nav-quotes-count" hidden>0</i></button>
+          <button type="button" id="nav-invoices"><b>$</b> Invoices <i id="nav-invoices-count" hidden>0</i></button>
+          <button type="button" id="nav-customers"><b>◉</b> Customers</button>
+          <button type="button" id="nav-reports"><b>▧</b> Service reports</button>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="online-dot"></span> Workshop online
+          <br /><small>Live workshop data</small>
+          <br /><a href="/" target="_blank" rel="noopener">Website</a>
+        </div>
+      </aside>
+      <main>
       <header class="topbar">
         <div>
-          <p class="brand small"><span class="script">Deane</span> ADMIN</p>
-          <h1 id="view-title">Dashboard</h1>
+          <p class="overline" id="view-overline">TODAY</p>
+          <h1 id="view-title">Today in the <em>workshop.</em></h1>
         </div>
-        <div class="topbar-actions">
-          <nav class="admin-nav" aria-label="Admin sections">
-            <button type="button" id="nav-dashboard" class="nav-tab is-active">Dashboard</button>
-            <button type="button" id="nav-reports" class="nav-tab">Reports</button>
-            <button type="button" id="nav-jobs" class="nav-tab">Jobs</button>
-            <button type="button" id="nav-quotes" class="nav-tab">Quotes</button>
-            <button type="button" id="nav-invoices" class="nav-tab">Invoices</button>
-            <button type="button" id="nav-customers" class="nav-tab">Customers</button>
-          </nav>
-          <a href="/" target="_blank" rel="noopener">Website</a>
-          <button type="button" id="btn-new" class="primary">New report</button>
-          <button type="button" id="btn-logout" class="ghost">Sign out</button>
+        <div class="top-actions">
+          <button type="button" id="btn-search" class="button ghost">Search</button>
+          <button type="button" id="btn-new" class="button dark">+ New customer</button>
+          <button type="button" id="btn-logout" class="avatar" title="Sign out">DA</button>
         </div>
       </header>
-
-      <main>
         <section id="dashboard-section">
           <div id="dashboard-root" class="dashboard">
             <p class="muted">Loading dashboard…</p>
@@ -515,10 +526,10 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260826datefmt"></script>
-    <script src="dashboard.js?v=20260826datefmt"></script>
+    <script src="admin.js?v=20260826preview"></script>
+    <script src="dashboard.js?v=20260826greencomplete"></script>
     <script src="jobs.js?v=20260826datefmt"></script>
-    <script src="billing.js?v=20260826datefmt"></script>
+    <script src="billing.js?v=20260826quoteinvoice"></script>
     <script src="customers.js?v=20260826datefmt"></script>
   </body>
 </html>

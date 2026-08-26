@@ -692,6 +692,12 @@ label.check input {
   font-weight: 700;
 }
 
+.billing-table td.empty-table-cell {
+  padding: 1.4rem 0.85rem;
+  color: var(--muted);
+  text-align: center;
+}
+
 .billing-table td.job-table-status {
   white-space: nowrap;
 }

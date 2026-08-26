@@ -146,34 +146,37 @@ function render(doc) {
 
   const letterhead = `
     <header class="letterhead">
-      <p class="letterhead-brand"><span class="script">Deane</span> <span class="sans">AUTO REPAIRS</span></p>
-      <p class="letterhead-contact">
-        ${escapeHtml(shopName)}<br />
-        ${escapeHtml(shopLandmark)}<br />
-        ${escapeHtml(shopStreet)}<br />
-        <a href="tel:${escapeHtml(shopPhoneTel)}">${escapeHtml(shopPhone)}</a>
-        · <a href="mailto:${escapeHtml(shopEmail)}">${escapeHtml(shopEmail)}</a>
-      </p>
+      <div class="letterhead-inner">
+        <div>
+          <p class="letterhead-brand"><span class="script">Deane</span> <span class="sans">AUTO REPAIRS</span></p>
+          <p class="letterhead-contact"><strong>${escapeHtml(shopName)}</strong><br />${escapeHtml(shopLandmark)}</p>
+        </div>
+        <p class="letterhead-contact">
+          ${escapeHtml(shopStreet)}<br />
+          <a href="tel:${escapeHtml(shopPhoneTel)}">${escapeHtml(shopPhone)}</a>
+          · <a href="mailto:${escapeHtml(shopEmail)}">${escapeHtml(shopEmail)}</a>
+        </p>
+      </div>
     </header>`;
 
   docEl.innerHTML = `
     ${letterhead}
     ${banner}
-    <section class="panel">
+    <section class="panel document-summary">
       <h1>${escapeHtml(isInvoice ? "Tax Invoice" : "Quote")} ${escapeHtml(doc.number)}</h1>
       <p class="meta">${escapeHtml(statusLabel(doc))}</p>
       ${doc.validUntil && !isInvoice ? `<p class="meta">Valid until ${escapeHtml(formatDateShort(doc.validUntil))}</p>` : ""}
       ${gstLine}
       <div class="grid-2" style="margin-top:1rem">
-        <div>
-          <p class="meta">Customer</p>
-          <p><strong>${escapeHtml(doc.customerName || "—")}</strong></p>
+        <div class="detail-card">
+          <p class="detail-label">Customer</p>
+          <p class="detail-value"><strong>${escapeHtml(doc.customerName || "—")}</strong></p>
           ${doc.customerEmail ? `<p class="meta">${escapeHtml(doc.customerEmail)}</p>` : ""}
           ${doc.customerPhone ? `<p class="meta">${escapeHtml(doc.customerPhone)}</p>` : ""}
         </div>
-        <div>
-          <p class="meta">Vehicle</p>
-          <p><strong>${escapeHtml(doc.registration || "—")}</strong></p>
+        <div class="detail-card">
+          <p class="detail-label">Vehicle</p>
+          <p class="detail-value"><strong>${escapeHtml(doc.registration || "—")}</strong></p>
           <p class="meta">${escapeHtml(doc.vehicle || "")}</p>
         </div>
       </div>

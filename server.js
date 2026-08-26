@@ -2383,6 +2383,104 @@ app.post("/api/admin/restore-workshop", requireAdmin, (req, res) => {
   }
 });
 
+function aucklandClock(iso) {
+  const raw = String(iso || "").trim();
+  const date = raw ? new Date(raw) : null;
+  if (!date || Number.isNaN(date.getTime())) return { time: "—", period: "" };
+  const parts = new Intl.DateTimeFormat("en-NZ", {
+    timeZone: "Pacific/Auckland",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(date);
+  const hour = parts.find((part) => part.type === "hour")?.value || "";
+  const minute = parts.find((part) => part.type === "minute")?.value || "00";
+  const period = (parts.find((part) => part.type === "dayPeriod")?.value || "").toUpperCase();
+  return { time: `${hour}:${minute}`, period };
+}
+
+function billingDocForJob(job, billingDocs) {
+  return (
+    (job.invoiceId && billingDocs.find((doc) => doc.id === job.invoiceId)) ||
+    (job.quoteId && billingDocs.find((doc) => doc.id === job.quoteId)) ||
+    null
+  );
+}
+
+function jobMentionsWof(job, billingDocs) {
+  const bill = billingDocForJob(job, billingDocs);
+  if ((bill?.lines || []).some((line) => catalog.lineLooksLikeWof(line.description))) return true;
+  return /\bwof\b/i.test(
+    [job.workRequested, job.notes, bill?.notes].filter(Boolean).join(" ")
+  );
+}
+
+function workLabelForJob(job, billingDocs) {
+  const first = String(job.workRequested || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .find(Boolean);
+  if (first) return first.slice(0, 90);
+  const bill = billingDocForJob(job, billingDocs);
+  const line = (bill?.lines || []).find((row) => String(row.description || "").trim());
+  if (line) return String(line.description).trim().slice(0, 90);
+  return "Workshop job";
+}
+
+function nextActionForStatus(status) {
+  if (status === "waiting_parts") return "Waiting on parts";
+  if (status === "completed") return "Ready for collection";
+  if (status === "collected") return "Vehicle collected";
+  return "Continue workshop work";
+}
+
+function snapshotForPlate(plate, reports, customers) {
+  const key = plateKey(plate);
+  let wofExpiry = "";
+  let photo = "";
+  let lastService = "";
+  let odometer = "";
+  if (key) {
+    for (const customer of customers) {
+      const hit = normalizeVehicles(customer, customer).find(
+        (vehicle) => plateKey(vehicle.registration) === key
+      );
+      if (hit) {
+        wofExpiry = hit.wofExpiry || "";
+        break;
+      }
+    }
+    const latest = reports
+      .filter((report) => plateKey(report.registration) === key)
+      .sort((a, b) =>
+        String(b.serviceDate || b.updatedAt || "").localeCompare(
+          String(a.serviceDate || a.updatedAt || "")
+        )
+      )[0];
+    if (latest) {
+      lastService = String(latest.serviceDate || latest.updatedAt || "").slice(0, 10);
+      photo = reportPhotoList(latest)[0] || "";
+      odometer = String(latest.odometer || "");
+    }
+  }
+  const meta = wofMeta(wofExpiry);
+  let wofDaysLabel = "No WOF date";
+  if (meta.daysUntil == null) wofDaysLabel = "No WOF date";
+  else if (meta.daysUntil < 0) wofDaysLabel = `${Math.abs(meta.daysUntil)} days overdue`;
+  else wofDaysLabel = `${meta.daysUntil} days remaining`;
+  return {
+    wofExpiry,
+    wofExpiryLabel: formatDateShort(wofExpiry) || "—",
+    wofDays: meta.daysUntil,
+    wofDaysLabel,
+    wofStatus: meta.wofStatus,
+    lastService,
+    lastServiceLabel: formatDateShort(lastService) || "—",
+    photo,
+    odometer,
+  };
+}
+
 app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
   try {
     const jobs = readJobs();
@@ -2471,7 +2569,7 @@ app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
         quotesAwaiting += 1;
         quotesAwaitingTotal = catalog.round2(quotesAwaitingTotal + totals.totalIncl);
       }
-      if (doc.kind === "invoice") {
+      if (doc.kind === "invoice" && doc.status !== "draft") {
         const payment = normalizeInvoicePayment(doc, {}, totals);
         if (isInvoiceOverdue(doc, payment)) {
           invoicesOverdueCount += 1;
@@ -2547,6 +2645,70 @@ app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
 
     const financialMonthly = [...monthBuckets.values()];
     const activityMonthLabel = monthLongLabel(activityMonthKey);
+    const reports = readReports();
+    const customers = readSavedCustomers();
+    const activeJobs = jobs
+      .map((job) => ({
+        job,
+        status: jobsLib.normalizeJobStatus(job.status, job.parts || []),
+      }))
+      .filter((row) => row.status !== "collected")
+      .sort((a, b) =>
+        String(b.job.updatedAt || b.job.createdAt || "").localeCompare(
+          String(a.job.updatedAt || a.job.createdAt || "")
+        )
+      );
+    const boardJobs = activeJobs.slice(0, 8).map(({ job, status }) => {
+      const clock = aucklandClock(job.createdAt || job.updatedAt);
+      const snap = snapshotForPlate(job.registration, reports, customers);
+      return {
+        id: job.id,
+        number: job.number || "",
+        status,
+        registration: String(job.registration || "").toUpperCase(),
+        vehicle: job.vehicle || "",
+        customerName: job.customerName || "",
+        technicianName: job.technicianName || "",
+        workLabel: workLabelForJob(job, billing),
+        createdAt: job.createdAt || "",
+        updatedAt: job.updatedAt || "",
+        time: clock.time,
+        period: clock.period,
+        odometer: job.odometer || snap.odometer || "",
+        lastServiceLabel: snap.lastServiceLabel,
+        wofExpiryLabel: snap.wofExpiryLabel,
+        wofDaysLabel: snap.wofDaysLabel,
+        wofStatus: snap.wofStatus,
+        photo: snap.photo,
+        nextAction: nextActionForStatus(status),
+        mentionsWof: jobMentionsWof(job, billing),
+      };
+    });
+    const wofBoard = boardJobs.filter((row) => row.mentionsWof);
+    const nextWof = wofBoard
+      .filter((row) => String(row.createdAt || "").slice(0, 10) === today)
+      .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))[0];
+    const wofToday = {
+      count: wofBoard.length,
+      nextLabel: nextWof
+        ? `Next on the board ${nextWof.time}${nextWof.period ? ` ${nextWof.period}` : ""}`
+        : wofBoard.length
+          ? "On the job board"
+          : "No WOF jobs on the board",
+    };
+    const activity = jobs.map((job) => ({
+        tone: "red",
+        icon: "+",
+        title: "Job created",
+        detail: `${workLabelForJob(job, billing)} · ${
+          String(job.registration || "").toUpperCase() || "No plate"
+        }`,
+        at: job.createdAt || job.updatedAt || "",
+      }));
+    const activityFeed = activity
+      .filter((row) => row.at)
+      .sort((a, b) => String(b.at).localeCompare(String(a.at)))
+      .slice(0, 8);
 
     res.json({
       jobs: {
@@ -2597,6 +2759,17 @@ app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
         services: servicesThisMonth,
         wofs: wofsThisMonth,
         collected: collectedActivityMonth,
+      },
+      wofToday,
+      board: {
+        total: activeJobs.length,
+        jobs: boardJobs,
+      },
+      activity: activityFeed,
+      nav: {
+        jobs: jobTotal,
+        quotes: quotesAwaiting,
+        invoices: invoicesUnpaidCount,
       },
     });
   } catch (err) {
