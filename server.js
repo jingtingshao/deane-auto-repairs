@@ -51,6 +51,8 @@ function resolveAdminPin() {
 }
 
 const ADMIN_PIN = resolveAdminPin();
+/** Temporary public-site lock. Empty = unlocked (go-live). Set SITE_PIN on Render until the website is ready. */
+const SITE_PIN = String(process.env.SITE_PIN || "").trim();
 const ROOT = __dirname;
 
 function isWritableDir(dir) {
@@ -2371,11 +2373,14 @@ function nextJobNumber(reports) {
 }
 
 const ADMIN_SESSION_COOKIE = "deane_admin";
+const SITE_SESSION_COOKIE = "deane_site";
 const ADMIN_SESSION_MS = 12 * 60 * 60 * 1000;
+const SITE_SESSION_MS = 12 * 60 * 60 * 1000;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_FAILS = 8;
 const LOGIN_BLOCK_MS = 15 * 60 * 1000;
 const adminSessions = new Map();
+const siteSessions = new Map();
 const loginAttempts = new Map();
 
 function clientIp(req) {
@@ -2404,11 +2409,19 @@ function cookieSecure(req) {
   return isProduction() || req.secure || req.get("x-forwarded-proto") === "https";
 }
 
-function sessionCookieHeader(req, token, maxAgeMs) {
-  const parts = [`${ADMIN_SESSION_COOKIE}=${token || ""}`, "Path=/", "HttpOnly", "SameSite=Lax"];
+function sessionCookieHeader(req, cookieName, token, maxAgeMs) {
+  const parts = [`${cookieName}=${token || ""}`, "Path=/", "HttpOnly", "SameSite=Lax"];
   if (cookieSecure(req)) parts.push("Secure");
   parts.push(`Max-Age=${maxAgeMs > 0 ? Math.floor(maxAgeMs / 1000) : 0}`);
   return parts.join("; ");
+}
+
+function adminCookieHeader(req, token, maxAgeMs) {
+  return sessionCookieHeader(req, ADMIN_SESSION_COOKIE, token, maxAgeMs);
+}
+
+function siteCookieHeader(req, token, maxAgeMs) {
+  return sessionCookieHeader(req, SITE_SESSION_COOKIE, token, maxAgeMs);
 }
 
 function pruneAdminSessions() {
@@ -2425,6 +2438,20 @@ function createAdminSession() {
   return token;
 }
 
+function pruneSiteSessions() {
+  const now = Date.now();
+  for (const [token, session] of siteSessions) {
+    if (!session || session.expiresAt < now) siteSessions.delete(token);
+  }
+}
+
+function createSiteSession() {
+  pruneSiteSessions();
+  const token = randomBytes(32).toString("hex");
+  siteSessions.set(token, { expiresAt: Date.now() + SITE_SESSION_MS });
+  return token;
+}
+
 function readAdminSession(req) {
   const token = parseCookies(req.headers.cookie)[ADMIN_SESSION_COOKIE];
   if (!token) return null;
@@ -2436,8 +2463,106 @@ function readAdminSession(req) {
   return { token, session };
 }
 
+function readSiteSession(req) {
+  const token = parseCookies(req.headers.cookie)[SITE_SESSION_COOKIE];
+  if (!token) return null;
+  const session = siteSessions.get(token);
+  if (!session || session.expiresAt < Date.now()) {
+    siteSessions.delete(token);
+    return null;
+  }
+  return { token, session };
+}
+
 function isAdminRequest(req) {
   return Boolean(readAdminSession(req));
+}
+
+function isSiteUnlocked(req) {
+  if (!SITE_PIN) return true;
+  if (isAdminRequest(req)) return true;
+  return Boolean(readSiteSession(req));
+}
+
+function siteLockBypassPath(pathname) {
+  const p = String(pathname || "");
+  if (p === "/api/health") return true;
+  if (p === "/api/site-lock/login" || p === "/api/site-lock/status") return true;
+  if (p === "/admin" || p.startsWith("/admin/")) return true;
+  if (p === "/tech" || p.startsWith("/tech/")) return true;
+  if (p.startsWith("/api/admin/")) return true;
+  // Keep workshop APIs and customer quote/report links available; only the public site is gated.
+  if (p.startsWith("/api/") && p !== "/api/booking" && !p.startsWith("/api/booking/")) return true;
+  if (p === "/r" || p.startsWith("/r/")) return true;
+  if (p === "/b" || p.startsWith("/b/")) return true;
+  if (p === "/report" || p.startsWith("/report/")) return true;
+  if (p === "/billing" || p.startsWith("/billing/")) return true;
+  if (p.startsWith("/uploads/")) return true;
+  return false;
+}
+
+function siteLockGateHtml() {
+  return `<!DOCTYPE html>
+<html lang="en-NZ">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Preview lock · Deane Auto Repairs</title>
+  <style>
+    body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:"Segoe UI",Arial,sans-serif;background:#0f2744;color:#1a2332}
+    form{width:min(380px,calc(100% - 2rem));background:#fff;border-radius:14px;padding:1.4rem;display:grid;gap:.7rem}
+    h1{margin:0;font-size:1.25rem}
+    p{margin:0;color:#5b6777;font-size:.95rem}
+    label{display:grid;gap:.3rem;font-weight:700;font-size:.92rem}
+    input,button{font:inherit;padding:.65rem .75rem;border-radius:10px;border:1px solid #d7e0ea}
+    button{background:#1565c0;border-color:#1565c0;color:#fff;font-weight:700;cursor:pointer}
+    .error{color:#c62828;margin:0}
+  </style>
+</head>
+<body>
+  <form id="gate">
+    <h1>Deane Auto Repairs</h1>
+    <p>This website is in preview. Enter the site PIN to continue.</p>
+    <label>Site PIN<input id="pin" type="password" autocomplete="current-password" required /></label>
+    <button type="submit">Unlock</button>
+    <p id="err" class="error" hidden></p>
+  </form>
+  <script>
+    const form=document.getElementById("gate");
+    const err=document.getElementById("err");
+    form.addEventListener("submit",async(e)=>{
+      e.preventDefault();
+      err.hidden=true;
+      try{
+        const res=await fetch("/api/site-lock/login",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          credentials:"include",
+          body:JSON.stringify({pin:document.getElementById("pin").value})
+        });
+        const data=await res.json().catch(()=>({}));
+        if(!res.ok) throw new Error(data.error||"Wrong PIN");
+        location.reload();
+      }catch(ex){
+        err.hidden=false;
+        err.textContent=ex.message||"Unlock failed";
+      }
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function requireSiteUnlock(req, res, next) {
+  if (!SITE_PIN) return next();
+  if (siteLockBypassPath(req.path) || isSiteUnlocked(req)) return next();
+  const wantsHtml = String(req.headers.accept || "").includes("text/html");
+  if (wantsHtml || req.method === "GET" || req.method === "HEAD") {
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(401).type("html").send(siteLockGateHtml());
+  }
+  return res.status(401).json({ error: "Site is locked. Enter the preview PIN first." });
 }
 
 function requireAdmin(req, res, next) {
@@ -2540,6 +2665,35 @@ const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: false }));
+
+app.get("/api/site-lock/status", (_req, res) => {
+  res.json({ locked: Boolean(SITE_PIN) });
+});
+
+app.post("/api/site-lock/login", (req, res) => {
+  if (!SITE_PIN) {
+    return res.json({ ok: true, locked: false });
+  }
+  const ip = clientIp(req);
+  const wait = loginBlockedSeconds(ip);
+  if (wait > 0) {
+    res.setHeader("Retry-After", String(wait));
+    return res.status(429).json({
+      error: "Too many sign-in attempts. Try again in 15 minutes.",
+    });
+  }
+  if (String(req.body?.pin || "") !== SITE_PIN) {
+    recordLoginFailure(ip);
+    return res.status(401).json({ error: "Wrong PIN" });
+  }
+  clearLoginFailures(ip);
+  const token = createSiteSession();
+  res.setHeader("Set-Cookie", siteCookieHeader(req, token, SITE_SESSION_MS));
+  res.json({ ok: true, locked: true });
+});
+
+app.use(requireSiteUnlock);
+
 app.get("/uploads/:filename", (req, res) => {
   const filePath = safeUploadPath(UPLOADS_DIR, req.params.filename);
   if (!filePath || !fs.existsSync(filePath)) {
@@ -2576,6 +2730,17 @@ app.use(
     },
   })
 );
+app.use(
+  "/tech",
+  express.static(path.join(ROOT, "tech"), {
+    etag: false,
+    lastModified: false,
+    dotfiles: "deny",
+    setHeaders(res) {
+      res.setHeader("Cache-Control", "no-store");
+    },
+  })
+);
 app.use("/report", express.static(path.join(ROOT, "report"), { dotfiles: "deny" }));
 app.use("/billing", express.static(path.join(ROOT, "billing"), { dotfiles: "deny" }));
 app.use(express.static(ROOT, { index: "index.html", dotfiles: "deny" }));
@@ -2586,6 +2751,7 @@ app.get("/api/health", (_req, res) => {
     shop: business.name,
     dataDir: DATA_DIR,
     restoreWorkshop: true,
+    siteLocked: Boolean(SITE_PIN),
   });
 });
 
@@ -2671,14 +2837,14 @@ app.post("/api/admin/login", (req, res) => {
   }
   clearLoginFailures(ip);
   const token = createAdminSession();
-  res.setHeader("Set-Cookie", sessionCookieHeader(req, token, ADMIN_SESSION_MS));
+  res.setHeader("Set-Cookie", adminCookieHeader(req, token, ADMIN_SESSION_MS));
   res.json({ ok: true });
 });
 
 app.post("/api/admin/logout", (req, res) => {
   const session = readAdminSession(req);
   if (session) adminSessions.delete(session.token);
-  res.setHeader("Set-Cookie", sessionCookieHeader(req, "", 0));
+  res.setHeader("Set-Cookie", adminCookieHeader(req, "", 0));
   res.json({ ok: true });
 });
 
@@ -5466,6 +5632,11 @@ app.listen(PORT, "0.0.0.0", () => {
     }
     console.log("Admin PIN: set in .env (ADMIN_PIN)");
   }
+  console.log(
+    SITE_PIN
+      ? "Site lock: ON (SITE_PIN set — public website requires preview PIN)"
+      : "Site lock: OFF (set SITE_PIN to lock the public website while unfinished)"
+  );
   console.log(
     smtpConfigured()
       ? `Email: SMTP ready (from ${MAIL_FROM})`
