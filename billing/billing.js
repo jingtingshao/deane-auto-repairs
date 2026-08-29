@@ -116,7 +116,7 @@ function render(doc) {
 
   const lineRows = (doc.lines || [])
     .map((line) => {
-      const total = (Number(line.qty) || 0) * (Number(line.unitPriceIncl) || 0);
+      const total = line.amounts?.net ?? (Number(line.qty) || 0) * (Number(line.unitPriceIncl) || 0);
       return `<tr>
         <td>${escapeHtml(line.description)}</td>
         <td class="num">${escapeHtml(String(line.qty))}</td>

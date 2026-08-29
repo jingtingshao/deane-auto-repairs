@@ -18,18 +18,32 @@ const ADVERTISED_INCL = {
 
 const ADVERTISED_INCL_LIST = Object.values(ADVERTISED_INCL);
 
+function toCents(n) {
+  const value = Number(n);
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * 100 + Number.EPSILON);
+}
+
+function fromCents(cents) {
+  return Math.round(Number(cents) || 0) / 100;
+}
+
 function round2(n) {
-  return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+  return fromCents(toCents(n));
+}
+
+function gstFromInclCents(inclCents) {
+  return Math.round((Number(inclCents) || 0) * GST_FRACTION);
 }
 
 function gstFromIncl(incl) {
-  return round2(Number(incl) * GST_FRACTION);
+  return fromCents(gstFromInclCents(toCents(incl)));
 }
 
 /** Convert an advertised GST-inclusive price to the excl. GST line amount. */
 function exclFromIncl(incl) {
-  const inclRounded = round2(incl);
-  return round2(inclRounded - gstFromIncl(inclRounded));
+  const inclCents = toCents(incl);
+  return fromCents(inclCents - gstFromInclCents(inclCents));
 }
 
 const PRICE = {
@@ -54,15 +68,23 @@ function lineAmounts(line) {
   const unit = Number(line?.unitPriceIncl) || 0;
   const advertised = advertisedInclFromExcl(unit);
   if (advertised != null) {
-    const totalIncl = round2(qty * advertised);
-    const gst = gstFromIncl(totalIncl);
-    const net = round2(totalIncl - gst);
-    return { net, gst, totalIncl };
+    const totalInclCents = Math.round(qty * advertised * 100);
+    const gstCents = gstFromInclCents(totalInclCents);
+    const netCents = totalInclCents - gstCents;
+    return {
+      net: fromCents(netCents),
+      gst: fromCents(gstCents),
+      totalIncl: fromCents(totalInclCents),
+    };
   }
-  const net = round2(qty * unit);
-  const totalIncl = round2(net * (1 + GST_RATE));
-  const gst = round2(totalIncl - net);
-  return { net, gst, totalIncl };
+  const netCents = Math.round(qty * toCents(unit));
+  const totalInclCents = Math.round(netCents * (1 + GST_RATE));
+  const gstCents = totalInclCents - netCents;
+  return {
+    net: fromCents(netCents),
+    gst: fromCents(gstCents),
+    totalIncl: fromCents(totalInclCents),
+  };
 }
 
 function lineTotal(line) {
@@ -70,16 +92,21 @@ function lineTotal(line) {
 }
 
 function computeTotals(lines) {
-  let net = 0;
-  let gst = 0;
-  let totalIncl = 0;
+  let netCents = 0;
+  let gstCents = 0;
+  let totalInclCents = 0;
   for (const line of lines || []) {
     const amounts = lineAmounts(line);
-    net = round2(net + amounts.net);
-    gst = round2(gst + amounts.gst);
-    totalIncl = round2(totalIncl + amounts.totalIncl);
+    netCents += toCents(amounts.net);
+    gstCents += toCents(amounts.gst);
+    totalInclCents += toCents(amounts.totalIncl);
   }
-  return { totalIncl, net, gst, gstRate: GST_RATE };
+  return {
+    totalIncl: fromCents(totalInclCents),
+    net: fromCents(netCents),
+    gst: fromCents(gstCents),
+    gstRate: GST_RATE,
+  };
 }
 
 function cloneLines(lines) {
@@ -170,6 +197,13 @@ const QUICK_ADDS = [
     qty: 1,
     unitPriceIncl: PRICE.labourHour,
   },
+  {
+    id: "consumable",
+    label: "+ Consumable",
+    description: "Consumable",
+    qty: 1,
+    unitPriceIncl: 5,
+  },
 ];
 
 function presetById(id) {
@@ -184,6 +218,50 @@ function lineLooksLikeService(description) {
   return /\bservice\b/i.test(String(description || "").trim());
 }
 
+/** Fixed website packages (Standard / Premium / Full Service) — not labour or parts. */
+function lineLooksLikePackageService(description) {
+  return /(standard|premium|full)\s+service/i.test(String(description || "").trim());
+}
+
+function lineLooksLikeConsumable(description) {
+  return /\bconsumables?\b/i.test(String(description || "").trim());
+}
+
+function lineExcludedFromConsumableBase(description) {
+  return (
+    lineLooksLikeWof(description) ||
+    lineLooksLikePackageService(description) ||
+    lineLooksLikeConsumable(description)
+  );
+}
+
+/**
+ * Default consumable charge (excl. GST) from repair lines excl. WOF / service packages.
+ * $0–100 → $5; $101–300 → $10; $301–500 → $15; over $500 → $20.
+ */
+function consumableDefaultExcl(repairExclTotal) {
+  const n = Number(repairExclTotal) || 0;
+  if (n <= 100) return 5;
+  if (n <= 300) return 10;
+  if (n <= 500) return 15;
+  return 20;
+}
+
+function repairExclForConsumable(lines) {
+  let totalCents = 0;
+  for (const line of lines || []) {
+    if (lineExcludedFromConsumableBase(line?.description)) continue;
+    totalCents += toCents(lineAmounts(line).net);
+  }
+  return fromCents(totalCents);
+}
+
+function capitalizeLineDescription(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 module.exports = {
   GST_RATE,
   GST_FRACTION,
@@ -192,6 +270,8 @@ module.exports = {
   PRICE,
   PRESETS,
   QUICK_ADDS,
+  toCents,
+  fromCents,
   round2,
   gstFromIncl,
   exclFromIncl,
@@ -203,4 +283,10 @@ module.exports = {
   presetById,
   lineLooksLikeWof,
   lineLooksLikeService,
+  lineLooksLikePackageService,
+  lineLooksLikeConsumable,
+  lineExcludedFromConsumableBase,
+  consumableDefaultExcl,
+  repairExclForConsumable,
+  capitalizeLineDescription,
 };

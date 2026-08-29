@@ -36,8 +36,24 @@ function money(n) {
   }).format(Number(n) || 0);
 }
 
+function toCents(n) {
+  const value = Number(n);
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * 100 + Number.EPSILON);
+}
+
+function fromCents(cents) {
+  return Math.round(Number(cents) || 0) / 100;
+}
+
 function round2(n) {
-  return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+  return fromCents(toCents(n));
+}
+
+function capitalizeLineDescription(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function newLine(partial = {}) {
@@ -110,17 +126,61 @@ function renderPresetButtons() {
   });
 }
 
-async function createDoc(preset) {
+async function createDoc(presetId) {
   try {
-    const doc = await Admin.api("/api/billing", {
-      method: "POST",
-      body: JSON.stringify({ preset }),
-    });
-    await openDoc(doc.id);
-    Admin.showBillingStatus(`${doc.number} created`);
+    await loadCatalog();
+    const preset = (catalogMeta?.presets || []).find((p) => p.id === presetId);
+    if (!preset) throw new Error("Choose a package or custom quote.");
+    const lines = (preset.lines || []).map((line) => newLine(line));
+    const totals = computeTotals(lines);
+    const draft = {
+      id: "",
+      unsaved: true,
+      kind: preset.kind,
+      number: "Not saved yet",
+      status: "draft",
+      preset: preset.id,
+      customerId: "",
+      vehicleId: "",
+      customerName: "",
+      customerEmail: "",
+      customerPhone: "",
+      registration: "",
+      vehicle: "",
+      notes: "",
+      validUntil: "",
+      lines,
+      payments: [],
+      paymentStatus: "unpaid",
+      amountPaid: 0,
+      history: [],
+      totals,
+      jobId: "",
+      reportId: "",
+      quoteId: "",
+      invoiceId: "",
+    };
+    await openUnsavedDoc(draft);
+    Admin.showBillingStatus(
+      preset.kind === "invoice"
+        ? "Choose a customer, then Save to create the invoice"
+        : "Choose a customer, then Save to create the quote"
+    );
   } catch (err) {
     alert(err.message);
   }
+}
+
+async function openUnsavedDoc(doc) {
+  await loadCustomerDirectory();
+  currentBill = doc;
+  listKind = currentBill.kind === "invoice" ? "invoice" : "quote";
+  Admin.setSection(listKind === "invoice" ? "invoices" : "quotes");
+  updateListChrome();
+  billingListView.hidden = true;
+  billingEditView.hidden = false;
+  Admin.setViewTitle(currentBill.number || "New");
+  fillForm(currentBill);
 }
 
 function normalizeSearch(value) {
@@ -248,9 +308,9 @@ function renderPartyChip() {
 function matchesListFilter(d) {
   if (d.kind !== listKind) return false;
   if (listKind === "quote") {
-    if (listFilter === "all") return d.status !== "void" && d.status !== "invoiced";
+    if (listFilter === "all") return d.status !== "void";
     if (listFilter === "awaiting") return d.status === "sent";
-    if (listFilter === "accepted") return d.status === "accepted";
+    if (listFilter === "accepted") return d.status === "accepted" || d.status === "invoiced";
     if (listFilter === "draft") return d.status === "draft";
   }
   if (listKind === "invoice") {
@@ -710,6 +770,11 @@ function fillForm(doc) {
       hint.hidden = false;
       hint.textContent =
         "This quote is locked after accept. Use Revise quote to make a new editable copy.";
+    } else if (doc.kind === "invoice" && doc.viewedAt) {
+      hint.hidden = false;
+      hint.textContent = `Customer has opened this invoice${
+        doc.lastViewedAt ? ` (${formatHistoryWhen(doc.lastViewedAt)})` : ""
+      }.`;
     } else {
       hint.hidden = true;
       hint.textContent = "";
@@ -753,10 +818,16 @@ function renderHistory(doc) {
       const detail = ev.detail
         ? `<p class="history-detail">${Admin.escapeHtml(ev.detail)}</p>`
         : "";
+      const labels = {
+        sent: doc.kind === "invoice" ? "Invoice emailed to customer" : "Quote emailed to customer",
+        viewed: doc.kind === "invoice" ? "Customer opened invoice" : "Customer opened quote",
+        created: doc.kind === "invoice" ? "Invoice created" : "Quote created",
+      };
+      const summaryText = ev.summary || labels[ev.type] || ev.type || "Update";
       return `<li class="history-item history-${Admin.escapeAttr(ev.type || "note")}">
         <div class="history-when">${Admin.escapeHtml(formatHistoryWhen(ev.at))}</div>
         <div class="history-body">
-          <p class="history-summary">${Admin.escapeHtml(ev.summary || ev.type || "Update")}${amount}</p>
+          <p class="history-summary">${Admin.escapeHtml(summaryText)}${amount}</p>
           ${detail}
         </div>
       </li>`;
@@ -766,6 +837,41 @@ function renderHistory(doc) {
 
 function lineLooksLikeWof(description) {
   return /\bwof\b/i.test(String(description || "").trim());
+}
+
+function lineLooksLikePackageService(description) {
+  return /(standard|premium|full)\s+service/i.test(String(description || "").trim());
+}
+
+function lineLooksLikeConsumable(description) {
+  return /\bconsumables?\b/i.test(String(description || "").trim());
+}
+
+function repairExclForConsumable(lines) {
+  let total = 0;
+  for (const line of lines || []) {
+    if (
+      lineLooksLikeWof(line.description) ||
+      lineLooksLikePackageService(line.description) ||
+      lineLooksLikeConsumable(line.description)
+    ) {
+      continue;
+    }
+    total = round2(total + lineAmounts(line).net);
+  }
+  return total;
+}
+
+function consumableDefaultExcl(repairExclTotal) {
+  const n = Number(repairExclTotal) || 0;
+  if (n <= 100) return 5;
+  if (n <= 300) return 10;
+  if (n <= 500) return 15;
+  return 20;
+}
+
+function suggestedConsumablePrice() {
+  return consumableDefaultExcl(repairExclForConsumable(lineRows));
 }
 
 function plusCalendarMonths(iso, months) {
@@ -810,19 +916,41 @@ function syncWofExpiryField() {
 function renderQuickAdds() {
   const adds = catalogMeta?.quickAdds || [];
   const locked = !canEditLines(currentBill);
+  const suggestedConsumable = suggestedConsumablePrice();
   quickAddsEl.innerHTML = locked
     ? ""
     : adds
-        .map(
-          (a, i) =>
-            `<button type="button" data-quick="${i}">${Admin.escapeHtml(a.label)}</button>`
-        )
+        .map((a, i) => {
+          const label =
+            a.id === "consumable" ? `+ Consumable $${suggestedConsumable}` : a.label;
+          return `<button type="button" data-quick="${i}">${Admin.escapeHtml(label)}</button>`;
+        })
         .join("");
   quickAddsEl.querySelectorAll("[data-quick]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const item = adds[Number(btn.dataset.quick)];
       if (!item) return;
-      lineRows.push(newLine(item));
+      if (item.id === "consumable") {
+        const price = suggestedConsumablePrice();
+        const existing = lineRows.findIndex((line) =>
+          lineLooksLikeConsumable(line.description)
+        );
+        if (existing >= 0) {
+          lineRows[existing].description = "Consumable";
+          lineRows[existing].qty = 1;
+          lineRows[existing].unitPriceIncl = price;
+        } else {
+          lineRows.push(
+            newLine({
+              description: "Consumable",
+              qty: 1,
+              unitPriceIncl: price,
+            })
+          );
+        }
+      } else {
+        lineRows.push(newLine(item));
+      }
       renderLines();
       scheduleBillAutosave();
     });
@@ -833,7 +961,7 @@ function renderLines() {
   const locked = !canEditLines(currentBill);
   billingLinesEl.innerHTML = lineRows
     .map((line, index) => {
-      const total = round2((Number(line.qty) || 0) * (Number(line.unitPriceIncl) || 0));
+      const total = lineAmounts(line).net;
       return `<tr data-index="${index}">
         <td><input data-field="description" value="${Admin.escapeAttr(line.description)}" ${locked ? "readonly" : ""} /></td>
         <td><input class="qty" data-field="qty" type="number" min="0" step="0.25" value="${Admin.escapeAttr(String(line.qty))}" ${locked ? "readonly" : ""} /></td>
@@ -852,12 +980,11 @@ function renderLines() {
       let value = input.value;
       if (field === "qty" || field === "unitPriceIncl") value = Number(value) || 0;
       lineRows[index][field] = value;
-      const total = round2(
-        (Number(lineRows[index].qty) || 0) * (Number(lineRows[index].unitPriceIncl) || 0)
-      );
+      const total = lineAmounts(lineRows[index]).net;
       row.querySelector(".total").textContent = money(total);
       renderTotals();
       if (field === "description") syncWofExpiryField();
+      updateConsumableQuickLabel();
       scheduleBillAutosave();
     });
   });
@@ -872,6 +999,15 @@ function renderLines() {
   });
   renderTotals();
   syncWofExpiryField();
+  updateConsumableQuickLabel();
+}
+
+function updateConsumableQuickLabel() {
+  const adds = catalogMeta?.quickAdds || [];
+  const consumableIndex = adds.findIndex((a) => a.id === "consumable");
+  if (consumableIndex < 0 || !quickAddsEl) return;
+  const btn = quickAddsEl.querySelector(`[data-quick="${consumableIndex}"]`);
+  if (btn) btn.textContent = `+ Consumable $${suggestedConsumablePrice()}`;
 }
 
 function advertisedInclFromExcl(excl) {
@@ -884,31 +1020,45 @@ function advertisedInclFromExcl(excl) {
   return null;
 }
 
-function computeTotals(lines) {
-  let net = 0;
-  let gst = 0;
-  let totalIncl = 0;
-  for (const line of lines || []) {
-    const qty = Number(line.qty) || 0;
-    const unit = Number(line.unitPriceIncl) || 0;
-    const advertised = advertisedInclFromExcl(unit);
-    let lineNet;
-    let lineGst;
-    let lineIncl;
-    if (advertised != null) {
-      lineIncl = round2(qty * advertised);
-      lineGst = round2(lineIncl * (3 / 23));
-      lineNet = round2(lineIncl - lineGst);
-    } else {
-      lineNet = round2(qty * unit);
-      lineIncl = round2(lineNet * 1.15);
-      lineGst = round2(lineIncl - lineNet);
-    }
-    net = round2(net + lineNet);
-    gst = round2(gst + lineGst);
-    totalIncl = round2(totalIncl + lineIncl);
+function lineAmounts(line) {
+  const qty = Number(line?.qty) || 0;
+  const unit = Number(line?.unitPriceIncl) || 0;
+  const advertised = advertisedInclFromExcl(unit);
+  if (advertised != null) {
+    const totalInclCents = Math.round(qty * advertised * 100);
+    const gstCents = Math.round(totalInclCents * (3 / 23));
+    const netCents = totalInclCents - gstCents;
+    return {
+      net: fromCents(netCents),
+      gst: fromCents(gstCents),
+      totalIncl: fromCents(totalInclCents),
+    };
   }
-  return { net, gst, totalIncl };
+  const netCents = Math.round(qty * toCents(unit));
+  const totalInclCents = Math.round(netCents * 1.15);
+  const gstCents = totalInclCents - netCents;
+  return {
+    net: fromCents(netCents),
+    gst: fromCents(gstCents),
+    totalIncl: fromCents(totalInclCents),
+  };
+}
+
+function computeTotals(lines) {
+  let netCents = 0;
+  let gstCents = 0;
+  let totalInclCents = 0;
+  for (const line of lines || []) {
+    const amounts = lineAmounts(line);
+    netCents += toCents(amounts.net);
+    gstCents += toCents(amounts.gst);
+    totalInclCents += toCents(amounts.totalIncl);
+  }
+  return {
+    net: fromCents(netCents),
+    gst: fromCents(gstCents),
+    totalIncl: fromCents(totalInclCents),
+  };
 }
 
 function renderTotals() {
@@ -932,7 +1082,10 @@ function collectBill() {
     vehicle: value("vehicle"),
     notes: String(billingInput("notes")?.value || "").trim(),
     validUntil: billingInput("validUntil")?.value || "",
-    lines: lineRows.map((line) => ({ ...line })),
+    lines: lineRows.map((line) => ({
+      ...line,
+      description: capitalizeLineDescription(line.description),
+    })),
   };
   if (currentBill?.kind === "invoice") {
     payload.payments = paymentRows.map((p) => ({ ...p }));
@@ -1038,10 +1191,29 @@ async function saveBill(opts = {}) {
   if (currentBill.status === "void") {
     throw new Error("This document has been voided.");
   }
-  currentBill = await Admin.api(`/api/billing/${currentBill.id}`, {
-    method: "PUT",
-    body: JSON.stringify(collectBill()),
-  });
+  const payload = collectBill();
+  const hasCustomer = Boolean(
+    payload.customerId ||
+      String(payload.customerName || "").trim() ||
+      String(payload.registration || "").trim()
+  );
+  if (currentBill.unsaved || !currentBill.id) {
+    if (!hasCustomer) {
+      throw new Error("Choose a customer (or enter a name / plate) before saving.");
+    }
+    currentBill = await Admin.api("/api/billing", {
+      method: "POST",
+      body: JSON.stringify({
+        preset: currentBill.preset || "custom",
+        ...payload,
+      }),
+    });
+  } else {
+    currentBill = await Admin.api(`/api/billing/${currentBill.id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
   if (opts.refresh !== false) fillForm(currentBill);
   updateActionButtons();
   const msg =
@@ -1049,7 +1221,9 @@ async function saveBill(opts = {}) {
       ? "Autosaved"
       : currentBill.kind === "quote" && currentBill.status === "sent"
         ? "Saved — send email again if the customer needs the update"
-        : "Saved";
+        : currentBill.number
+          ? `Saved ${currentBill.number}`
+          : "Saved";
   Admin.showBillingStatus(msg);
   return currentBill;
 }
@@ -1058,6 +1232,8 @@ const billAutosave = Admin.createAutosave({
   isReady: () =>
     Boolean(
       currentBill &&
+        !currentBill.unsaved &&
+        currentBill.id &&
         billingEditView &&
         !billingEditView.hidden &&
         currentBill.status !== "void" &&
@@ -1105,31 +1281,41 @@ function updateActionButtons() {
     }
   }
 
-  convertBtn.hidden = !(doc.kind === "quote" && doc.status === "accepted");
-  if (openInvBtn) openInvBtn.hidden = true;
+  convertBtn.hidden = !(doc.kind === "quote" && doc.status === "accepted" && !doc.invoiceId);
+  if (openInvBtn) {
+    openInvBtn.hidden = !(
+      doc.kind === "quote" &&
+      doc.invoiceId &&
+      doc.invoiceId !== doc.id
+    );
+  }
   if (reviseBtn) reviseBtn.hidden = !quoteLocked;
+  const unsaved = Boolean(doc.unsaved || !doc.id);
   const jobBtn = document.getElementById("btn-billing-job");
   const canJob =
-    (doc.kind === "quote" && (doc.status === "accepted" || doc.status === "invoiced")) ||
-    (doc.kind === "invoice" && doc.status !== "void");
+    !unsaved &&
+    ((doc.kind === "quote" && (doc.status === "accepted" || doc.status === "invoiced")) ||
+      (doc.kind === "invoice" && doc.status !== "void"));
   if (jobBtn) {
     jobBtn.hidden = !canJob;
     jobBtn.textContent = doc.jobId ? "Open job card" : "Create job card";
   }
   const reportBtn = document.getElementById("btn-billing-report");
   if (reportBtn) {
-    const canReport = doc.kind === "invoice" && doc.status !== "void";
+    const canReport = !unsaved && doc.kind === "invoice" && doc.status !== "void";
     reportBtn.hidden = !canReport;
     reportBtn.textContent = doc.reportId ? "Open report" : "Create report";
   }
   emailBtn.textContent = "Send email";
   emailBtn.hidden =
+    unsaved ||
     doc.status === "void" ||
     (doc.kind === "quote" && (doc.status === "accepted" || doc.status === "invoiced"));
   emailBtn.classList.toggle("primary", !linesEditable || doc.status === "sent");
   emailBtn.classList.toggle("ghost", linesEditable && doc.status === "draft");
-  voidBtn.hidden = doc.status === "void" || doc.status === "invoiced" || doc.status === "draft";
-  deleteBtn.hidden = doc.status !== "draft";
+  voidBtn.hidden =
+    unsaved || doc.status === "void" || doc.status === "invoiced" || doc.status === "draft";
+  deleteBtn.hidden = doc.status !== "draft" && !unsaved;
   addLineBtn.hidden = !linesEditable;
 }
 
@@ -1345,7 +1531,14 @@ document.getElementById("btn-billing-void").addEventListener("click", async () =
 });
 
 document.getElementById("btn-billing-delete").addEventListener("click", async () => {
-  if (!currentBill || !confirm("Delete this draft permanently?")) return;
+  if (!currentBill) return;
+  if (currentBill.unsaved || !currentBill.id) {
+    billAutosave.cancel();
+    currentBill = null;
+    await showList();
+    return;
+  }
+  if (!confirm("Delete this draft permanently?")) return;
   billAutosave.cancel();
   try {
     await Admin.api(`/api/billing/${currentBill.id}`, { method: "DELETE" });

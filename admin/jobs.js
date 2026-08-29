@@ -24,6 +24,7 @@ const jobsForm = document.getElementById("jobs-form");
 const jobsPartsEl = document.getElementById("jobs-parts");
 const jobsQuoteLink = document.getElementById("jobs-quote-link");
 const openQuoteBtn = document.getElementById("btn-jobs-open-quote");
+const attachInvoiceBtn = document.getElementById("btn-jobs-attach-invoice");
 const collectBtn = document.getElementById("btn-jobs-collected");
 const jobsYearSelect = document.getElementById("jobs-year");
 const jobsYearLabel = document.getElementById("jobs-year-label");
@@ -294,11 +295,9 @@ function renderParts() {
     .map(
       (part, index) => `<tr data-index="${index}">
         <td><input data-field="partNumber" value="${Admin.escapeAttr(part.partNumber || "")}" placeholder="Part #" /></td>
-        <td><input data-field="description" value="${Admin.escapeAttr(part.description)}" placeholder="e.g. Front pads" /></td>
+        <td class="part-name-cell"><input data-field="description" value="${Admin.escapeAttr(part.description)}" placeholder="e.g. Front pads" /></td>
         <td><input class="qty" data-field="qty" type="number" min="0" step="1" value="${Admin.escapeAttr(String(part.qty))}" /></td>
         <td><input class="price" data-field="costPrice" type="number" min="0" step="0.01" value="${Admin.escapeAttr(String(part.costPrice || 0))}" /></td>
-        <td><input class="price" data-field="markupPercent" type="number" min="0" step="0.01" value="${Admin.escapeAttr(String(part.markupPercent || 0))}" /></td>
-        <td><input class="price" data-field="sellPrice" type="number" min="0" step="0.01" value="${Admin.escapeAttr(String(part.sellPrice || 0))}" /></td>
         <td class="check-cell"><input data-field="ordered" type="checkbox" ${part.ordered ? "checked" : ""} /></td>
         <td class="check-cell"><input data-field="received" type="checkbox" ${part.received ? "checked" : ""} /></td>
         <td><input class="part-supplier" data-field="supplier" value="${Admin.escapeAttr(part.supplier)}" placeholder="e.g. Repco" /></td>
@@ -333,14 +332,12 @@ function renderParts() {
         scheduleJobAutosave();
         return;
       }
-      if (field === "qty" || field === "costPrice" || field === "markupPercent" || field === "sellPrice") {
+      if (field === "qty" || field === "costPrice") {
         partRows[index][field] = Number(control.value) || 0;
-        if (field === "costPrice" || field === "markupPercent") {
+        if (field === "costPrice") {
           const cost = Number(partRows[index].costPrice) || 0;
-          const markup = Number(partRows[index].markupPercent) || 0;
+          const markup = Number(partRows[index].markupPercent) || 25;
           partRows[index].sellPrice = Number((cost * (1 + markup / 100)).toFixed(2));
-          const sellInput = row.querySelector('[data-field="sellPrice"]');
-          if (sellInput) sellInput.value = String(partRows[index].sellPrice);
         }
       } else {
         partRows[index][field] = control.value;
@@ -418,7 +415,15 @@ function fillForm(job) {
   const workEl = jobInput("workRequested");
   if (workEl) workEl.readOnly = linked;
   const hasQuote = Boolean(job.quoteId);
-  if (openQuoteBtn) openQuoteBtn.hidden = !hasQuote;
+  const hasInvoice = Boolean(job.invoiceId);
+  if (openQuoteBtn) {
+    openQuoteBtn.hidden = !hasQuote && !hasInvoice;
+    openQuoteBtn.textContent = hasInvoice ? "Open invoice" : "Open quote";
+  }
+  if (attachInvoiceBtn) {
+    const pending = (job.parts || []).some((part) => String(part.description || "").trim());
+    attachInvoiceBtn.hidden = !(hasInvoice && pending);
+  }
   if (jobsQuoteLink) {
     if (hasQuote) {
       jobsQuoteLink.hidden = false;
@@ -665,14 +670,38 @@ collectBtn?.addEventListener("click", async () => {
 });
 
 openQuoteBtn?.addEventListener("click", async () => {
-  if (!currentJob?.quoteId) return;
+  const docId = currentJob?.invoiceId || currentJob?.quoteId;
+  if (!docId) return;
   try {
     await saveJob();
   } catch {
-    /* still try to open the quote */
+    /* still try to open the document */
   }
-  Admin.setSection(currentJob.invoiceNumber ? "invoices" : "quotes");
-  await window.DeaneBilling?.openDoc(currentJob.quoteId);
+  Admin.setSection(currentJob.invoiceId ? "invoices" : "quotes");
+  await window.DeaneBilling?.openDoc(docId);
+});
+
+attachInvoiceBtn?.addEventListener("click", async () => {
+  if (!currentJob?.id || !currentJob.invoiceId) return;
+  try {
+    await saveJob();
+    const result = await Admin.api(
+      `/api/jobs/${currentJob.id}/invoices/${currentJob.invoiceId}/attach-parts`,
+      { method: "POST", body: "{}" }
+    );
+    await openJob(currentJob.id);
+    const added = Number(result.linesAdded) || 0;
+    const attached = Number(result.attached) || 0;
+    alert(
+      added
+        ? `Added ${added} part line${added === 1 ? "" : "s"} to ${currentJob.invoiceNumber || "the invoice"}.`
+        : attached
+          ? "Parts marked billed. Those descriptions were already on the invoice."
+          : "No approved parts to add. Set a part to Approved first."
+    );
+  } catch (err) {
+    alert(err.message);
+  }
 });
 
 document.getElementById("btn-jobs-delete")?.addEventListener("click", async () => {

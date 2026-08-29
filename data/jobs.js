@@ -31,7 +31,7 @@ function normalizeJobStatus(status, parts) {
   let next = String(status || "").trim();
   if (LEGACY_STATUS_MAP[next]) next = LEGACY_STATUS_MAP[next];
   if (!isJobStatus(next)) next = "in_progress";
-  if (next === "waiting_parts" || next === "completed" || next === "collected") return next;
+  if (next === "completed" || next === "collected") return next;
   return suggestStatusFromParts(next, parts);
 }
 
@@ -48,10 +48,24 @@ function isPackageServiceLine(description) {
   );
 }
 
+function isLabourLine(description) {
+  const d = String(description || "")
+    .trim()
+    .toLowerCase();
+  if (!d) return false;
+  if (isPackageServiceLine(d)) return false;
+  return (
+    /\blabou?r\b/.test(d) ||
+    /\bdiagnostic\b/.test(d) ||
+    /\bper hour\b/.test(d) ||
+    /\bhourly\b/.test(d)
+  );
+}
+
 function isServiceOrLabourLine(description) {
   const d = String(description || "").trim();
   if (!d) return true;
-  return isPackageServiceLine(d);
+  return isPackageServiceLine(d) || isLabourLine(d);
 }
 
 function normalizePart(part = {}, idFallback = "") {
@@ -161,7 +175,7 @@ function mergeNewParts(job, incoming) {
   if (!job) return false;
   const extra = (incoming || []).filter((p) => {
     const desc = String(p.description || "").trim();
-    return desc && !isPackageServiceLine(desc);
+    return desc && !isServiceOrLabourLine(desc);
   });
   if (!extra.length) return false;
   const parts = Array.isArray(job.parts) ? [...job.parts] : [];
@@ -221,7 +235,7 @@ function stripPackageWorkRequested(text) {
 function stripPackageParts(job) {
   if (!job || !Array.isArray(job.parts)) return false;
   const next = job.parts.filter(
-    (part) => !isPackageServiceLine(part.description)
+    (part) => String(part.description || "").trim() && !isServiceOrLabourLine(part.description)
   );
   if (next.length === job.parts.length) return false;
   job.parts = next;
@@ -268,6 +282,7 @@ module.exports = {
   statusLabel: statusLabel,
   normalizeJobStatus,
   isPackageServiceLine,
+  isLabourLine,
   isServiceOrLabourLine,
   isServiceOrLabourLine: isServiceOrLabourLine,
   normalizePart,

@@ -4,7 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const express = require("express");
 const multer = require("multer");
-const pdfParse = require("pdf-parse");
+const pdfParseModule = require("pdf-parse");
 const Tesseract = require("tesseract.js");
 const nodemailer = require("nodemailer");
 const { randomUUID, randomBytes } = require("crypto");
@@ -25,6 +25,14 @@ const { todayIso, plusDays, nowIso, monthKey, monthShortLabel, monthLongLabel } 
 const driveBackup = require("./data/drive-backup");
 
 const PORT = Number(process.env.PORT) || 5173;
+const pdfParseLegacy =
+  typeof pdfParseModule === "function"
+    ? pdfParseModule
+    : typeof pdfParseModule?.default === "function"
+      ? pdfParseModule.default
+      : null;
+const PDFParseClass =
+  typeof pdfParseModule?.PDFParse === "function" ? pdfParseModule.PDFParse : null;
 const KNOWN_WEAK_PINS = new Set(["deane123", "12345678", "password", "admin", "1234", "0000"]);
 
 function isProduction() {
@@ -380,6 +388,26 @@ function alignLinkedJobNumbers(jobs) {
   return changed;
 }
 
+function jobLineItemsPreview(job) {
+  const parts = Array.isArray(job?.parts) ? job.parts : [];
+  const fromParts = parts
+    .map((part) => {
+      const description = String(part.description || "").trim();
+      if (!description) return "";
+      const qty = Number(part.qty);
+      const qtyLabel = Number.isFinite(qty) && qty > 0 ? qty : 1;
+      const partNumber = String(part.partNumber || "").trim();
+      return partNumber ? `${qtyLabel} × ${description} · ${partNumber}` : `${qtyLabel} × ${description}`;
+    })
+    .filter(Boolean);
+  if (fromParts.length) return fromParts.slice(0, 8);
+  return String(job?.workRequested || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
 function summarizeJob(job) {
   const status = jobsLib.normalizeJobStatus(job.status, job.parts);
   const parts = jobsLib.partsSummary(job.parts);
@@ -399,6 +427,11 @@ function summarizeJob(job) {
     invoiceNumber: job.invoiceNumber || "",
     partsTotal: parts.total,
     partsReceived: parts.received,
+    workRequestedPreview: String(job.workRequested || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)[0] || "",
+    lineItemsPreview: jobLineItemsPreview(job),
     workPhotosCount: workPhotos.length,
     supplierInvoicePhotosCount: supplierInvoicePhotos.length,
     readyAt: job.readyAt || "",
@@ -408,6 +441,71 @@ function summarizeJob(job) {
   };
 }
 
+function supplierInvoiceTrackingSummary(invoice) {
+  const jobs = readJobs();
+  const supplierKey = normalizeSupplierName(invoice?.supplier);
+  const invoiceNoKey = normalizeInvoiceNo(invoice?.invoiceNo);
+  let supplierCost = 0;
+  let trackedLines = 0;
+  for (const job of jobs) {
+    const parts = Array.isArray(job.parts) ? job.parts : [];
+    for (const part of parts) {
+      if (
+        normalizeSupplierName(part?.supplier) !== supplierKey ||
+        normalizeInvoiceNo(part?.supplierInvoiceNo) !== invoiceNoKey
+      ) {
+        continue;
+      }
+      const qty = Number(part.qty) || 0;
+      const lineCost = Number(part.lineCostTotal);
+      supplierCost += Number.isFinite(lineCost) ? lineCost : qty * (Number(part.costPrice) || 0);
+      trackedLines += 1;
+    }
+  }
+  let pendingCost = 0;
+  let ignoredCost = 0;
+  let consumableCost = 0;
+  let toolCost = 0;
+  const invoiceId = String(invoice?.id || "").trim();
+  for (const row of readInvoiceCandidates()) {
+    if (row.supplierInvoiceId !== invoiceId) continue;
+    const line = toMoney((Number(row.qtyCandidate) || 0) * (Number(row.costPriceCandidate) || 0));
+    if (row.decision === "pending") pendingCost += line;
+    if (row.decision === "rejected") ignoredCost += line;
+    if (row.decision === "consumable") consumableCost += line;
+    if (row.decision === "tool") toolCost += line;
+  }
+  supplierCost = toMoney(supplierCost);
+  pendingCost = toMoney(pendingCost);
+  ignoredCost = toMoney(ignoredCost);
+  consumableCost = toMoney(consumableCost);
+  toolCost = toMoney(toolCost);
+  return {
+    supplierCost,
+    pendingCost,
+    ignoredCost,
+    consumableCost,
+    toolCost,
+    trackedLines,
+  };
+}
+
+function isJobAcceptedCandidateDecision(decision) {
+  return decision === "accepted" || decision === "edited_then_accepted";
+}
+
+function isShopClassifiedCandidateDecision(decision) {
+  return decision === "consumable" || decision === "tool";
+}
+
+function isResolvedCandidateDecision(decision) {
+  return (
+    isJobAcceptedCandidateDecision(decision) ||
+    decision === "rejected" ||
+    isShopClassifiedCandidateDecision(decision)
+  );
+}
+
 function billingSourceForJob(docs, id) {
   const doc = docs.find((d) => d.id === id);
   if (!doc) return { error: "Quote not found", status: 404 };
@@ -415,7 +513,11 @@ function billingSourceForJob(docs, id) {
     if (doc.status === "void") {
       return { error: "This invoice has been voided.", status: 400 };
     }
-    return { quote: doc, invoice: doc, source: doc };
+    const quote =
+      (doc.quoteId &&
+        docs.find((d) => d.id === doc.quoteId && d.kind === "quote")) ||
+      null;
+    return { quote: quote || null, invoice: doc, source: quote || doc };
   }
   if (doc.kind !== "quote") {
     return { error: "Only quotes can become job cards.", status: 400 };
@@ -426,21 +528,32 @@ function billingSourceForJob(docs, id) {
       status: 400,
     };
   }
-  return { quote: doc, invoice: null, source: doc };
+  const invoice =
+    (doc.invoiceId &&
+      docs.find((d) => d.id === doc.invoiceId && d.kind === "invoice")) ||
+    null;
+  return { quote: doc, invoice, source: doc };
 }
 
 function linkJobToBilling(docs, job, quote, invoice) {
-  if (quote) {
-    quote.jobId = job.id;
-    quote.updatedAt = job.updatedAt;
-    job.quoteId = quote.id;
-    job.quoteNumber = quote.number;
+  const quoteDoc = quote && quote.kind === "quote" ? quote : null;
+  const invoiceDoc =
+    invoice && invoice.kind === "invoice"
+      ? invoice
+      : quote && quote.kind === "invoice"
+        ? quote
+        : null;
+  if (quoteDoc) {
+    quoteDoc.jobId = job.id;
+    quoteDoc.updatedAt = job.updatedAt;
+    job.quoteId = quoteDoc.id;
+    job.quoteNumber = quoteDoc.number;
   }
-  if (invoice) {
-    invoice.jobId = job.id;
-    invoice.updatedAt = job.updatedAt;
-    job.invoiceId = invoice.id;
-    job.invoiceNumber = invoice.number;
+  if (invoiceDoc) {
+    invoiceDoc.jobId = job.id;
+    invoiceDoc.updatedAt = job.updatedAt;
+    job.invoiceId = invoiceDoc.id;
+    job.invoiceNumber = invoiceDoc.number;
   }
 }
 
@@ -864,7 +977,7 @@ function normalizeCandidate(row = {}) {
     rawLineText: String(row.rawLineText || "").trim(),
     partNumberCandidate: String(row.partNumberCandidate || "").trim(),
     descriptionCandidate: String(row.descriptionCandidate || "").trim(),
-    qtyCandidate: Number.isFinite(Number(row.qtyCandidate)) ? Number(row.qtyCandidate) : 1,
+    qtyCandidate: Math.max(0, Math.round(Number(row.qtyCandidate) || 1)),
     costPriceCandidate: toMoney(row.costPriceCandidate),
     supplierCandidate: String(row.supplierCandidate || "").trim(),
     confidence: toRatio(row.confidence),
@@ -872,12 +985,54 @@ function normalizeCandidate(row = {}) {
     suggestedPartId: String(row.suggestedPartId || "").trim(),
     matchReason: String(row.matchReason || "").trim(),
     matchScore: toRatio(row.matchScore),
+    appliedJobId: String(row.appliedJobId || "").trim(),
+    appliedPartId: String(row.appliedPartId || "").trim(),
+    splitFromId: String(row.splitFromId || "").trim(),
     decision,
     decidedAt: String(row.decidedAt || "").trim(),
     decidedBy: String(row.decidedBy || "").trim(),
     createdAt: String(row.createdAt || "").trim(),
     updatedAt: String(row.updatedAt || "").trim(),
   };
+}
+
+function toQty(value, fallback = 1) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.max(0, Math.round(n));
+}
+
+function nextCandidateLineNo(rows, invoiceId) {
+  return (
+    rows
+      .filter((row) => row.supplierInvoiceId === invoiceId)
+      .reduce((max, row) => Math.max(max, Number(row.lineNo) || 0), 0) + 1
+  );
+}
+
+function insertRemainderCandidate(candidateRows, sourceIndex, remainderQty, now) {
+  const source = candidateRows[sourceIndex];
+  if (!(remainderQty > 0)) return null;
+  const leftover = normalizeCandidate({
+    ...source,
+    id: randomUUID(),
+    lineNo: nextCandidateLineNo(candidateRows, source.supplierInvoiceId),
+    qtyCandidate: remainderQty,
+    decision: "pending",
+    suggestedJobId: "",
+    suggestedPartId: "",
+    appliedJobId: "",
+    appliedPartId: "",
+    decidedAt: "",
+    decidedBy: "",
+    matchScore: 0,
+    matchReason: "remainder to allocate",
+    splitFromId: source.splitFromId || source.id,
+    createdAt: now,
+    updatedAt: now,
+  });
+  candidateRows.splice(sourceIndex + 1, 0, leftover);
+  return leftover;
 }
 
 function parseCandidatesFromRawText(rawText, supplier) {
@@ -1024,8 +1179,24 @@ function parseSupplierInvoiceText(rawText) {
 async function extractTextFromImportFile(file) {
   if (!file?.buffer?.length) return "";
   if (file.mimetype === "application/pdf") {
-    const parsed = await pdfParse(file.buffer);
-    return String(parsed?.text || "").trim();
+    if (pdfParseLegacy) {
+      const parsed = await pdfParseLegacy(file.buffer);
+      return String(parsed?.text || "").trim();
+    }
+    if (PDFParseClass) {
+      const parser = new PDFParseClass({ data: file.buffer });
+      try {
+        const result = await parser.getText();
+        return String(result?.text || "").trim();
+      } finally {
+        await parser.destroy().catch(() => {});
+      }
+    }
+    if (!pdfParseLegacy && !PDFParseClass) {
+      const err = new Error("PDF parser is not available on this server.");
+      err.status = 500;
+      throw err;
+    }
   }
   if (file.mimetype.startsWith("image/")) {
     const result = await Tesseract.recognize(file.buffer, "eng", {
@@ -1137,14 +1308,12 @@ function refreshSupplierInvoiceStatus(invoiceId) {
   const invoice = invoices[idx];
   const candidates = readInvoiceCandidates().filter((row) => row.supplierInvoiceId === invoiceId);
   const total = candidates.length;
-  const accepted = candidates.filter(
-    (row) => row.decision === "accepted" || row.decision === "edited_then_accepted"
-  ).length;
-  const rejected = candidates.filter((row) => row.decision === "rejected").length;
+  const resolved = candidates.filter((row) => isResolvedCandidateDecision(row.decision)).length;
+  const accepted = candidates.filter((row) => isJobAcceptedCandidateDecision(row.decision)).length;
   let nextStatus = invoice.status || "uploaded";
   if (!total) nextStatus = invoice.imageRefs?.length ? "uploaded" : "uploaded";
-  else if (accepted === total || accepted + rejected === total) nextStatus = "approved";
-  else if (accepted > 0) nextStatus = "partially_matched";
+  else if (resolved === total) nextStatus = "approved";
+  else if (accepted > 0 || resolved > 0) nextStatus = "partially_matched";
   else nextStatus = "parsed";
   if (nextStatus !== invoice.status) {
     invoice.status = nextStatus;
@@ -1189,13 +1358,26 @@ function acceptInvoiceCandidate(candidateId, req, decisionMode = "accepted") {
   }
   const now = nowIso();
   const incoming = body.part || {};
+  const originalQty = toQty(currentCandidate.qtyCandidate, 1);
+  const allocatedQty = toQty(incoming.qty ?? originalQty, originalQty);
+  if (allocatedQty <= 0) {
+    const err = new Error("Qty must be greater than 0. Use Ignore for unused lines.");
+    err.status = 400;
+    throw err;
+  }
+  if (allocatedQty > originalQty) {
+    const err = new Error(`This line only has ${originalQty} left to allocate.`);
+    err.status = 400;
+    throw err;
+  }
+  const remainderQty = toQty(originalQty - allocatedQty, 0);
   const part = jobsLib.normalizePart(
     {
       id: randomUUID(),
       partNumber: incoming.partNumber ?? currentCandidate.partNumberCandidate,
       description: incoming.description ?? currentCandidate.descriptionCandidate,
       supplier: incoming.supplier ?? currentCandidate.supplierCandidate ?? invoice.supplier,
-      qty: incoming.qty ?? currentCandidate.qtyCandidate ?? 1,
+      qty: allocatedQty,
       costPrice: incoming.costPrice ?? currentCandidate.costPriceCandidate ?? 0,
       markupPercent: incoming.markupPercent ?? 25,
       sellPrice: incoming.sellPrice,
@@ -1227,13 +1409,22 @@ function acceptInvoiceCandidate(candidateId, req, decisionMode = "accepted") {
   const beforeCandidate = { ...candidateRows[candidateIndex] };
   candidateRows[candidateIndex] = normalizeCandidate({
     ...currentCandidate,
+    qtyCandidate: allocatedQty,
     decision: decisionMode === "edited_then_accepted" ? "edited_then_accepted" : "accepted",
     decidedAt: now,
     decidedBy: nowActor(req),
     suggestedJobId: jobs[jobIndex].id,
+    appliedJobId: jobs[jobIndex].id,
+    appliedPartId: part.id,
     matchReason: currentCandidate.matchReason || "accepted by user",
     updatedAt: now,
   });
+  const remainderCandidate = insertRemainderCandidate(
+    candidateRows,
+    candidateIndex,
+    remainderQty,
+    now
+  );
   writeInvoiceCandidates(candidateRows);
   const invoiceAfter = refreshSupplierInvoiceStatus(currentCandidate.supplierInvoiceId);
   writePartAudit("jobPart", part.id, "approve", null, part, req, "candidate accepted");
@@ -1257,9 +1448,266 @@ function acceptInvoiceCandidate(candidateId, req, decisionMode = "accepted") {
   );
   return {
     candidate: candidateRows[candidateIndex],
+    remainderCandidate,
     jobPart: part,
     jobId: jobs[jobIndex].id,
     supplierInvoice: invoiceAfter || invoice,
+  };
+}
+
+function editMatchedCandidate(candidateId, req) {
+  const candidateRows = readInvoiceCandidates();
+  const candidateIndex = candidateRows.findIndex((row) => row.id === candidateId);
+  if (candidateIndex < 0) {
+    const err = new Error("Candidate not found");
+    err.status = 404;
+    throw err;
+  }
+  const candidate = normalizeCandidate(candidateRows[candidateIndex]);
+  if (candidate.decision !== "accepted" && candidate.decision !== "edited_then_accepted") {
+    const err = new Error("Only matched candidates can be edited.");
+    err.status = 400;
+    throw err;
+  }
+  if (!candidate.appliedPartId) {
+    const err = new Error("Matched part link is missing. Unmatch then re-accept this line.");
+    err.status = 400;
+    throw err;
+  }
+
+  const jobs = readJobs();
+  const body = req.body || {};
+  const targetJobId = String(body.jobId || "").trim() || candidate.appliedJobId || candidate.suggestedJobId;
+  const sourceJobIndex = jobs.findIndex((job) => job.id === candidate.appliedJobId);
+  const targetJobIndex = jobs.findIndex((job) => job.id === targetJobId);
+  if (sourceJobIndex < 0 || targetJobIndex < 0) {
+    const err = new Error("Linked job not found.");
+    err.status = 404;
+    throw err;
+  }
+  const sourceParts = Array.isArray(jobs[sourceJobIndex].parts) ? [...jobs[sourceJobIndex].parts] : [];
+  const sourcePartIndex = sourceParts.findIndex((part) => part.id === candidate.appliedPartId);
+  if (sourcePartIndex < 0) {
+    const err = new Error("Linked part not found on job.");
+    err.status = 404;
+    throw err;
+  }
+
+  const existingPart = sourceParts[sourcePartIndex];
+  if (existingPart.status === "billed") {
+    const err = new Error("This part is already billed and cannot be edited.");
+    err.status = 400;
+    throw err;
+  }
+  const incoming = body.part || {};
+  const now = nowIso();
+  const originalQty = toQty(existingPart.qty ?? candidate.qtyCandidate, 1);
+  const allocatedQty = toQty(incoming.qty ?? originalQty, originalQty);
+  if (allocatedQty <= 0) {
+    const err = new Error("Qty must be greater than 0. Unmatch or Ignore unused lines.");
+    err.status = 400;
+    throw err;
+  }
+  if (allocatedQty > originalQty) {
+    const err = new Error(`This matched line only has ${originalQty}. Unmatch first to add more.`);
+    err.status = 400;
+    throw err;
+  }
+  const remainderQty = toQty(originalQty - allocatedQty, 0);
+  const updatedPart = jobsLib.normalizePart(
+    {
+      ...existingPart,
+      partNumber: incoming.partNumber ?? existingPart.partNumber,
+      description: incoming.description ?? existingPart.description,
+      qty: allocatedQty,
+      costPrice: incoming.costPrice ?? existingPart.costPrice,
+      markupPercent: incoming.markupPercent ?? existingPart.markupPercent,
+      sellPrice: incoming.sellPrice ?? existingPart.sellPrice,
+      supplier: incoming.supplier ?? existingPart.supplier,
+      supplierInvoiceNo: incoming.supplierInvoiceNo ?? existingPart.supplierInvoiceNo,
+      supplierInvoiceDate: incoming.supplierInvoiceDate ?? existingPart.supplierInvoiceDate,
+      updatedAt: now,
+      updatedBy: nowActor(req),
+    },
+    existingPart.id
+  );
+
+  if (sourceJobIndex === targetJobIndex) {
+    sourceParts[sourcePartIndex] = updatedPart;
+    jobs[sourceJobIndex].parts = jobsLib.normalizeParts(sourceParts, () => randomUUID());
+    jobs[sourceJobIndex].status = jobsLib.normalizeJobStatus(
+      jobs[sourceJobIndex].status,
+      jobs[sourceJobIndex].parts
+    );
+    jobs[sourceJobIndex].updatedAt = now;
+  } else {
+    sourceParts.splice(sourcePartIndex, 1);
+    jobs[sourceJobIndex].parts = jobsLib.normalizeParts(sourceParts, () => randomUUID());
+    jobs[sourceJobIndex].status = jobsLib.normalizeJobStatus(
+      jobs[sourceJobIndex].status,
+      jobs[sourceJobIndex].parts
+    );
+    jobs[sourceJobIndex].updatedAt = now;
+
+    const targetParts = Array.isArray(jobs[targetJobIndex].parts) ? [...jobs[targetJobIndex].parts] : [];
+    targetParts.push(updatedPart);
+    jobs[targetJobIndex].parts = jobsLib.normalizeParts(targetParts, () => randomUUID());
+    jobs[targetJobIndex].status = jobsLib.normalizeJobStatus(
+      jobs[targetJobIndex].status,
+      jobs[targetJobIndex].parts
+    );
+    jobs[targetJobIndex].updatedAt = now;
+  }
+  writeJobs(jobs);
+
+  const beforeCandidate = { ...candidateRows[candidateIndex] };
+  candidateRows[candidateIndex] = normalizeCandidate({
+    ...candidate,
+    decision: "edited_then_accepted",
+    partNumberCandidate: updatedPart.partNumber,
+    descriptionCandidate: updatedPart.description,
+    qtyCandidate: updatedPart.qty,
+    costPriceCandidate: updatedPart.costPrice,
+    suggestedJobId: jobs[targetJobIndex].id,
+    appliedJobId: jobs[targetJobIndex].id,
+    appliedPartId: updatedPart.id,
+    matchReason: remainderQty > 0 ? "qty split for other jobs" : "edited after match",
+    updatedAt: now,
+  });
+  const remainderCandidate = insertRemainderCandidate(
+    candidateRows,
+    candidateIndex,
+    remainderQty,
+    now
+  );
+  writeInvoiceCandidates(candidateRows);
+  const supplierInvoice = refreshSupplierInvoiceStatus(candidate.supplierInvoiceId);
+  writePartAudit("jobPart", updatedPart.id, "update", existingPart, updatedPart, req, "matched part edited");
+  writePartAudit(
+    "invoiceCandidate",
+    candidate.id,
+    "update",
+    beforeCandidate,
+    candidateRows[candidateIndex],
+    req,
+    "matched candidate edited"
+  );
+  return {
+    candidate: candidateRows[candidateIndex],
+    remainderCandidate,
+    jobPart: updatedPart,
+    jobId: jobs[targetJobIndex].id,
+    supplierInvoice,
+  };
+}
+
+function findCandidateLinkedPart(jobs, candidate) {
+  const jobId = candidate.appliedJobId || candidate.suggestedJobId;
+  const jobIndex = jobs.findIndex((job) => job.id === jobId);
+  if (jobIndex < 0) return null;
+  const parts = Array.isArray(jobs[jobIndex].parts) ? jobs[jobIndex].parts : [];
+  let partIndex = -1;
+  if (candidate.appliedPartId) {
+    partIndex = parts.findIndex((part) => part.id === candidate.appliedPartId);
+  }
+  if (partIndex < 0) {
+    partIndex = parts.findIndex((part) => {
+      const samePartNo =
+        candidate.partNumberCandidate &&
+        String(part.partNumber || "").trim() === candidate.partNumberCandidate;
+      const sameName =
+        candidate.descriptionCandidate &&
+        String(part.description || "").trim().toLowerCase() ===
+          candidate.descriptionCandidate.toLowerCase();
+      return samePartNo || sameName;
+    });
+  }
+  if (partIndex < 0) return null;
+  return { jobIndex, partIndex, part: parts[partIndex] };
+}
+
+function unmatchInvoiceCandidate(candidateId, req) {
+  const candidateRows = readInvoiceCandidates();
+  const candidateIndex = candidateRows.findIndex((row) => row.id === candidateId);
+  if (candidateIndex < 0) {
+    const err = new Error("Candidate not found");
+    err.status = 404;
+    throw err;
+  }
+  const candidate = normalizeCandidate(candidateRows[candidateIndex]);
+  const wasAccepted = isJobAcceptedCandidateDecision(candidate.decision);
+  const wasIgnored = candidate.decision === "rejected";
+  const wasShopClassified = isShopClassifiedCandidateDecision(candidate.decision);
+  if (!wasAccepted && !wasIgnored && !wasShopClassified && candidate.decision !== "pending") {
+    const err = new Error("This line cannot be restored.");
+    err.status = 400;
+    throw err;
+  }
+
+  const jobs = readJobs();
+  let removedPart = null;
+  if (wasAccepted) {
+    const linked = findCandidateLinkedPart(jobs, candidate);
+    if (linked) {
+      if (linked.part.status === "billed") {
+        const err = new Error("This part is already billed. Unmatch is not allowed.");
+        err.status = 400;
+        throw err;
+      }
+      const parts = [...(jobs[linked.jobIndex].parts || [])];
+      removedPart = parts[linked.partIndex];
+      parts.splice(linked.partIndex, 1);
+      jobs[linked.jobIndex].parts = jobsLib.normalizeParts(parts, () => randomUUID());
+      jobs[linked.jobIndex].status = jobsLib.normalizeJobStatus(
+        jobs[linked.jobIndex].status,
+        jobs[linked.jobIndex].parts
+      );
+      jobs[linked.jobIndex].updatedAt = nowIso();
+      writeJobs(jobs);
+    }
+  }
+
+  const now = nowIso();
+  const beforeCandidate = { ...candidateRows[candidateIndex] };
+  candidateRows[candidateIndex] = normalizeCandidate({
+    ...candidate,
+    decision: "pending",
+    suggestedJobId: "",
+    suggestedPartId: "",
+    appliedJobId: "",
+    appliedPartId: "",
+    matchScore: 0,
+    decidedAt: "",
+    decidedBy: "",
+    matchReason: wasIgnored
+      ? "restored from ignored"
+      : wasShopClassified
+        ? `restored from ${candidate.decision}`
+        : "unmatched for review",
+    updatedAt: now,
+  });
+  writeInvoiceCandidates(candidateRows);
+  const supplierInvoice = refreshSupplierInvoiceStatus(candidate.supplierInvoiceId);
+  if (removedPart) {
+    writePartAudit("jobPart", removedPart.id, "delete", removedPart, null, req, "candidate unmatched");
+  }
+  writePartAudit(
+    "invoiceCandidate",
+    candidate.id,
+    "update",
+    beforeCandidate,
+    candidateRows[candidateIndex],
+    req,
+    wasIgnored
+      ? "candidate restored from ignored"
+      : wasShopClassified
+        ? `candidate restored from ${candidate.decision}`
+        : "candidate unmatched"
+  );
+  return {
+    candidate: candidateRows[candidateIndex],
+    removedPartId: removedPart?.id || "",
+    supplierInvoice,
   };
 }
 
@@ -1526,6 +1974,34 @@ function findCustomerWithSameName(rows, name, exceptId = "") {
         row.id !== exceptId &&
         customerNameKey(namesFromCustomer(row).customerName) === key
     ) || null
+  );
+}
+
+function emailKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
+function findCustomerWithSameEmail(rows, email, exceptId = "") {
+  const key = emailKey(email);
+  if (!key) return null;
+  return (
+    rows.find((row) => row.id !== exceptId && emailKey(row.customerEmail) === key) ||
+    null
+  );
+}
+
+function findCustomerWithSamePlate(rows, vehicles, exceptId = "") {
+  const plates = new Set(
+    (vehicles || []).map((v) => plateKey(v.registration)).filter(Boolean)
+  );
+  if (!plates.size) return null;
+  return (
+    rows.find((row) => {
+      if (row.id === exceptId) return false;
+      return normalizeVehicles(row, row).some((v) => plates.has(plateKey(v.registration)));
+    }) || null
   );
 }
 
@@ -1838,6 +2314,7 @@ function unifyInvoiceNumberFromQuote(docs, invoice, quote) {
 
 function repairLegacyConvertedBilling(docs) {
   let changed = false;
+  if (splitInPlaceQuoteInvoices(docs)) changed = true;
   for (const quote of docs) {
     if (quote.kind !== "quote") continue;
     if (!quote.invoiceId || quote.invoiceId === quote.id) continue;
@@ -1850,6 +2327,99 @@ function repairLegacyConvertedBilling(docs) {
     const quote = docs.find((d) => d.id === invoice.quoteId);
     if (!quote || quote.kind !== "quote") continue;
     if (unifyInvoiceNumberFromQuote(docs, invoice, quote)) changed = true;
+  }
+  return changed;
+}
+
+function splitInPlaceQuoteInvoices(docs) {
+  const created = [];
+  let changed = false;
+  for (const invoice of docs) {
+    if (!invoice || invoice.kind !== "invoice") continue;
+    const quotedNumber = String(invoice.quotedNumber || "").trim();
+    if (!quotedNumber) continue;
+    const linkedId = String(invoice.quoteId || "").trim();
+    const linkedQuote =
+      linkedId && linkedId !== invoice.id
+        ? docs.find((row) => row.id === linkedId && row.kind === "quote") ||
+          created.find((row) => row.id === linkedId)
+        : null;
+    if (linkedQuote) continue;
+
+    const quoteId = randomUUID();
+    const quote = {
+      id: quoteId,
+      kind: "quote",
+      number: quotedNumber,
+      status: "invoiced",
+      preset: invoice.preset || "custom",
+      createdAt: invoice.createdAt,
+      updatedAt: nowIso(),
+      sentAt: invoice.sentAt || "",
+      acceptedAt: invoice.acceptedAt || "",
+      validUntil: "",
+      customerId: invoice.customerId || "",
+      vehicleId: invoice.vehicleId || "",
+      customerName: invoice.customerName || "",
+      customerEmail: invoice.customerEmail || "",
+      customerPhone: invoice.customerPhone || "",
+      registration: invoice.registration || "",
+      vehicle: invoice.vehicle || "",
+      odometer: invoice.odometer || "",
+      notes: invoice.notes || "",
+      lines: (invoice.lines || []).map((line) => ({
+        ...line,
+        id: line.id || randomUUID(),
+      })),
+      acceptToken: invoice.acceptToken || newAcceptToken(),
+      viewToken: newViewToken(),
+      quoteId: "",
+      invoiceId: invoice.id,
+      jobId: invoice.jobId || "",
+      lastEmailedAt: invoice.lastEmailedAt || "",
+      lastEmailedTo: invoice.lastEmailedTo || "",
+      firstName: invoice.firstName || "",
+      lastName: invoice.lastName || "",
+      history: Array.isArray(invoice.history)
+        ? invoice.history.filter(
+            (row) => row?.type !== "payment" && row?.type !== "payment_removed"
+          )
+        : [],
+    };
+    invoice.quoteId = quoteId;
+    invoice.acceptToken = "";
+    if (invoice.status === "accepted") invoice.status = "sent";
+    created.push(quote);
+    changed = true;
+  }
+  if (!created.length) return false;
+  docs.push(...created);
+
+  try {
+    const jobs = readJobs();
+    let jobsChanged = false;
+    for (const job of jobs) {
+      const invoice =
+        (job.invoiceId && docs.find((d) => d.id === job.invoiceId && d.kind === "invoice")) ||
+        (job.quoteId && docs.find((d) => d.id === job.quoteId && d.kind === "invoice")) ||
+        null;
+      if (!invoice) continue;
+      const quote = docs.find((d) => d.id === invoice.quoteId && d.kind === "quote");
+      if (!quote) continue;
+      if (job.quoteId !== quote.id || job.quoteNumber !== quote.number) {
+        job.quoteId = quote.id;
+        job.quoteNumber = quote.number;
+        jobsChanged = true;
+      }
+      if (job.invoiceId !== invoice.id || job.invoiceNumber !== invoice.number) {
+        job.invoiceId = invoice.id;
+        job.invoiceNumber = invoice.number;
+        jobsChanged = true;
+      }
+    }
+    if (jobsChanged) writeJobs(jobs);
+  } catch (err) {
+    console.error("Could not relink jobs after splitting quotes:", err);
   }
   return changed;
 }
@@ -2014,7 +2584,7 @@ function normalizeLines(lines) {
   if (!Array.isArray(lines)) return [];
   return lines.map((line) => ({
     id: line.id || randomUUID(),
-    description: String(line.description || "").trim(),
+    description: catalog.capitalizeLineDescription(line.description),
     qty: Math.max(0, Number(line.qty) || 0),
     unitPriceIncl: Math.max(0, Number(line.unitPriceIncl) || 0),
   }));
@@ -2146,14 +2716,41 @@ function ensureHistory(doc) {
   });
 }
 
-/** Customer quote opens — cooldown avoids refresh spam in History. */
+function historyHasType(doc, type) {
+  return (doc.history || []).some((row) => row.type === type);
+}
+
+function backfillEmailAndViewHistory(doc) {
+  if (!doc) return;
+  ensureHistory(doc);
+  if (doc.lastEmailedAt && !historyHasType(doc, "sent")) {
+    appendHistory(doc, {
+      at: doc.lastEmailedAt,
+      type: "sent",
+      summary:
+        doc.kind === "invoice" ? "Invoice emailed to customer" : "Quote emailed to customer",
+      detail: doc.lastEmailedTo || "",
+    });
+  }
+  const openedAt = doc.lastViewedAt || doc.viewedAt;
+  if (openedAt && !historyHasType(doc, "viewed")) {
+    appendHistory(doc, {
+      at: openedAt,
+      type: "viewed",
+      summary:
+        doc.kind === "invoice" ? "Customer opened invoice" : "Customer opened quote",
+    });
+  }
+}
+
+/** Customer quote/invoice opens — cooldown avoids refresh spam in History. */
 const QUOTE_VIEW_COOLDOWN_MS = 30 * 60 * 1000;
 
-function recordCustomerQuoteView(doc) {
-  if (!doc || doc.kind !== "quote") return false;
+function recordCustomerDocumentView(doc) {
+  if (!doc || (doc.kind !== "quote" && doc.kind !== "invoice")) return false;
   if (doc.status === "void" || doc.status === "draft") return false;
 
-  ensureHistory(doc);
+  backfillEmailAndViewHistory(doc);
   const now = Date.now();
   const lastView = [...(doc.history || [])]
     .reverse()
@@ -2169,13 +2766,14 @@ function recordCustomerQuoteView(doc) {
   if (!doc.viewedAt) doc.viewedAt = iso;
   doc.lastViewedAt = iso;
   doc.viewCount = (Number(doc.viewCount) || 0) + 1;
+  const kindLabel = doc.kind === "invoice" ? "invoice" : "quote";
   appendHistory(doc, {
     at: iso,
     type: "viewed",
     summary:
       doc.viewCount === 1
-        ? "Customer opened quote"
-        : "Customer opened quote again",
+        ? `Customer opened ${kindLabel}`
+        : `Customer opened ${kindLabel} again`,
     detail: doc.viewCount > 1 ? `View #${doc.viewCount}` : "",
   });
   return true;
@@ -2258,6 +2856,10 @@ function withBillingTotals(doc, isAdmin) {
       : null;
   const payload = {
     ...doc,
+    lines: (doc.lines || []).map((line) => ({
+      ...line,
+      amounts: catalog.lineAmounts(line),
+    })),
     totals,
     shop: {
       name: business.name,
@@ -2617,6 +3219,7 @@ const UPLOAD_MIME_EXT = {
   "image/png": ".png",
   "image/gif": ".gif",
   "image/webp": ".webp",
+  "application/pdf": ".pdf",
 };
 const OCR_IMPORT_MIME = new Set([
   "application/pdf",
@@ -2638,10 +3241,22 @@ const upload = multer({
   storage,
   limits: { fileSize: 6 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const mimeOk = Boolean(UPLOAD_MIME_EXT[file.mimetype]);
+    const mimeOk = Boolean(UPLOAD_MIME_EXT[file.mimetype]) && file.mimetype !== "application/pdf";
     const extOk = UPLOAD_EXTS.has(path.extname(file.originalname || "").toLowerCase());
     if (!mimeOk || !extOk) {
       const err = new Error("Please upload a JPEG, PNG, GIF, or WebP photo.");
+      err.status = 400;
+      return cb(err);
+    }
+    cb(null, true);
+  },
+});
+const invoiceEvidenceUpload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!OCR_IMPORT_MIME.has(file.mimetype)) {
+      const err = new Error("Upload a PDF or image file.");
       err.status = 400;
       return cb(err);
     }
@@ -2884,12 +3499,18 @@ app.post("/api/customers", requireAdmin, (req, res) => {
   try {
     const fields = normalizeSavedCustomer(req.body);
     const rows = readSavedCustomers();
-    const plates = new Set(fields.vehicles.map((v) => plateKey(v.registration)));
-    const existing = rows.find((c) => {
-      const vehicles = normalizeVehicles(c, c);
-      return vehicles.some((v) => plates.has(plateKey(v.registration)));
-    });
-    const sameName = findCustomerWithSameName(rows, fields.customerName, existing?.id);
+    const plateOwner = findCustomerWithSamePlate(rows, fields.vehicles);
+    if (plateOwner) {
+      const err = new Error(
+        `Plate ${fields.vehicles
+          .map((v) => v.registration)
+          .filter(Boolean)
+          .join(", ")} is already on ${plateOwner.customerName}. Open that record instead.`
+      );
+      err.status = 400;
+      throw err;
+    }
+    const sameName = findCustomerWithSameName(rows, fields.customerName);
     if (sameName) {
       const err = new Error(
         `A customer named ${fields.customerName} already exists. Open that record instead.`
@@ -2897,12 +3518,15 @@ app.post("/api/customers", requireAdmin, (req, res) => {
       err.status = 400;
       throw err;
     }
-    const now = nowIso();
-    if (existing) {
-      Object.assign(existing, fields, { updatedAt: now });
-      writeSavedCustomers(rows);
-      return res.json(existing);
+    const sameEmail = findCustomerWithSameEmail(rows, fields.customerEmail);
+    if (sameEmail) {
+      const err = new Error(
+        `${fields.customerEmail} is already on ${sameEmail.customerName}. Open that record instead.`
+      );
+      err.status = 400;
+      throw err;
     }
+    const now = nowIso();
     const seq = nextCustomerSeq(rows);
     const row = {
       id: randomUUID(),
@@ -2931,6 +3555,25 @@ app.put("/api/customers/:id", requireAdmin, (req, res) => {
     if (sameName) {
       const err = new Error(
         `A customer named ${fields.customerName} already exists. Use a different name.`
+      );
+      err.status = 400;
+      throw err;
+    }
+    const plateOwner = findCustomerWithSamePlate(rows, fields.vehicles, rows[index].id);
+    if (plateOwner) {
+      const err = new Error(
+        `Plate ${fields.vehicles
+          .map((v) => v.registration)
+          .filter(Boolean)
+          .join(", ")} is already on ${plateOwner.customerName}. Open that record instead.`
+      );
+      err.status = 400;
+      throw err;
+    }
+    const sameEmail = findCustomerWithSameEmail(rows, fields.customerEmail, rows[index].id);
+    if (sameEmail) {
+      const err = new Error(
+        `${fields.customerEmail} is already on ${sameEmail.customerName}. Use a different email.`
       );
       err.status = 400;
       throw err;
@@ -3336,22 +3979,25 @@ app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
         quotesAwaiting += 1;
         quotesAwaitingTotal = catalog.round2(quotesAwaitingTotal + totals.totalIncl);
       }
-      if (doc.kind === "invoice" && doc.status !== "draft") {
+      if (doc.kind === "invoice") {
         const payment = normalizeInvoicePayment(doc, {}, totals);
-        if (isInvoiceOverdue(doc, payment)) {
-          invoicesOverdueCount += 1;
-          invoicesOverdueTotal = catalog.round2(
-            invoicesOverdueTotal + payment.balanceDue
-          );
-        }
-        if (
-          (payment.paymentStatus === "unpaid" || payment.paymentStatus === "deposit") &&
-          payment.balanceDue > 0
-        ) {
-          invoicesUnpaidCount += 1;
-          invoicesUnpaidTotal = catalog.round2(
-            invoicesUnpaidTotal + payment.balanceDue
-          );
+        const isDraft = doc.status === "draft";
+        if (!isDraft) {
+          if (isInvoiceOverdue(doc, payment)) {
+            invoicesOverdueCount += 1;
+            invoicesOverdueTotal = catalog.round2(
+              invoicesOverdueTotal + payment.balanceDue
+            );
+          }
+          if (
+            (payment.paymentStatus === "unpaid" || payment.paymentStatus === "deposit") &&
+            payment.balanceDue > 0
+          ) {
+            invoicesUnpaidCount += 1;
+            invoicesUnpaidTotal = catalog.round2(
+              invoicesUnpaidTotal + payment.balanceDue
+            );
+          }
         }
 
         const anchor = String(doc.sentAt || doc.createdAt || doc.updatedAt || "");
@@ -3363,27 +4009,29 @@ app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
           invoiceBucket.invoiced = catalog.round2(
             invoiceBucket.invoiced + totals.totalIncl
           );
-          if (payment.balanceDue > 0) {
+          if (!isDraft && payment.balanceDue > 0) {
             invoiceBucket.outstanding = catalog.round2(
               invoiceBucket.outstanding + payment.balanceDue
             );
           }
         }
-        for (const row of payment.payments) {
-          const paidMonth = String(row.paidAt || "").slice(0, 7);
-          const paidYear = Number(paidMonth.slice(0, 4));
-          if (Number.isInteger(paidYear)) financialYears.add(paidYear);
-          if (paidMonth === thisMonthKey) {
-            paymentsThisMonthCount += 1;
-            paymentsThisMonthTotal = catalog.round2(
-              paymentsThisMonthTotal + row.amount
-            );
-          }
-          const paymentBucket = monthBuckets.get(paidMonth);
-          if (paymentBucket) {
-            paymentBucket.received = catalog.round2(
-              paymentBucket.received + row.amount
-            );
+        if (!isDraft) {
+          for (const row of payment.payments) {
+            const paidMonth = String(row.paidAt || "").slice(0, 7);
+            const paidYear = Number(paidMonth.slice(0, 4));
+            if (Number.isInteger(paidYear)) financialYears.add(paidYear);
+            if (paidMonth === thisMonthKey) {
+              paymentsThisMonthCount += 1;
+              paymentsThisMonthTotal = catalog.round2(
+                paymentsThisMonthTotal + row.amount
+              );
+            }
+            const paymentBucket = monthBuckets.get(paidMonth);
+            if (paymentBucket) {
+              paymentBucket.received = catalog.round2(
+                paymentBucket.received + row.amount
+              );
+            }
           }
         }
       }
@@ -3836,6 +4484,7 @@ app.get("/api/billing/catalog", requireAdmin, (_req, res) => {
       kind: p.kind,
       label: p.label,
       title: p.title,
+      lines: catalog.cloneLines(p.lines),
     })),
     quickAdds: catalog.QUICK_ADDS,
     gstNumber: business.gstNumber || "",
@@ -3904,9 +4553,30 @@ app.post("/api/billing", requireAdmin, (req, res) => {
     return res.status(400).json({ error: "Choose a package or custom quote." });
   }
 
+  const customerName = String(req.body?.customerName || "").trim();
+  const customerId = String(req.body?.customerId || "").trim();
+  const registration = String(req.body?.registration || "").trim();
+  if (!customerName && !customerId && !registration) {
+    return res.status(400).json({
+      error: "Choose a customer (or enter a name / plate) before saving.",
+    });
+  }
+
   const docs = readBilling();
   const now = nowIso();
   const today = todayIso();
+  const bodyLines = Array.isArray(req.body?.lines) ? req.body.lines : null;
+  const lines = (bodyLines && bodyLines.length
+    ? bodyLines
+    : catalog.cloneLines(preset.lines)
+  ).map((line) => ({
+    id: line.id || randomUUID(),
+    description: catalog.capitalizeLineDescription
+      ? catalog.capitalizeLineDescription(line.description)
+      : String(line.description || "").trim(),
+    qty: Number(line.qty) || 0,
+    unitPriceIncl: Math.max(0, Number(line.unitPriceIncl) || 0),
+  }));
   const doc = {
     id: randomUUID(),
     kind: preset.kind,
@@ -3917,20 +4587,21 @@ app.post("/api/billing", requireAdmin, (req, res) => {
     updatedAt: now,
     sentAt: "",
     acceptedAt: "",
-    validUntil: preset.kind === "quote" ? plusDays(today, catalog.QUOTE_VALID_DAYS) : "",
-    customerId: "",
-    vehicleId: "",
-    customerName: "",
-    customerEmail: "",
-    customerPhone: "",
-    registration: "",
-    vehicle: "",
+    validUntil:
+      preset.kind === "quote"
+        ? String(req.body?.validUntil || "").trim() ||
+          plusDays(today, catalog.QUOTE_VALID_DAYS)
+        : "",
+    customerId,
+    vehicleId: String(req.body?.vehicleId || "").trim(),
+    customerName,
+    customerEmail: String(req.body?.customerEmail || "").trim(),
+    customerPhone: String(req.body?.customerPhone || "").trim(),
+    registration,
+    vehicle: String(req.body?.vehicle || "").trim(),
     odometer: req.body?.odometer || "",
-    notes: req.body?.notes || "",
-    lines: catalog.cloneLines(preset.lines).map((line) => ({
-      id: randomUUID(),
-      ...line,
-    })),
+    notes: String(req.body?.notes || "").trim(),
+    lines,
     acceptToken: preset.kind === "quote" ? newAcceptToken() : "",
     viewToken: newViewToken(),
     quoteId: "",
@@ -3948,7 +4619,7 @@ app.post("/api/billing", requireAdmin, (req, res) => {
   });
 
   docs.push(doc);
-  if (doc.kind === "invoice") {
+  if (doc.kind === "invoice" && (doc.customerName || doc.registration)) {
     try {
       syncJobFromInvoiceExtras(docs, doc);
     } catch (err) {
@@ -3982,14 +4653,14 @@ app.get("/api/billing/:id", (req, res) => {
 
   if (isAdmin) {
     const before = Array.isArray(doc.history) ? doc.history.length : 0;
-    ensureHistory(doc);
+    backfillEmailAndViewHistory(doc);
     if ((doc.history || []).length > before) writeBilling(docs);
-  } else if (recordCustomerQuoteView(doc)) {
+  } else if (recordCustomerDocumentView(doc)) {
     docs[index] = doc;
     try {
       writeBilling(docs);
     } catch (err) {
-      console.error("Could not save quote view:", err);
+      console.error("Could not save customer document view:", err);
     }
   }
 
@@ -4065,7 +4736,7 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
   }
 
   if (!Array.isArray(next.history)) next.history = Array.isArray(current.history) ? [...current.history] : [];
-  ensureHistory(next);
+  backfillEmailAndViewHistory(next);
 
   const beforePayments = normalizePaymentRows(current.payments || []);
   const afterPayments =
@@ -4347,40 +5018,96 @@ function convertQuoteToInvoice(docs, quote) {
     const existing = docs.find((d) => d.id === quote.invoiceId);
     if (existing && existing.kind === "invoice") {
       unifyInvoiceNumberFromQuote(docs, existing, quote);
+      if (quote.status !== "invoiced") {
+        quote.status = "invoiced";
+        quote.updatedAt = nowIso();
+      }
       return existing;
     }
   }
 
   const now = nowIso();
   const previousNumber = quote.number;
-  quote.kind = "invoice";
-  quote.quotedNumber = quote.quotedNumber || previousNumber;
-  quote.number = toInvoiceNumber(previousNumber);
-  quote.lines = lines;
-  quote.validUntil = "";
-  quote.quoteId = quote.id;
-  quote.invoiceId = quote.id;
+  let invoiceNumber = toInvoiceNumber(previousNumber);
+  const clash = docs.find(
+    (d) => d.kind === "invoice" && d.id !== quote.id && d.number === invoiceNumber
+  );
+  if (clash) invoiceNumber = nextBillingNumber(docs, "invoice");
+
+  const invoice = {
+    id: randomUUID(),
+    kind: "invoice",
+    number: invoiceNumber,
+    quotedNumber: previousNumber,
+    status: "sent",
+    preset: quote.preset || "custom",
+    createdAt: now,
+    updatedAt: now,
+    sentAt: quote.sentAt || now,
+    acceptedAt: quote.acceptedAt || now,
+    validUntil: "",
+    customerId: quote.customerId || "",
+    vehicleId: quote.vehicleId || "",
+    customerName: quote.customerName || "",
+    customerEmail: quote.customerEmail || "",
+    customerPhone: quote.customerPhone || "",
+    registration: quote.registration || "",
+    vehicle: quote.vehicle || "",
+    odometer: quote.odometer || "",
+    notes: quote.notes || "",
+    lines: lines.map((line) => ({
+      ...line,
+      id: randomUUID(),
+    })),
+    acceptToken: "",
+    viewToken: newViewToken(),
+    quoteId: quote.id,
+    invoiceId: "",
+    jobId: quote.jobId || "",
+    lastEmailedAt: "",
+    lastEmailedTo: "",
+    firstName: quote.firstName || "",
+    lastName: quote.lastName || "",
+    wofExpiry: quote.wofExpiry || "",
+    history: [],
+    ...emptyPaymentFields(),
+  };
+  invoice.invoiceId = invoice.id;
+  appendHistory(invoice, {
+    type: "created",
+    summary: "Invoice created from quote",
+    detail: previousNumber,
+    amount: catalog.computeTotals(invoice.lines).totalIncl,
+  });
+  appendHistory(invoice, {
+    type: "invoiced",
+    summary: "Converted from quote",
+    detail: `${previousNumber} → ${invoice.number}`,
+    amount: catalog.computeTotals(invoice.lines).totalIncl,
+  });
+
+  quote.status = "invoiced";
+  quote.invoiceId = invoice.id;
   quote.updatedAt = now;
-  if (!Array.isArray(quote.payments)) {
-    Object.assign(quote, emptyPaymentFields());
-  }
   ensureHistory(quote);
   appendHistory(quote, {
     type: "invoiced",
     summary: "Converted to invoice",
-    detail: `${previousNumber} → ${quote.number}`,
-    amount: catalog.computeTotals(quote.lines).totalIncl,
+    detail: `${previousNumber} → ${invoice.number}`,
+    amount: catalog.computeTotals(invoice.lines).totalIncl,
   });
+
+  docs.push(invoice);
 
   if (quote.jobId) {
     const jobs = readJobs();
     const job = jobs.find((j) => j.id === quote.jobId);
     if (job) {
-      job.invoiceId = quote.id;
-      job.invoiceNumber = quote.number;
+      job.invoiceId = invoice.id;
+      job.invoiceNumber = invoice.number;
       job.quoteId = quote.id;
-      job.quoteNumber = quote.quotedNumber || previousNumber;
-      const preferred = jobNumberFromBilling(quote.number);
+      job.quoteNumber = quote.number;
+      const preferred = jobNumberFromBilling(invoice.number);
       if (
         preferred &&
         job.number !== preferred &&
@@ -4393,11 +5120,11 @@ function convertQuoteToInvoice(docs, quote) {
     }
   }
   try {
-    syncJobFromInvoiceExtras(docs, quote);
+    syncJobFromInvoiceExtras(docs, invoice);
   } catch (err) {
     console.error("Could not add invoice extras to job card:", err);
   }
-  return quote;
+  return invoice;
 }
 
 function reportPhotoList(report = {}) {
@@ -4621,6 +5348,8 @@ app.post("/api/billing/:id/accept", async (req, res) => {
       ok: true,
       already: true,
       doc: withBillingTotals(doc, false),
+      invoiceId: invoice?.id || "",
+      invoiceNumber: invoice?.number || "",
       jobNumber: job?.number || "",
     });
   }
@@ -4654,7 +5383,7 @@ app.post("/api/billing/:id/accept", async (req, res) => {
 
   let job = null;
   try {
-    const ensured = ensureJobFromAcceptedQuote(docs, invoice || doc, invoice);
+    const ensured = ensureJobFromAcceptedQuote(docs, doc, invoice);
     job = ensured?.job || null;
   } catch (err) {
     console.error("Quote accepted but job card failed:", err);
@@ -4672,6 +5401,8 @@ app.post("/api/billing/:id/accept", async (req, res) => {
     ok: true,
     already: false,
     doc: withBillingTotals(doc, false),
+    invoiceId: invoice?.id || "",
+    invoiceNumber: invoice?.number || "",
     jobNumber: job?.number || "",
   });
 });
@@ -5132,19 +5863,77 @@ app.post("/api/jobs/:jobId/parts/:partId/mark-billed", requireAdmin, (req, res) 
   jobs[index].updatedAt = nowIso();
   writeJobs(jobs);
   writePartAudit("jobPart", next.id, "update", previous, next, req, "mark billed");
+  const invoiceId = next.linkedInvoiceId;
+  if (invoiceId) {
+    const docs = readBilling();
+    const invoice = docs.find((d) => d.id === invoiceId && d.kind === "invoice");
+    if (invoice && addJobPartsToInvoiceLines(invoice, [next])) writeBilling(docs);
+  }
   res.json(next);
 });
+
+function invoiceLineKey(description) {
+  return String(description || "")
+    .trim()
+    .toLowerCase();
+}
+
+function addJobPartsToInvoiceLines(invoice, parts) {
+  if (!invoice || invoice.kind !== "invoice" || invoice.status === "void") return 0;
+  const lines = Array.isArray(invoice.lines) ? [...invoice.lines] : [];
+  let added = 0;
+  for (const part of parts || []) {
+    const description = String(part.description || "").trim();
+    if (!description || jobsLib.isServiceOrLabourLine(description)) continue;
+    const key = invoiceLineKey(description);
+    if (lines.some((line) => invoiceLineKey(line.description) === key)) continue;
+    const qty = Number(part.qty);
+    lines.push({
+      id: randomUUID(),
+      description: catalog.capitalizeLineDescription(description),
+      qty: Number.isFinite(qty) && qty > 0 ? qty : 1,
+      unitPriceIncl: catalog.round2(Math.max(0, Number(part.sellPrice) || 0)),
+    });
+    added += 1;
+  }
+  if (!added) return 0;
+  invoice.lines = lines;
+  invoice.updatedAt = nowIso();
+  ensureHistory(invoice);
+  appendHistory(invoice, {
+    type: "edited",
+    summary: "Job parts added to invoice",
+    detail: `${added} line${added === 1 ? "" : "s"}`,
+    amount: catalog.computeTotals(invoice.lines).totalIncl,
+  });
+  return added;
+}
 
 app.post("/api/jobs/:jobId/invoices/:invoiceId/attach-parts", requireAdmin, (req, res) => {
   const jobs = readJobs();
   const index = jobs.findIndex((row) => row.id === req.params.jobId);
   if (index < 0) return res.status(404).json({ error: "Job not found" });
+  const docs = readBilling();
+  const invoice = docs.find((d) => d.id === req.params.invoiceId && d.kind === "invoice");
+  if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+  if (invoice.status === "void") {
+    return res.status(400).json({ error: "This invoice has been voided." });
+  }
+
   const onlyApproved = req.body?.onlyApproved !== false;
+  const toBill = [];
   let attached = 0;
   const rows = (jobs[index].parts || []).map((part) => {
+    if (jobsLib.isServiceOrLabourLine(part.description)) return part;
+    const alreadyOnThisInvoice =
+      String(part.linkedInvoiceId || "") === req.params.invoiceId;
+    if (alreadyOnThisInvoice) {
+      toBill.push(part);
+      return part;
+    }
     if (onlyApproved && part.status !== "approved") return part;
     attached += 1;
-    return jobsLib.normalizePart(
+    const next = jobsLib.normalizePart(
       {
         ...part,
         linkedInvoiceId: req.params.invoiceId,
@@ -5154,12 +5943,23 @@ app.post("/api/jobs/:jobId/invoices/:invoiceId/attach-parts", requireAdmin, (req
       },
       part.id
     );
+    toBill.push(next);
+    return next;
   });
   jobs[index].parts = rows;
   jobs[index].invoiceId = jobs[index].invoiceId || req.params.invoiceId;
+  jobs[index].invoiceNumber = jobs[index].invoiceNumber || invoice.number;
   jobs[index].updatedAt = nowIso();
+  const linesAdded = addJobPartsToInvoiceLines(invoice, toBill);
   writeJobs(jobs);
-  res.json({ ok: true, attached, invoiceId: req.params.invoiceId });
+  writeBilling(docs);
+  res.json({
+    ok: true,
+    attached,
+    linesAdded,
+    invoiceId: req.params.invoiceId,
+    invoice: withBillingTotals(invoice, true),
+  });
 });
 
 app.post(
@@ -5203,6 +6003,18 @@ app.post(
       }
 
       const now = nowIso();
+      const imageRefs = [];
+      if (file.buffer) {
+        const mime = String(file.mimetype || "");
+        const ext =
+          UPLOAD_MIME_EXT[mime] ||
+          (mime === "application/pdf" ? ".pdf" : mime.startsWith("image/") ? ".jpg" : "");
+        if (ext) {
+          const filename = `${Date.now()}-${randomUUID().slice(0, 8)}${ext}`;
+          fs.writeFileSync(path.join(UPLOADS_DIR, filename), file.buffer);
+          imageRefs.push(`/uploads/${filename}`);
+        }
+      }
       const created = normalizeSupplierInvoice({
         id: randomUUID(),
         supplier,
@@ -5215,7 +6027,7 @@ app.post(
         linkedJobId: String(req.body?.linkedJobId || "").trim(),
         notes: String(req.body?.notes || "").trim(),
         status: "parsed",
-        imageRefs: [],
+        imageRefs,
         ocrRawTextRef: "",
         parseVersion: "pdf-v1",
         createdAt: now,
@@ -5318,15 +6130,37 @@ app.get("/api/supplier-invoices", requireAdmin, (_req, res) => {
     .map((row) => normalizeSupplierInvoice(row))
     .map((row) => {
       const candidates = candidateRows.filter((c) => c.supplierInvoiceId === row.id);
-      const accepted = candidates.filter(
-        (c) => c.decision === "accepted" || c.decision === "edited_then_accepted"
-      ).length;
+      const accepted = candidates.filter((c) => isJobAcceptedCandidateDecision(c.decision)).length;
+      const consumable = candidates.filter((c) => c.decision === "consumable").length;
+      const tool = candidates.filter((c) => c.decision === "tool").length;
+      const rejected = candidates.filter((c) => c.decision === "rejected").length;
       const pending = candidates.filter((c) => c.decision === "pending").length;
+      const resolved = candidates.filter((c) => isResolvedCandidateDecision(c.decision)).length;
+      let consumableCost = 0;
+      let toolCost = 0;
+      for (const c of candidates) {
+        const line = toMoney((Number(c.qtyCandidate) || 0) * (Number(c.costPriceCandidate) || 0));
+        if (c.decision === "consumable") consumableCost += line;
+        if (c.decision === "tool") toolCost += line;
+      }
       return {
         ...row,
         candidatesTotal: candidates.length,
         candidatesAccepted: accepted,
+        candidatesConsumable: consumable,
+        candidatesTool: tool,
+        candidatesRejected: rejected,
+        candidatesResolved: resolved,
         candidatesPending: pending,
+        consumableCost: toMoney(consumableCost),
+        toolCost: toMoney(toolCost),
+        searchLines: candidates.map((c) => ({
+          description: String(c.descriptionCandidate || "").trim(),
+          partNumber: String(c.partNumberCandidate || "").trim(),
+          qty: Number(c.qtyCandidate) || 0,
+          cost: toMoney(c.costPriceCandidate),
+          decision: String(c.decision || "pending"),
+        })),
       };
     })
     .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
@@ -5340,13 +6174,17 @@ app.get("/api/supplier-invoices/:invoiceId", requireAdmin, (req, res) => {
   const candidates = readInvoiceCandidates().filter(
     (row) => row.supplierInvoiceId === req.params.invoiceId
   );
+  const normalized = normalizeSupplierInvoice(invoice);
   res.json({
-    ...normalizeSupplierInvoice(invoice),
+    ...normalized,
     candidatesTotal: candidates.length,
     candidatesPending: candidates.filter((row) => row.decision === "pending").length,
-    candidatesAccepted: candidates.filter(
-      (row) => row.decision === "accepted" || row.decision === "edited_then_accepted"
-    ).length,
+    candidatesAccepted: candidates.filter((row) => isJobAcceptedCandidateDecision(row.decision))
+      .length,
+    candidatesConsumable: candidates.filter((row) => row.decision === "consumable").length,
+    candidatesTool: candidates.filter((row) => row.decision === "tool").length,
+    candidatesResolved: candidates.filter((row) => isResolvedCandidateDecision(row.decision)).length,
+    tracking: supplierInvoiceTrackingSummary(normalized),
   });
 });
 
@@ -5387,13 +6225,13 @@ app.put("/api/supplier-invoices/:invoiceId", requireAdmin, (req, res) => {
 app.post(
   "/api/supplier-invoices/:invoiceId/images",
   requireAdmin,
-  upload.array("images", 12),
+  invoiceEvidenceUpload.array("images", 12),
   (req, res) => {
     const rows = readSupplierInvoices();
     const index = rows.findIndex((row) => row.id === req.params.invoiceId);
     if (index < 0) return res.status(404).json({ error: "Supplier invoice not found" });
     const files = req.files || [];
-    if (!files.length) return res.status(400).json({ error: "No image uploaded" });
+    if (!files.length) return res.status(400).json({ error: "No file uploaded" });
     const added = files.map((file) => `/uploads/${file.filename}`);
     const prev = normalizeSupplierInvoice(rows[index]);
     const next = normalizeSupplierInvoice({
@@ -5404,7 +6242,7 @@ app.post(
     });
     rows[index] = next;
     writeSupplierInvoices(rows);
-    writePartAudit("supplierInvoice", next.id, "update", prev, next, req, "images uploaded");
+    writePartAudit("supplierInvoice", next.id, "update", prev, next, req, "original file attached");
     res.json(next);
   }
 );
@@ -5510,6 +6348,22 @@ app.post("/api/invoice-candidates/:candidateId/edit-accept", requireAdmin, (req,
   }
 });
 
+app.patch("/api/invoice-candidates/:candidateId/edit-matched", requireAdmin, (req, res) => {
+  try {
+    res.json(editMatchedCandidate(req.params.candidateId, req));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post("/api/invoice-candidates/:candidateId/unmatch", requireAdmin, (req, res) => {
+  try {
+    res.json(unmatchInvoiceCandidate(req.params.candidateId, req));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
 app.post("/api/invoice-candidates/:candidateId/reject", requireAdmin, (req, res) => {
   const rows = readInvoiceCandidates();
   const index = rows.findIndex((row) => row.id === req.params.candidateId);
@@ -5532,6 +6386,70 @@ app.post("/api/invoice-candidates/:candidateId/reject", requireAdmin, (req, res)
   writePartAudit("invoiceCandidate", next.id, "reject", previous, next, req, next.matchReason);
   res.json({ candidate: next, supplierInvoice: invoice });
 });
+
+app.post("/api/invoice-candidates/:candidateId/consumable", requireAdmin, (req, res) => {
+  try {
+    res.json(classifyShopCandidate(req.params.candidateId, req, "consumable"));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post("/api/invoice-candidates/:candidateId/tool", requireAdmin, (req, res) => {
+  try {
+    res.json(classifyShopCandidate(req.params.candidateId, req, "tool"));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+function classifyShopCandidate(candidateId, req, decision) {
+  if (!isShopClassifiedCandidateDecision(decision)) {
+    const err = new Error("Invalid shop classification.");
+    err.status = 400;
+    throw err;
+  }
+  const rows = readInvoiceCandidates();
+  const index = rows.findIndex((row) => row.id === candidateId);
+  if (index < 0) {
+    const err = new Error("Candidate not found");
+    err.status = 404;
+    throw err;
+  }
+  const previous = normalizeCandidate(rows[index]);
+  if (previous.decision !== "pending") {
+    const err = new Error("Candidate has already been decided.");
+    err.status = 400;
+    throw err;
+  }
+  const defaultReason = decision === "tool" ? "shop tool" : "shop consumable";
+  const next = normalizeCandidate({
+    ...previous,
+    decision,
+    suggestedJobId: "",
+    suggestedPartId: "",
+    appliedJobId: "",
+    appliedPartId: "",
+    matchScore: 0,
+    decidedAt: nowIso(),
+    decidedBy: nowActor(req),
+    matchReason: String(req.body?.reason || previous.matchReason || defaultReason),
+    updatedAt: nowIso(),
+  });
+  rows[index] = next;
+  writeInvoiceCandidates(rows);
+  const invoice = refreshSupplierInvoiceStatus(next.supplierInvoiceId);
+  writePartAudit(
+    "invoiceCandidate",
+    next.id,
+    "update",
+    previous,
+    next,
+    req,
+    `candidate classified as ${decision}`
+  );
+  return { candidate: next, supplierInvoice: invoice };
+}
 
 app.get("/api/match/part-suggestions", requireAdmin, (req, res) => {
   const invoiceId = String(req.query.invoiceId || "").trim();

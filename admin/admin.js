@@ -189,7 +189,7 @@ window.DeaneAdmin = {
       day: "2-digit",
     }).format(new Date());
   },
-  createAutosave({ delay = 2500, isReady, save, onSaving, onError }) {
+  createAutosave({ delay = 30000, isReady, save, onSaving, onError }) {
     let timer = null;
     let inflight = null;
     let queued = false;

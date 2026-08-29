@@ -392,7 +392,7 @@
           </div>
         </div>
       </div>
-      <p class="muted small">Red bars include all invoices, including drafts and converted quotes. The blue line and values show payments received in each month.</p>
+      <p class="muted small">Red bars include all invoices (drafts, sent, and converted quotes), GST-inclusive. Voided invoices are excluded. The blue line and values show payments received in each month.</p>
     `;
   }
 

@@ -51,7 +51,7 @@ function blockedStaticPath(urlPath) {
   return false;
 }
 
-const UPLOAD_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp"]);
+const UPLOAD_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf"]);
 
 function safeUploadPath(uploadsDir, filename) {
   const base = path.basename(String(filename || ""));

@@ -637,12 +637,29 @@ async function saveCustomer(event) {
     return;
   }
   const matches = findContactMatches(body, vehicles);
-  if (matches.length) {
-    const detail = matches
+  const plateHits = matches.filter((hit) =>
+    hit.reasons.some((reason) => String(reason).startsWith("plate"))
+  );
+  const emailHits = matches.filter((hit) => hit.reasons.includes("email"));
+  if (plateHits.length) {
+    alert(
+      `This plate is already on ${plateHits[0].name}. Open that record instead.`
+    );
+    return;
+  }
+  if (emailHits.length) {
+    alert(
+      `This email is already on ${emailHits[0].name}. Open that record instead.`
+    );
+    return;
+  }
+  const phoneHits = matches.filter((hit) => hit.reasons.includes("phone"));
+  if (phoneHits.length) {
+    const detail = phoneHits
       .map((hit) => `${hit.name} (${hit.reasons.join(", ")})`)
       .join("\n");
     const ok = confirm(
-      `This customer may already exist:\n\n${detail}\n\nSave anyway?`
+      `This phone number may already exist:\n\n${detail}\n\nSave anyway?`
     );
     if (!ok) return;
   }

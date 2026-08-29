@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260826quoteinvoice" />
+    <link rel="stylesheet" href="admin.css?v=20260829tool-si" />
     <link rel="stylesheet" href="admin-refresh.css?v=20260826greencomplete" />
   </head>
   <body>
@@ -219,6 +219,7 @@
                 <button type="button" id="btn-jobs-save" class="ghost">Save</button>
                 <button type="button" id="btn-jobs-collected" class="primary" hidden>Mark collected</button>
                 <button type="button" id="btn-jobs-open-quote" class="ghost" hidden>Open quote</button>
+                <button type="button" id="btn-jobs-attach-invoice" class="ghost" hidden>Add parts to invoice</button>
                 <button type="button" id="btn-jobs-delete" class="danger">Delete</button>
               </div>
             </div>
@@ -257,17 +258,15 @@
 
               <fieldset>
                 <legend>Parts</legend>
-                <p class="muted small">Tick Ordered when you order. Tick Received when the part is in. Add supplier and ETA while waiting.</p>
+                <p class="muted small">Tick Ordered when you order. Tick Received when the part is in. Cost is the supplier price — customer sell price stays on the quote / invoice.</p>
                 <div class="line-table-wrap">
-                  <table class="line-table parts-table">
+                  <table class="line-table parts-table job-parts-table">
                     <thead>
                       <tr>
-                        <th>Part #</th>
-                        <th>Part</th>
+                        <th><span class="th-two-line">PART<br />NUMBER</span></th>
+                        <th><span class="th-two-line">PART<br />NAME</span></th>
                         <th>Qty</th>
                         <th>Cost</th>
-                        <th>Markup %</th>
-                        <th>Sell</th>
                         <th>Ordered</th>
                         <th>Received</th>
                         <th>Supplier</th>
@@ -300,14 +299,6 @@
                   <p class="muted small">Technicians can upload worksite photos from phone.</p>
                   <div id="job-work-photos" class="photo-thumbs"></div>
                 </div>
-                <div class="photo-row">
-                  <label class="file-label">
-                    Supplier invoice photos
-                    <input id="job-supplier-photos-input" type="file" accept="image/*" capture="environment" multiple />
-                  </label>
-                  <p class="muted small">Upload supplier invoice photos for office matching.</p>
-                  <div id="job-supplier-photos" class="photo-thumbs"></div>
-                </div>
               </fieldset>
             </form>
           </section>
@@ -315,13 +306,14 @@
 
         <section id="supplier-invoices-section" hidden>
           <section id="supplier-invoices-list-view">
-            <p class="muted small">Upload supplier invoices, parse parts candidates, then confirm lines onto a job card.</p>
+            <p class="muted small">Import supplier invoices, confirm extracted parts, then link costs to the right job. Mark consumables and tools separately so they count as matched and roll into this month’s spend.</p>
+            <p id="supplier-month-consumables" class="supplier-month-summary" hidden></p>
             <label class="list-search">
               Search supplier invoices
               <input
                 id="supplier-invoices-search"
                 type="search"
-                placeholder="Supplier or invoice number"
+                placeholder="Supplier, invoice #, or part name"
                 autocomplete="off"
               />
             </label>
@@ -346,7 +338,22 @@
 
             <form id="supplier-invoice-form" class="report-form">
               <fieldset>
-                <legend>Supplier invoice</legend>
+                <legend>① Upload Supplier Invoice</legend>
+                <p class="muted small">Upload your Repco / BNT / PartMaster invoice. We'll extract invoice details automatically. The uploaded file is kept with this record.</p>
+                <div class="photo-row">
+                  <label class="file-label">
+                    Choose files
+                    <input id="supplier-invoice-import-file-inline" type="file" accept=".pdf,application/pdf,image/*" capture="environment" />
+                  </label>
+                  <span class="muted small">or</span>
+                  <button type="button" id="btn-supplier-invoice-import-inline" class="ghost">Take photo / Upload PDF</button>
+                  <div id="supplier-invoice-photos" class="photo-thumbs"></div>
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend>② Invoice Details</legend>
+                <p class="muted small supplier-ocr-status" id="supplier-ocr-status-line">OCR pending</p>
                 <div class="grid-3">
                   <label>Supplier<input name="supplier" required /></label>
                   <label>Invoice #<input name="invoiceNo" required /></label>
@@ -354,39 +361,40 @@
                   <label>Subtotal<input name="subtotal" type="number" min="0" step="0.01" /></label>
                   <label>Tax<input name="tax" type="number" min="0" step="0.01" /></label>
                   <label>Total<input name="total" type="number" min="0" step="0.01" /></label>
-                  <label>
-                    Linked job
-                    <select name="linkedJobId" id="supplier-invoice-job-select">
-                      <option value="">Not linked</option>
-                    </select>
-                  </label>
-                  <label>Currency<input name="currency" value="NZD" /></label>
                 </div>
                 <label>Notes<textarea name="notes" rows="2"></textarea></label>
               </fieldset>
 
               <fieldset>
-                <legend>Invoice photos</legend>
-                <div class="photo-row">
-                  <label class="file-label">
-                    Add invoice photos
-                    <input id="supplier-invoice-images" type="file" accept="image/*" multiple />
-                  </label>
-                  <p class="muted small">Upload first, then parse OCR text or candidates.</p>
-                  <div id="supplier-invoice-photos" class="photo-thumbs"></div>
-                </div>
+                <legend>③ Extracted Items (Parts / Lines)</legend>
+                <p class="muted small">Review extracted lines: Accept onto a job, mark as Consumable or Tool (not for one car), or Ignore. Those lines count as matched and are tracked for monthly spend.</p>
+                <div id="supplier-candidates-list" class="supplier-candidates"></div>
               </fieldset>
 
               <fieldset>
-                <legend>Parse candidates</legend>
-                <label>OCR raw text<textarea id="supplier-invoice-raw-text" rows="6" placeholder="Paste OCR text here, then click Parse OCR text"></textarea></label>
-                <div class="line-actions">
-                  <button type="button" id="btn-supplier-invoice-parse" class="ghost">Parse OCR text</button>
+                <legend>④ Matched supplier cost</legend>
+                <div id="supplier-cost-tracking" class="supplier-cost-tracking">
+                  <div><span>Matched to jobs</span><strong id="track-supplier-cost">$0.00</strong></div>
+                  <div><span>Consumables</span><strong id="track-consumable-cost">$0.00</strong></div>
+                  <div><span>Tools</span><strong id="track-tool-cost">$0.00</strong></div>
+                  <div><span>Still to allocate</span><strong id="track-pending-cost">$0.00</strong></div>
+                  <div><span>Ignored</span><strong id="track-ignored-cost">$0.00</strong></div>
                 </div>
-                <p class="muted small">Each pending line can be accepted into a job part, edited then accepted, or rejected.</p>
-                <div id="supplier-candidates-list" class="supplier-candidates"></div>
+                <p class="muted small">Matched = job parts. Consumables / Tools = workshop purchases not charged to a vehicle. Ignored = discarded lines.</p>
               </fieldset>
+
+              <details class="supplier-ocr-advanced">
+                <summary>Advanced OCR text (admin)</summary>
+                <label>OCR raw text<textarea id="supplier-invoice-raw-text" rows="6" placeholder="Paste OCR text here only if automatic extraction needs help"></textarea></label>
+                <div class="line-actions">
+                  <button type="button" id="btn-supplier-invoice-parse" class="ghost">Re-parse OCR text</button>
+                </div>
+              </details>
             </form>
+            <div id="supplier-invoice-lightbox" class="supplier-invoice-lightbox" hidden>
+              <button type="button" class="ghost supplier-invoice-lightbox-close" id="btn-supplier-lightbox-close" aria-label="Close preview">×</button>
+              <div class="supplier-invoice-lightbox-body"></div>
+            </div>
           </section>
         </section>
 
@@ -583,6 +591,7 @@
 
               <fieldset id="billing-history-fieldset">
                 <legend>History</legend>
+                <p class="muted small">Includes when this was emailed, and when the customer opened the link.</p>
                 <ol id="billing-history" class="billing-history"></ol>
               </fieldset>
 
@@ -631,11 +640,11 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260826preview"></script>
-    <script src="dashboard.js?v=20260826greencomplete"></script>
-    <script src="jobs.js?v=20260827mobilephotos"></script>
-    <script src="supplier-invoices.js?v=20260827partsflow"></script>
-    <script src="billing.js?v=20260826quoteinvoice"></script>
+    <script src="admin.js?v=20260828autosave30"></script>
+    <script src="dashboard.js?v=20260828draftinvoiced"></script>
+    <script src="jobs.js?v=20260828partname"></script>
+    <script src="supplier-invoices.js?v=20260829nopreview"></script>
+    <script src="billing.js?v=20260828consumable"></script>
     <script src="customers.js?v=20260826datefmt"></script>
   </body>
 </html>
