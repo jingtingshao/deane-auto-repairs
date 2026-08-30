@@ -1,4 +1,8 @@
-require("dotenv").config();
+require("dotenv").config(
+  process.env.DOTENV_CONFIG_PATH
+    ? { path: process.env.DOTENV_CONFIG_PATH, override: true }
+    : undefined
+);
 
 const path = require("path");
 const fs = require("fs");
@@ -1984,11 +1988,27 @@ function namesFromCustomer(row = {}) {
 }
 
 function normalizeSavedCustomer(body, current = {}) {
-  const fromBody = namesFromCustomer({
-    firstName: body?.firstName ?? current.firstName,
-    lastName: body?.lastName ?? current.lastName,
-    customerName: body?.customerName ?? current.customerName,
-  });
+  const hasParts =
+    (body?.firstName != null && String(body.firstName).trim() !== "") ||
+    (body?.lastName != null && String(body.lastName).trim() !== "");
+  const hasFullName = body?.customerName != null && String(body.customerName).trim() !== "";
+  // If the client only sends customerName (no first/last), re-split it.
+  // Otherwise keeping current first/last would ignore the new full name.
+  const fromBody = namesFromCustomer(
+    hasParts
+      ? {
+          firstName: body?.firstName ?? current.firstName,
+          lastName: body?.lastName ?? current.lastName,
+          customerName: body?.customerName ?? current.customerName,
+        }
+      : hasFullName
+        ? { customerName: body.customerName }
+        : {
+            firstName: current.firstName,
+            lastName: current.lastName,
+            customerName: current.customerName,
+          }
+  );
   const firstName = fromBody.firstName;
   const lastName = fromBody.lastName;
   const customerName = fromBody.customerName;
@@ -3877,16 +3897,15 @@ function applyBookingSmsReply({ from, body, replyTo = "" } = {}) {
   if (index < 0) return { handled: false, reason: "missing", reply };
   const now = nowIso();
   const current = appointmentsLib.normalizeAppointment(rows[index], rows[index].id);
+  const mutable = new Set(["booked", "confirmed", "needs_reschedule"]);
   let nextStatus = current.status;
   let noteLine = "";
-  if (reply === "yes") {
-    if (
-      current.status === "booked" ||
-      current.status === "confirmed" ||
-      current.status === "needs_reschedule"
-    ) {
-      nextStatus = "confirmed";
-    }
+  let ignored = false;
+  if (!mutable.has(current.status)) {
+    ignored = true;
+    noteLine = `Customer SMS ${formatDateShort(now) || now.slice(0, 10)}: ${reply.toUpperCase()} (ignored — status is ${current.status}).`;
+  } else if (reply === "yes") {
+    nextStatus = "confirmed";
     noteLine = `Customer SMS ${formatDateShort(now) || now.slice(0, 10)}: YES — confirmed.`;
   } else {
     nextStatus = "needs_reschedule";
@@ -3906,13 +3925,16 @@ function applyBookingSmsReply({ from, body, replyTo = "" } = {}) {
   );
   writeAppointments(rows);
   console.log(
-    `Booking SMS reply ${reply.toUpperCase()} → appointment ${current.id} status=${nextStatus}`
+    `Booking SMS reply ${reply.toUpperCase()} → appointment ${current.id} status=${nextStatus}${
+      ignored ? " (ignored)" : ""
+    }`
   );
   return {
     handled: true,
     reply,
     appointmentId: current.id,
     status: nextStatus,
+    ignored,
     customerName: current.customerName || "",
     registration: current.registration || "",
   };
@@ -3966,7 +3988,7 @@ app.post("/api/websms/webhook", (req, res) => {
         registration: applied.registration || "",
         handled: Boolean(applied.handled),
         handleResult: applied.handled
-          ? `${applied.reply} → ${applied.status}`
+          ? `${applied.reply} → ${applied.status}${applied.ignored ? " (ignored)" : ""}`
           : applied.reason || "",
       });
       try {
