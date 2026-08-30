@@ -3,6 +3,7 @@
 const APPOINTMENT_STATUSES = [
   { id: "booked", label: "Booked" },
   { id: "confirmed", label: "Confirmed" },
+  { id: "needs_reschedule", label: "Need reschedule" },
   { id: "arrived", label: "Arrived" },
   { id: "job_created", label: "Job created" },
   { id: "cancelled", label: "Cancelled" },
@@ -126,6 +127,8 @@ function normalizeAppointment(row = {}, idFallback = "") {
     jobNumber: String(row.jobNumber || "").trim(),
     source,
     bookingSmsReminderSentAt: String(row.bookingSmsReminderSentAt || "").trim(),
+    bookingSmsReply: String(row.bookingSmsReply || "").trim(),
+    bookingSmsReplyAt: String(row.bookingSmsReplyAt || "").trim(),
     createdAt: String(row.createdAt || "").trim(),
     updatedAt: String(row.updatedAt || "").trim(),
   };

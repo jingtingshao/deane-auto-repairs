@@ -3783,12 +3783,139 @@ function appendSmsLog(entry = {}) {
     customerName: String(entry.customerName || matched?.customerName || "").trim(),
     registration: String(entry.registration || matched?.registration || "").trim(),
     vehicleId: String(entry.vehicleId || "").trim(),
+    appointmentId: String(entry.appointmentId || "").trim(),
     sandbox: Boolean(entry.sandbox),
     handled: Boolean(entry.handled),
+    handleResult: String(entry.handleResult || "").trim(),
   };
   rows.push(row);
   writeJsonArray(SMS_LOG_FILE, rows.length > 1000 ? rows.slice(-1000) : rows);
   return row;
+}
+
+/** Parse short YES/NO booking replies. Returns "yes" | "no" | "". */
+function parseBookingSmsReply(body) {
+  const text = String(body || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^[^\w]+|[^\w]+$/g, "");
+  if (!text) return "";
+  const first = text.split(/\s+/)[0] || "";
+  if (["yes", "y", "yeah", "yep", "ok", "okay", "confirm", "confirmed"].includes(first)) {
+    return "yes";
+  }
+  if (["no", "n", "nope", "nah", "cancel", "reschedule"].includes(first)) {
+    return "no";
+  }
+  if (/^(yes|y)\b/.test(text)) return "yes";
+  if (/^(no|n)\b/.test(text)) return "no";
+  return "";
+}
+
+function findAppointmentForBookingSmsReply(fromMobile, replyToMessageId = "") {
+  const want = websms.normalizeNzMobile(fromMobile);
+  if (!want) return null;
+  const today = todayIso();
+  const tomorrow = plusDays(today, 1);
+  const rows = readAppointments().map((row) => syncAppointmentJobMeta({ ...row }));
+
+  if (replyToMessageId) {
+    const out = readSmsLog().find(
+      (row) =>
+        row.direction === "out" &&
+        row.kind === "booking_confirm" &&
+        String(row.messageId || "") === String(replyToMessageId)
+    );
+    if (out?.appointmentId) {
+      const hit = rows.find((row) => row.id === out.appointmentId);
+      if (hit && hit.status !== "cancelled" && hit.status !== "no_show") return hit;
+    }
+    if (out?.registration || out?.customerId) {
+      const byLink = rows.find((row) => {
+        if (row.status === "cancelled" || row.status === "no_show") return false;
+        if (websms.normalizeNzMobile(row.customerPhone) !== want) return false;
+        if (out.customerId && row.customerId && row.customerId === out.customerId) return true;
+        if (out.registration && plateKey(row.registration) === plateKey(out.registration)) {
+          return true;
+        }
+        return false;
+      });
+      if (byLink) return byLink;
+    }
+  }
+
+  const candidates = rows
+    .filter((row) => {
+      if (row.status === "cancelled" || row.status === "no_show") return false;
+      if (websms.normalizeNzMobile(row.customerPhone) !== want) return false;
+      if (!row.date || row.date < today) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const byDate = String(a.date).localeCompare(String(b.date));
+      if (byDate) return byDate;
+      return String(a.startTime).localeCompare(String(b.startTime));
+    });
+
+  const withSms = candidates.filter((row) => row.bookingSmsReminderSentAt);
+  const tomorrowSms = withSms.filter((row) => row.date === tomorrow);
+  if (tomorrowSms.length) return tomorrowSms[0];
+  if (withSms.length) return withSms[0];
+  const tomorrowOnly = candidates.filter((row) => row.date === tomorrow);
+  if (tomorrowOnly.length === 1) return tomorrowOnly[0];
+  if (candidates.length === 1) return candidates[0];
+  return null;
+}
+
+function applyBookingSmsReply({ from, body, replyTo = "" } = {}) {
+  const reply = parseBookingSmsReply(body);
+  if (!reply) return { handled: false, reason: "not_yes_no" };
+  const appt = findAppointmentForBookingSmsReply(from, replyTo);
+  if (!appt) return { handled: false, reason: "no_match", reply };
+  const rows = readAppointments();
+  const index = rows.findIndex((row) => row.id === appt.id);
+  if (index < 0) return { handled: false, reason: "missing", reply };
+  const now = nowIso();
+  const current = appointmentsLib.normalizeAppointment(rows[index], rows[index].id);
+  let nextStatus = current.status;
+  let noteLine = "";
+  if (reply === "yes") {
+    if (
+      current.status === "booked" ||
+      current.status === "confirmed" ||
+      current.status === "needs_reschedule"
+    ) {
+      nextStatus = "confirmed";
+    }
+    noteLine = `Customer SMS ${formatDateShort(now) || now.slice(0, 10)}: YES — confirmed.`;
+  } else {
+    nextStatus = "needs_reschedule";
+    noteLine = `Customer SMS ${formatDateShort(now) || now.slice(0, 10)}: NO — need reschedule.`;
+  }
+  const notes = [noteLine, current.notes].filter(Boolean).join("\n");
+  rows[index] = appointmentsLib.normalizeAppointment(
+    {
+      ...current,
+      status: nextStatus,
+      notes,
+      bookingSmsReply: reply,
+      bookingSmsReplyAt: now,
+      updatedAt: now,
+    },
+    current.id
+  );
+  writeAppointments(rows);
+  console.log(
+    `Booking SMS reply ${reply.toUpperCase()} → appointment ${current.id} status=${nextStatus}`
+  );
+  return {
+    handled: true,
+    reply,
+    appointmentId: current.id,
+    status: nextStatus,
+    customerName: current.customerName || "",
+    registration: current.registration || "",
+  };
 }
 
 /**
@@ -3822,16 +3949,25 @@ app.post("/api/websms/webhook", (req, res) => {
   try {
     if (looksLikeInbound) {
       const from = websms.normalizeNzMobile(fromRaw) || fromRaw.replace(/^\+/, "");
+      const replyTo = String(
+        payload.replyTo || payload.replyToConnexusId || payload.relatedMessageId || ""
+      ).trim();
+      const applied = applyBookingSmsReply({ from, body, replyTo });
       const logged = appendSmsLog({
         direction: "in",
-        kind: "reply",
+        kind: applied.reply ? `reply_${applied.reply}` : "reply",
         from,
         to: String(payload.to || "").trim(),
         body,
         messageId: String(payload.messageId || payload.connexusMessageId || "").trim(),
-        replyTo: String(
-          payload.replyTo || payload.replyToConnexusId || payload.relatedMessageId || ""
-        ).trim(),
+        replyTo,
+        appointmentId: applied.appointmentId || "",
+        customerName: applied.customerName || "",
+        registration: applied.registration || "",
+        handled: Boolean(applied.handled),
+        handleResult: applied.handled
+          ? `${applied.reply} → ${applied.status}`
+          : applied.reason || "",
       });
       try {
         const legacy = readJsonArray(SMS_INBOUND_FILE, "sms inbound");
@@ -3845,13 +3981,18 @@ app.post("/api/websms/webhook", (req, res) => {
           messageId: logged.messageId,
           replyTo: logged.replyTo,
           raw: payload,
-          handled: false,
+          handled: Boolean(applied.handled),
+          handleResult: logged.handleResult || "",
         });
         writeJsonArray(SMS_INBOUND_FILE, legacy.length > 500 ? legacy.slice(-500) : legacy);
       } catch (legacyErr) {
         console.error("Legacy sms-inbound write failed:", legacyErr);
       }
-      console.log(`WebSMS inbound from ${from || "?"}: ${body.slice(0, 80)}`);
+      console.log(
+        `WebSMS inbound from ${from || "?"}: ${body.slice(0, 80)}${
+          applied.handled ? ` [${applied.reply} → ${applied.appointmentId}]` : ""
+        }`
+      );
     } else if (type === "dlr" || type === "DLR") {
       console.log(
         `WebSMS DLR ${payload.status || "?"} messageId=${payload.messageId || payload.connexusMessageId || ""}`
@@ -6447,6 +6588,7 @@ async function sendBookingConfirmSms(appointmentId) {
       customerId: appt.customerId || "",
       customerName: appt.customerName || "",
       registration: plate === "your vehicle" ? "" : plate,
+      appointmentId: appt.id,
       sandbox: Boolean(sent.sandbox),
     });
   } catch (logErr) {

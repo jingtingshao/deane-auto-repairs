@@ -35,6 +35,7 @@
   const STATUS_FALLBACK = [
     { id: "booked", label: "Booked" },
     { id: "confirmed", label: "Confirmed" },
+    { id: "needs_reschedule", label: "Need reschedule" },
     { id: "arrived", label: "Arrived" },
     { id: "job_created", label: "Job created" },
     { id: "cancelled", label: "Cancelled" },

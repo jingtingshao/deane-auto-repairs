@@ -2488,6 +2488,7 @@ label.check input {
 }
 
 .cal-slot.status-confirmed { border-left-color: #2e7d32; }
+.cal-slot.status-needs_reschedule { border-left-color: #e65100; }
 .cal-slot.status-arrived { border-left-color: #c77700; }
 .cal-slot.status-job_created { border-left-color: #0d47a1; }
 .cal-slot.status-cancelled,
@@ -2500,6 +2501,7 @@ label.check input {
 
 .badge.booked { background: #e8f1fb; color: var(--blue); }
 .badge.confirmed { background: #e8f5e9; color: var(--ok); }
+.badge.needs_reschedule { background: #fff3e0; color: #e65100; }
 .badge.arrived { background: #fff8e1; color: var(--watch); }
 .badge.job_created { background: #e3f2fd; color: #0d47a1; }
 .badge.cancelled,

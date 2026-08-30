@@ -49,6 +49,7 @@
             <th>Customer</th>
             <th>Plate</th>
             <th>Message</th>
+            <th>Result</th>
           </tr>
         </thead>
         <tbody>
@@ -58,6 +59,13 @@
               const dirClass = row.direction === "in" ? "in" : "out";
               const when = Admin.formatDateTimeShort?.(row.at) || Admin.formatDateShort?.(row.at) || row.at || "—";
               const sandbox = row.sandbox ? ` <span class="muted small">(sandbox)</span>` : "";
+              const result = row.handleResult
+                ? row.handleResult
+                : row.handled
+                  ? "Handled"
+                  : row.direction === "in"
+                    ? "—"
+                    : "";
               return `
             <tr class="sms-row sms-${dirClass}">
               <td class="sms-when">${Admin.escapeHtml(when)}</td>
@@ -66,6 +74,7 @@
               <td>${Admin.escapeHtml(row.customerName || "—")}</td>
               <td>${Admin.escapeHtml(row.registration || "—")}</td>
               <td class="sms-body">${Admin.escapeHtml(row.body || "")}</td>
+              <td class="muted small">${Admin.escapeHtml(result || "—")}</td>
             </tr>`;
             })
             .join("")}
