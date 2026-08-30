@@ -15,6 +15,8 @@
   const saveStatus = document.getElementById("calendar-save-status");
   const createJobBtn = document.getElementById("btn-cal-create-job");
   const openJobBtn = document.getElementById("btn-cal-open-job");
+  const remindTomorrowBtn = document.getElementById("btn-cal-remind-tomorrow");
+  const smsBtn = document.getElementById("btn-cal-sms");
 
   let viewMode = "fortnight";
   let anchorDate = activeFortnightStart();
@@ -23,6 +25,7 @@
   let current = null;
   let jobOptions = [];
   let customerDirectory = [];
+  let tomorrowSmsCount = 0;
 
   const partyFind = document.getElementById("cal-party-find");
   const partySuggest = document.getElementById("cal-party-suggest");
@@ -420,10 +423,112 @@
     const linked = Boolean(current?.jobId);
     if (createJobBtn) createJobBtn.hidden = !current || linked || current.status === "cancelled" || current.status === "no_show";
     if (openJobBtn) openJobBtn.hidden = !linked;
+    if (smsBtn) {
+      const canSms = Boolean(current?.canBookingSms);
+      const sent = Boolean(current?.bookingSmsReminderSentAt);
+      smsBtn.hidden = !current || (!canSms && !sent);
+      smsBtn.disabled = !canSms;
+      smsBtn.textContent = sent && !canSms ? "Booking SMS sent" : "Send booking SMS";
+    }
     if (jobLinkEl) {
       jobLinkEl.textContent = linked
         ? `Linked job: ${current.jobNumber || current.jobId}`
         : "No job linked yet. Create one when the vehicle arrives, or link an existing job later.";
+    }
+  }
+
+  function updateRemindTomorrowButton() {
+    if (!remindTomorrowBtn) return;
+    const n = Number(tomorrowSmsCount) || 0;
+    if (!n) {
+      remindTomorrowBtn.hidden = true;
+      remindTomorrowBtn.textContent = "Remind tomorrow";
+      return;
+    }
+    remindTomorrowBtn.hidden = false;
+    remindTomorrowBtn.textContent = `Remind tomorrow (${n})`;
+  }
+
+  async function refreshTomorrowSmsCount() {
+    try {
+      const info = await Admin.api("/api/appointments/booking-sms-tomorrow");
+      tomorrowSmsCount = Number(info.count) || 0;
+    } catch {
+      tomorrowSmsCount = rows.filter((r) => r.canBookingSms).length;
+    }
+    updateRemindTomorrowButton();
+  }
+
+  async function sendBookingSms(appointmentId, btn) {
+    if (!appointmentId) return;
+    if (!confirm("Send booking confirmation SMS for this appointment?")) return;
+    const label = btn?.textContent || "SMS";
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Sending…";
+      }
+      const result = await Admin.api("/api/appointments/booking-sms-reminder", {
+        method: "POST",
+        body: JSON.stringify({ appointmentId }),
+      });
+      if (result.alreadySent) {
+        alert(`Booking SMS already sent on ${Admin.formatDateTimeShort?.(result.sentAt) || result.sentAt}.`);
+      } else {
+        alert(
+          `SMS sent to ${result.to}${result.sandbox ? " (sandbox — not billed)" : ""}`
+        );
+      }
+      await loadList();
+      if (current?.id === appointmentId) {
+        current = rows.find((r) => r.id === appointmentId) || current;
+        fillForm(current);
+      }
+    } catch (err) {
+      alert(err.message || "Could not send SMS.");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+    }
+  }
+
+  async function sendBulkTomorrowSms() {
+    if (!tomorrowSmsCount) {
+      alert("No tomorrow bookings with a NZ mobile are waiting for an SMS.");
+      return;
+    }
+    if (
+      !confirm(
+        `Send booking SMS to ${tomorrowSmsCount} appointment${tomorrowSmsCount === 1 ? "" : "s"} tomorrow?\n\nReply YES to confirm or NO to reschedule.`
+      )
+    ) {
+      return;
+    }
+    const label = remindTomorrowBtn?.textContent || "Remind tomorrow";
+    try {
+      if (remindTomorrowBtn) {
+        remindTomorrowBtn.disabled = true;
+        remindTomorrowBtn.textContent = `Sending ${tomorrowSmsCount}…`;
+      }
+      const result = await Admin.api("/api/appointments/booking-sms-reminder-bulk", {
+        method: "POST",
+        body: "{}",
+      });
+      const failed = Array.isArray(result.failed) ? result.failed : [];
+      let msg = `Remind tomorrow done.\nSent: ${result.sent || 0}\nAlready sent: ${result.alreadySent || 0}\nFailed: ${failed.length}`;
+      if (failed[0]?.error) msg += `\n\nFirst error: ${failed[0].error}`;
+      alert(msg);
+      await loadList();
+    } catch (err) {
+      alert(err.message || "Bulk booking SMS failed.");
+    } finally {
+      if (remindTomorrowBtn) {
+        remindTomorrowBtn.disabled = false;
+        remindTomorrowBtn.textContent = label;
+      }
+      updateRemindTomorrowButton();
     }
   }
 
@@ -447,12 +552,24 @@
                 .map((row) => {
                   const time = `${row.startTime}–${row.endTime || endTime(row.startTime, row.durationMinutes)}`;
                   const vehicleLine = [row.registration, row.vehicle].filter(Boolean).join(" · ");
-                  return `<button type="button" class="cal-slot status-${Admin.escapeAttr(row.status)}" data-id="${Admin.escapeAttr(row.id)}">
-                    <span class="cal-slot-time">${Admin.escapeHtml(time)}</span>
-                    <strong>${Admin.escapeHtml(row.customerName || "Customer")}</strong>
-                    ${vehicleLine ? `<span class="muted small">${Admin.escapeHtml(vehicleLine)}</span>` : ""}
-                    <span class="badge ${Admin.escapeAttr(row.status)}">${Admin.escapeHtml(statusLabel(row.status))}</span>
-                  </button>`;
+                  return `<div class="cal-slot-wrap">
+                    <button type="button" class="cal-slot status-${Admin.escapeAttr(row.status)}" data-id="${Admin.escapeAttr(row.id)}">
+                      <span class="cal-slot-time">${Admin.escapeHtml(time)}</span>
+                      <strong>${Admin.escapeHtml(row.customerName || "Customer")}</strong>
+                      ${vehicleLine ? `<span class="muted small">${Admin.escapeHtml(vehicleLine)}</span>` : ""}
+                      <span class="badge ${Admin.escapeAttr(row.status)}">${Admin.escapeHtml(statusLabel(row.status))}</span>
+                      ${
+                        row.bookingSmsReminderSentAt
+                          ? `<span class="muted small">SMS sent</span>`
+                          : ""
+                      }
+                    </button>
+                    ${
+                      row.canBookingSms
+                        ? `<button type="button" class="ghost compact cal-slot-sms" data-sms-id="${Admin.escapeAttr(row.id)}">SMS</button>`
+                        : ""
+                    }
+                  </div>`;
                 })
                 .join("")}
             </div>`
@@ -478,6 +595,12 @@
         openAppointment(btn.dataset.id);
       });
     });
+    board.querySelectorAll("[data-sms-id]").forEach((btn) => {
+      btn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        sendBookingSms(btn.getAttribute("data-sms-id"), btn);
+      });
+    });
     board.querySelectorAll("[data-book-day]").forEach((btn) => {
       btn.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -486,7 +609,7 @@
     });
     board.querySelectorAll(".cal-day.is-bookable[data-day]").forEach((card) => {
       card.addEventListener("click", (event) => {
-        if (event.target.closest(".cal-slot, [data-book-day]")) return;
+        if (event.target.closest(".cal-slot, .cal-slot-sms, [data-book-day]")) return;
         newAppointment({ date: card.dataset.day });
       });
     });
@@ -500,6 +623,7 @@
     const { from, to } = rangeBounds();
     rows = await Admin.api(`/api/appointments?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
     renderBoard();
+    await refreshTomorrowSmsCount();
   }
 
   function fillForm(row) {
@@ -563,6 +687,7 @@
       notes: value("notes"),
       jobId: value("jobId"),
       source: current?.source || "manual",
+      bookingSmsReminderSentAt: current?.bookingSmsReminderSentAt || "",
     };
   }
 
@@ -676,6 +801,11 @@
   document.getElementById("btn-cal-new")?.addEventListener("click", () =>
     newAppointment({ date: nextBookableDate(anchorDate) })
   );
+  remindTomorrowBtn?.addEventListener("click", () => sendBulkTomorrowSms());
+  smsBtn?.addEventListener("click", () => {
+    if (!current?.id) return;
+    sendBookingSms(current.id, smsBtn);
+  });
   document.getElementById("btn-cal-back")?.addEventListener("click", () => showList());
   document.getElementById("btn-cal-save")?.addEventListener("click", async () => {
     try {

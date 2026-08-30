@@ -2464,6 +2464,17 @@ label.check input {
   gap: 0.55rem;
 }
 
+.cal-slot-wrap {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.cal-slot-wrap .cal-slot-sms {
+  justify-self: start;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+}
+
 .cal-slot {
   display: grid;
   gap: 0.2rem;

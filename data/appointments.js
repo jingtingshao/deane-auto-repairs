@@ -125,6 +125,7 @@ function normalizeAppointment(row = {}, idFallback = "") {
     jobId: String(row.jobId || "").trim(),
     jobNumber: String(row.jobNumber || "").trim(),
     source,
+    bookingSmsReminderSentAt: String(row.bookingSmsReminderSentAt || "").trim(),
     createdAt: String(row.createdAt || "").trim(),
     updatedAt: String(row.updatedAt || "").trim(),
   };

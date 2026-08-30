@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260830smsinbox" />
+    <link rel="stylesheet" href="admin.css?v=20260830remindtmr" />
     <link rel="stylesheet" href="admin-refresh.css?v=20260826greencomplete" />
   </head>
   <body>
@@ -206,6 +206,7 @@
                 <button type="button" class="ghost is-active" data-cal-view="fortnight">2 weeks</button>
                 <button type="button" class="ghost" data-cal-view="month">1 month</button>
               </div>
+              <button type="button" id="btn-cal-remind-tomorrow" class="ghost" hidden>Remind tomorrow</button>
               <button type="button" id="btn-cal-new" class="primary">+ New appointment</button>
             </div>
             <div id="calendar-board" class="calendar-board"></div>
@@ -216,6 +217,7 @@
               <button type="button" id="btn-cal-back" class="ghost">← Calendar</button>
               <div class="edit-actions">
                 <button type="button" id="btn-cal-save" class="primary">Save appointment</button>
+                <button type="button" id="btn-cal-sms" class="ghost" hidden>Send booking SMS</button>
                 <button type="button" id="btn-cal-create-job" class="ghost" hidden>Create job card</button>
                 <button type="button" id="btn-cal-open-job" class="ghost" hidden>Open job</button>
                 <button type="button" id="btn-cal-delete" class="danger">Delete</button>
@@ -564,9 +566,10 @@
 
         <section id="sms-inbox-section" hidden>
           <p class="muted small">
-            Outbound WOF reminders and customer replies via WebSMS. Newest first.
-            Webhook:
+            Outbound reminders and customer replies. Newest first.
+            Replies only arrive if WebSMS Members Area → API Keys → Webhook URL is set to
             <code>https://deane-auto-repairs.onrender.com/api/websms/webhook</code>
+            (not localhost). Local SMS Inbox will not show replies sent to Render.
           </p>
           <label class="list-search">
             Search SMS
@@ -775,7 +778,7 @@
 
     <script src="admin.js?v=20260830smsinbox"></script>
     <script src="dashboard.js?v=20260828draftinvoiced"></script>
-    <script src="calendar.js?v=20260830partyfix"></script>
+    <script src="calendar.js?v=20260830remindtmr"></script>
     <script src="jobs.js?v=20260830noparts"></script>
     <script src="supplier-invoices.js?v=20260829nopreview"></script>
     <script src="billing.js?v=20260830partyfix"></script>

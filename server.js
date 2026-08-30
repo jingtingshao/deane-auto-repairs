@@ -3802,18 +3802,26 @@ app.post("/api/websms/webhook", (req, res) => {
   if (expected) {
     const got = String(req.query.secret || req.headers["x-websms-secret"] || "").trim();
     if (got !== expected) {
+      console.warn("WebSMS webhook rejected: secret mismatch");
       return res.status(401).json({ error: "Unauthorized" });
     }
   }
 
+  // ACK quickly so WebSMS does not retry (must be within ~5s).
   res.status(200).json({ ok: true });
 
   const payload = req.body && typeof req.body === "object" ? req.body : {};
   const type = String(payload.type || "").trim();
+  const fromRaw = String(payload.from || "").trim();
+  const body = String(payload.body || payload.message || "").trim();
+  const looksLikeInbound =
+    type === "SMS" ||
+    type === "mo" ||
+    type === "MO" ||
+    (!type && fromRaw && body);
   try {
-    if (type === "SMS" || type === "mo" || type === "MO") {
-      const from = String(payload.from || "").trim();
-      const body = String(payload.body || "").trim();
+    if (looksLikeInbound) {
+      const from = websms.normalizeNzMobile(fromRaw) || fromRaw.replace(/^\+/, "");
       const logged = appendSmsLog({
         direction: "in",
         kind: "reply",
@@ -3821,9 +3829,10 @@ app.post("/api/websms/webhook", (req, res) => {
         to: String(payload.to || "").trim(),
         body,
         messageId: String(payload.messageId || payload.connexusMessageId || "").trim(),
-        replyTo: String(payload.replyTo || payload.replyToConnexusId || "").trim(),
+        replyTo: String(
+          payload.replyTo || payload.replyToConnexusId || payload.relatedMessageId || ""
+        ).trim(),
       });
-      // Keep legacy file in sync (same id) so migration does not duplicate.
       try {
         const legacy = readJsonArray(SMS_INBOUND_FILE, "sms inbound");
         legacy.push({
@@ -3848,7 +3857,9 @@ app.post("/api/websms/webhook", (req, res) => {
         `WebSMS DLR ${payload.status || "?"} messageId=${payload.messageId || payload.connexusMessageId || ""}`
       );
     } else {
-      console.log(`WebSMS webhook type=${type || "unknown"}`);
+      console.log(
+        `WebSMS webhook ignored type=${type || "unknown"} keys=${Object.keys(payload).join(",")}`
+      );
     }
   } catch (err) {
     console.error("WebSMS webhook processing failed:", err);
@@ -6323,14 +6334,216 @@ app.get("/api/appointments/meta", requireAdmin, (_req, res) => {
       { minutes: 180, label: "3 hours" },
       { minutes: 240, label: "Half day (4h)" },
     ],
+    websmsConfigured: websms.websmsConfigured(),
+    tomorrow: plusDays(todayIso(), 1),
   });
+});
+
+function formatSmsClock(time) {
+  const t = appointmentsLib.normalizeTime(time);
+  if (!t) return "";
+  const [hRaw, m] = t.split(":").map(Number);
+  const suffix = hRaw >= 12 ? "pm" : "am";
+  const h12 = hRaw % 12 || 12;
+  return m ? `${h12}:${String(m).padStart(2, "0")}${suffix}` : `${h12}${suffix}`;
+}
+
+function appointmentBookingSmsEligible(row, tomorrow = plusDays(todayIso(), 1)) {
+  if (!row) return false;
+  if (appointmentsLib.normalizeDate(row.date) !== tomorrow) return false;
+  if (row.status === "cancelled" || row.status === "no_show") return false;
+  if (row.bookingSmsReminderSentAt) return false;
+  if (!websms.normalizeNzMobile(row.customerPhone)) return false;
+  return websms.websmsConfigured();
+}
+
+function withAppointmentSmsMeta(row) {
+  const next = syncAppointmentJobMeta({ ...row });
+  return {
+    ...next,
+    canBookingSms: appointmentBookingSmsEligible(next),
+  };
+}
+
+async function sendBookingConfirmSms(appointmentId) {
+  if (!websms.websmsConfigured()) {
+    const err = new Error(
+      "WebSMS not configured. Add WEBSMS_CLIENT_ID and WEBSMS_CLIENT_SECRET to .env / Render, then restart."
+    );
+    err.status = 503;
+    throw err;
+  }
+  const rows = readAppointments();
+  const index = rows.findIndex((row) => row.id === appointmentId);
+  if (index < 0) {
+    const err = new Error("Appointment not found");
+    err.status = 404;
+    throw err;
+  }
+  const appt = syncAppointmentJobMeta({ ...rows[index] });
+  const tomorrow = plusDays(todayIso(), 1);
+  if (appointmentsLib.normalizeDate(appt.date) !== tomorrow) {
+    const err = new Error("Booking SMS is only for appointments scheduled tomorrow.");
+    err.status = 400;
+    throw err;
+  }
+  if (appt.status === "cancelled" || appt.status === "no_show") {
+    const err = new Error("Cannot SMS a cancelled or no-show appointment.");
+    err.status = 400;
+    throw err;
+  }
+  if (appt.bookingSmsReminderSentAt) {
+    return {
+      ok: true,
+      alreadySent: true,
+      channel: "sms",
+      to: websms.normalizeNzMobile(appt.customerPhone) || appt.customerPhone,
+      sentAt: appt.bookingSmsReminderSentAt,
+      appointmentId: appt.id,
+    };
+  }
+  const to = websms.normalizeNzMobile(appt.customerPhone);
+  if (!to) {
+    const err = new Error("Appointment needs a valid NZ mobile number for SMS.");
+    err.status = 400;
+    throw err;
+  }
+
+  const name =
+    namesFromCustomer({ customerName: appt.customerName }).firstName ||
+    String(appt.customerName || "there").trim() ||
+    "there";
+  const plate = String(appt.registration || "").trim().toUpperCase() || "your vehicle";
+  const when = formatSmsClock(appt.startTime) || appt.startTime || "your booked time";
+  const body =
+    `Hi ${name}, your vehicle ${plate} is booked in tomorrow at ${when}. ` +
+    `Reply YES to confirm or NO to reschedule. Deane Auto ${business.phoneTel}`;
+
+  const sent = await websms.sendSms({
+    to,
+    body,
+    messageClass: "transactional",
+  });
+  const sentAt = nowIso();
+  rows[index] = appointmentsLib.normalizeAppointment(
+    {
+      ...appt,
+      bookingSmsReminderSentAt: sentAt,
+      updatedAt: sentAt,
+    },
+    appt.id
+  );
+  writeAppointments(rows);
+
+  try {
+    appendSmsLog({
+      direction: "out",
+      kind: "booking_confirm",
+      at: sentAt,
+      from: String(process.env.WEBSMS_FROM || "").trim(),
+      to: sent.to,
+      body,
+      messageId: sent.messageId || "",
+      customerId: appt.customerId || "",
+      customerName: appt.customerName || "",
+      registration: plate === "your vehicle" ? "" : plate,
+      sandbox: Boolean(sent.sandbox),
+    });
+  } catch (logErr) {
+    console.error("Could not write booking SMS to inbox:", logErr);
+  }
+
+  return {
+    ok: true,
+    channel: "sms",
+    to: sent.to,
+    sentAt,
+    appointmentId: appt.id,
+    messageId: sent.messageId || "",
+    sandbox: Boolean(sent.sandbox),
+    customerName: appt.customerName || "",
+  };
+}
+
+app.get("/api/appointments/booking-sms-tomorrow", requireAdmin, (_req, res) => {
+  try {
+    const tomorrow = plusDays(todayIso(), 1);
+    const eligible = readAppointments()
+      .map((row) => withAppointmentSmsMeta(row))
+      .filter((row) => row.canBookingSms)
+      .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)));
+    res.json({
+      tomorrow,
+      count: eligible.length,
+      appointments: eligible,
+      websmsConfigured: websms.websmsConfigured(),
+    });
+  } catch (err) {
+    console.error("Booking SMS tomorrow list failed:", err);
+    res.status(500).json({ error: "Could not load tomorrow booking SMS list." });
+  }
+});
+
+app.post("/api/appointments/booking-sms-reminder", requireAdmin, async (req, res) => {
+  try {
+    const id = String(req.body?.appointmentId || "").trim();
+    if (!id) return res.status(400).json({ error: "appointmentId is required." });
+    const result = await sendBookingConfirmSms(id);
+    res.json(result);
+  } catch (err) {
+    const status = err.status || 400;
+    if (status >= 500) console.error("Booking SMS reminder failed:", err);
+    res.status(status).json({
+      error: err.message || "Failed to send booking SMS. Check WebSMS settings.",
+    });
+  }
+});
+
+app.post("/api/appointments/booking-sms-reminder-bulk", requireAdmin, async (req, res) => {
+  try {
+    if (!websms.websmsConfigured()) {
+      return res.status(503).json({
+        error:
+          "WebSMS not configured. Add WEBSMS_CLIENT_ID and WEBSMS_CLIENT_SECRET to .env / Render, then restart.",
+      });
+    }
+    const tomorrow = plusDays(todayIso(), 1);
+    const targets = readAppointments()
+      .map((row) => withAppointmentSmsMeta(row))
+      .filter((row) => row.canBookingSms);
+    const summary = {
+      tomorrow,
+      sent: 0,
+      alreadySent: 0,
+      failed: [],
+    };
+    for (const target of targets) {
+      try {
+        const result = await sendBookingConfirmSms(target.id);
+        if (result.alreadySent) summary.alreadySent += 1;
+        else summary.sent += 1;
+      } catch (err) {
+        console.error("Booking bulk SMS failed:", target.id, err.message || err);
+        summary.failed.push({
+          appointmentId: target.id,
+          customerName: target.customerName || "",
+          registration: target.registration || "",
+          error: err.message || "Failed",
+        });
+      }
+    }
+    res.json(summary);
+  } catch (err) {
+    console.error("Booking bulk SMS failed:", err);
+    res.status(500).json({ error: err.message || "Bulk booking SMS failed." });
+  }
 });
 
 app.get("/api/appointments", requireAdmin, (req, res) => {
   const from = appointmentsLib.normalizeDate(req.query.from);
   const to = appointmentsLib.normalizeDate(req.query.to);
   const jobId = String(req.query.jobId || "").trim();
-  let rows = readAppointments().map((row) => syncAppointmentJobMeta({ ...row }));
+  let rows = readAppointments().map((row) => withAppointmentSmsMeta(row));
   if (from) rows = rows.filter((row) => row.date >= from);
   if (to) rows = rows.filter((row) => row.date <= to);
   if (jobId) rows = rows.filter((row) => row.jobId === jobId);
@@ -6345,8 +6558,7 @@ app.get("/api/appointments", requireAdmin, (req, res) => {
 app.get("/api/appointments/:id", requireAdmin, (req, res) => {
   const row = readAppointments().find((item) => item.id === req.params.id);
   if (!row) return res.status(404).json({ error: "Appointment not found" });
-  const next = syncAppointmentJobMeta({ ...row });
-  res.json(next);
+  res.json(withAppointmentSmsMeta(row));
 });
 
 app.post("/api/appointments", requireAdmin, (req, res) => {
