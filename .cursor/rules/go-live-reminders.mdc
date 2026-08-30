@@ -15,13 +15,15 @@ Remind them and offer to do this pass together:
 3. Add `robots.txt` and `sitemap.xml`
 4. Add Open Graph / social share meta (title, description, image)
 5. Submit the live domain + sitemap in Google Search Console (and Bing if useful)
-6. **Create / claim Google Business Profile (Google Maps)** — the business is not registered yet; remind the user to set this up during domain deploy with:
-   - Business name: Deane Auto Repairs
-   - Address: 63 Hayr Road, Three Kings, Auckland (Next to BP Petrol Station)
-   - Phone: 0800 625 9827
-   - Website: the live domain
-   - Hours: Mon–Sat 8:30am – 5:30pm; Sunday closed
-   - Categories: car repair / auto repair / WOF-related if available
+6. **Google Business Profile (Google Maps)**
+   - Status as of **31 Aug 2026**: registered, **waiting for verification**
+   - **Next-week reminder (~7 Sep 2026 / when user returns next week):** ask whether GBP is verified yet
+   - If verified, help with:
+     - Website URL = live domain (e.g. `https://www.deaneauto.co.nz`)
+     - Confirm phone `0800 625 9827`, hours Mon–Sat 8:30am–5:30pm / Sunday closed
+     - Replace site “Open in Google Maps” with the official GBP Maps link
+     - Suggest uploading workshop / storefront photos
+   - If still pending: ask which verification method they’re using and wait; do not nag daily
 7. Confirm Google Business Profile website URL matches the live domain once claimed
 
 ## Report / admin launch checklist (same pass)
