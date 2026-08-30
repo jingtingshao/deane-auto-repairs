@@ -310,21 +310,17 @@ p {
   bottom: 0;
   left: 0;
   display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr;
+  grid-template-columns: 1fr;
   border-top: 1px solid #ffffff66;
 }
 
 .hero-footer div {
   display: flex;
   min-height: 74px;
-  padding: 17px 20px;
-  border-right: 1px solid #ffffff66;
+  padding: 17px 0;
   flex-direction: column;
   justify-content: center;
-}
-
-.hero-footer div:first-child {
-  padding-left: 0;
+  border-right: 0;
 }
 
 .hero-footer strong {
@@ -850,12 +846,8 @@ footer {
     padding: 70px 0 110px;
   }
 
-  .hero-footer div:first-child {
-    display: none;
-  }
-
   .hero-footer {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
   .trust-grid,
