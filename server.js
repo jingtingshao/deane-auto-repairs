@@ -119,6 +119,7 @@ const SUPPLIER_INVOICES_FILE = path.join(DATA_DIR, "supplier-invoices.json");
 const INVOICE_CANDIDATES_FILE = path.join(DATA_DIR, "invoice-candidates.json");
 const PART_AUDIT_FILE = path.join(DATA_DIR, "part-audit-log.json");
 const SMS_INBOUND_FILE = path.join(DATA_DIR, "sms-inbound.json");
+const SMS_LOG_FILE = path.join(DATA_DIR, "sms-log.json");
 const UPLOADS_DIR = (() => {
   const raw = String(process.env.UPLOADS_DIR || "").trim();
   if (raw && isWritableDir(path.resolve(raw))) return path.resolve(raw);
@@ -174,6 +175,7 @@ for (const file of [
   INVOICE_CANDIDATES_FILE,
   PART_AUDIT_FILE,
   SMS_INBOUND_FILE,
+  SMS_LOG_FILE,
 ]) {
   if (!fs.existsSync(file)) writeJsonArray(file, []);
 }
@@ -1992,7 +1994,7 @@ function normalizeSavedCustomer(body, current = {}) {
   const customerName = fromBody.customerName;
   const customerAddress = String(body?.customerAddress ?? current.customerAddress ?? "").trim();
   const customerPhone = String(body?.customerPhone ?? current.customerPhone ?? "").trim();
-  const vehicles = normalizeVehicles(body || {}, current || {});
+  const vehicles = applyCustomerVehicles(body || {}, current || {});
   if (!firstName) {
     const err = new Error("First name is required.");
     err.status = 400;
@@ -2184,23 +2186,11 @@ function upsertCustomerFromParty(party = {}) {
       }
       const vehicles = normalizeVehicles(current, current);
       const pk = plateKey(registration);
-      if (!vehicles.some((v) => plateKey(v.registration) === pk)) {
-        // Plate is free (no other owner) — add it onto this customer.
-        vehicles.push({
-          id: randomUUID(),
-          registration,
-          vehicle: vehicleDesc,
-          wofExpiry: "",
-          wofReminderSentAt: "",
-          wofSmsReminderSentAt: "",
-        });
-        current.vehicles = vehicles;
-        current.registration = vehicles[0]?.registration || registration;
-        current.updatedAt = nowIso();
-        rows[index] = current;
-        writeSavedCustomers(rows);
+      if (vehicles.some((v) => plateKey(v.registration) === pk)) {
+        return { customerId: current.id, created: false, linked: true };
       }
-      return { customerId: current.id, created: false, linked: true };
+      // One plate per customer: another plate → new record (same name allowed).
+      // Fall through to create below.
     }
   }
 
@@ -2253,15 +2243,45 @@ function attachPartyCustomerId(row = {}) {
 }
 
 function customerRecordKey(item) {
-  if (item.customerId) return `id:${item.customerId}`;
+  if (item.listKey) return item.listKey;
+  if (item.customerId) {
+    const pk = plateKey(item.registration);
+    if (pk) return `id:${item.customerId}:rego:${pk}`;
+    if (item.vehicleId) return `id:${item.customerId}:veh:${item.vehicleId}`;
+    return `id:${item.customerId}`;
+  }
   const plate = plateKey(item.registration);
   if (plate) return `rego:${plate}`;
   const email = String(item.customerEmail || "").trim().toLowerCase();
   if (email) return `email:${email}`;
   const name = String(item.customerName || "").trim().toLowerCase();
   const phone = String(item.customerPhone || "").replace(/\s+/g, "");
-  if (name || phone) return `id:${name}|${phone}`;
+  if (name || phone) return `name:${name}|${phone}`;
   return "";
+}
+
+function customerIdFromListKey(key) {
+  const m = String(key || "").match(/^id:([^:]+)/);
+  return m ? m[1] : "";
+}
+
+/** One plate per customer going forward; legacy multi-car keeps other plates when editing one. */
+function applyCustomerVehicles(body = {}, current = {}) {
+  const currentVehicles = normalizeVehicles(current, current);
+  if (!Array.isArray(body.vehicles)) {
+    return currentVehicles.length ? currentVehicles : normalizeVehicles(body, current);
+  }
+  const next = normalizeVehicles(body, current);
+  const focusId = String(body.vehicleId || body.vehicles[0]?.id || "").trim();
+  if (next.length === 1 && currentVehicles.length > 1 && focusId) {
+    const idx = currentVehicles.findIndex((v) => v.id === focusId);
+    if (idx >= 0) {
+      const out = currentVehicles.slice();
+      out[idx] = { ...currentVehicles[idx], ...next[0], id: currentVehicles[idx].id };
+      return out;
+    }
+  }
+  return next.length ? [next[0]] : [];
 }
 
 function wofMeta(expiry) {
@@ -2295,6 +2315,7 @@ function mergeCustomer(map, incoming) {
   if (!key) return;
   const cur = map.get(key) || {
     key,
+    listKey: key,
     customerName: "",
     firstName: "",
     lastName: "",
@@ -2304,6 +2325,7 @@ function mergeCustomer(map, incoming) {
     registrations: [],
     vehicles: [],
     vehicle: "",
+    vehicleId: "",
     wofExpiry: "",
     wofReminderSentAt: "",
     lastVisit: "",
@@ -2385,6 +2407,8 @@ function mergeCustomer(map, incoming) {
   const savedWins = Boolean(cur.customerId);
   map.set(key, {
     ...cur,
+    key,
+    listKey: key,
     firstName: savedWins ? curNames.firstName || "" : names.firstName || curNames.firstName || "",
     lastName: savedWins ? curNames.lastName || "" : names.lastName || curNames.lastName || "",
     customerName: savedWins
@@ -2401,9 +2425,14 @@ function mergeCustomer(map, incoming) {
       : incoming.customerPhone || cur.customerPhone || "",
     vehicles,
     registrations,
-    registration: registrations.join(", "),
+    registration: registrations.join(", ") || incoming.registration || cur.registration || "",
     vehicle:
-      (isNewerVisit && incoming.vehicle) || cur.vehicle || incoming.vehicle || "",
+      (isNewerVisit && incoming.vehicle) ||
+      vehicles[0]?.vehicle ||
+      cur.vehicle ||
+      incoming.vehicle ||
+      "",
+    vehicleId: incoming.vehicleId || vehicles[0]?.id || cur.vehicleId || "",
     wofExpiry: bestWof,
     wofReminderSentAt: incoming.wofReminderSentAt || cur.wofReminderSentAt || "",
     lastVisit: incomingVisit >= (cur.lastVisit || "") ? incomingVisit : cur.lastVisit,
@@ -2429,35 +2458,48 @@ function listCustomers() {
   for (const c of readSavedCustomers()) {
     seqById.set(c.id, customerSeqOf(c));
     const vehicles = normalizeVehicles(c, c);
-    const key = `id:${c.id}`;
-    for (const v of vehicles) {
-      const pk = plateKey(v.registration);
-      if (pk) plateOwner.set(pk, key);
-    }
+    const list = vehicles.length
+      ? vehicles
+      : [
+          {
+            id: "",
+            registration: c.registration || "",
+            vehicle: "",
+            wofExpiry: c.wofExpiry || "",
+            wofReminderSentAt: c.wofReminderSentAt || "",
+            wofSmsReminderSentAt: "",
+          },
+        ];
     const names = namesFromCustomer(c);
-    mergeCustomer(map, {
-      firstName: names.firstName,
-      lastName: names.lastName,
-      customerName: names.customerName,
-      customerAddress: c.customerAddress,
-      customerPhone: c.customerPhone,
-      customerEmail: c.customerEmail || "",
-      vehicles,
-      registration: vehicles[0]?.registration || c.registration || "",
-      vehicle: "",
-      wofExpiry:
-        vehicles.map((v) => v.wofExpiry).filter(Boolean).sort()[0] || c.wofExpiry || "",
-      wofReminderSentAt: c.wofReminderSentAt || "",
-      lastVisit: "",
-      lastJobNumber: "",
-      lastReportId: "",
-      lastBillingId: "",
-      customerId: c.id,
-      dailySeq: c.dailySeq || c.customerSeq || 0,
-      customerSeq: c.customerSeq || c.dailySeq || 0,
-      dailySeqDate: c.dailySeqDate || "",
-      createdAt: c.createdAt || "",
-    });
+    for (const v of list) {
+      const pk = plateKey(v.registration) || String(v.id || "none");
+      const listKey = `id:${c.id}:rego:${pk}`;
+      if (plateKey(v.registration)) plateOwner.set(plateKey(v.registration), listKey);
+      mergeCustomer(map, {
+        listKey,
+        firstName: names.firstName,
+        lastName: names.lastName,
+        customerName: names.customerName,
+        customerAddress: c.customerAddress,
+        customerPhone: c.customerPhone,
+        customerEmail: c.customerEmail || "",
+        vehicles: [v],
+        registration: v.registration || "",
+        vehicle: v.vehicle || "",
+        vehicleId: v.id || "",
+        wofExpiry: v.wofExpiry || "",
+        wofReminderSentAt: v.wofReminderSentAt || "",
+        lastVisit: "",
+        lastJobNumber: "",
+        lastReportId: "",
+        lastBillingId: "",
+        customerId: c.id,
+        dailySeq: c.dailySeq || c.customerSeq || 0,
+        customerSeq: c.customerSeq || c.dailySeq || 0,
+        dailySeqDate: c.dailySeqDate || "",
+        createdAt: c.createdAt || "",
+      });
+    }
   }
 
   function mergeIncoming(incoming) {
@@ -2465,7 +2507,8 @@ function listCustomers() {
     const owned = pk ? plateOwner.get(pk) : "";
     mergeCustomer(map, {
       ...incoming,
-      customerId: owned ? owned.slice(3) : incoming.customerId || "",
+      listKey: owned || undefined,
+      customerId: owned ? customerIdFromListKey(owned) : incoming.customerId || "",
     });
   }
 
@@ -2512,16 +2555,18 @@ function listCustomers() {
       });
       const reminderVehicle = nextWofReminderVehicle(row.vehicles || []);
       const smsReminderVehicle = nextWofSmsReminderVehicle(row.vehicles || []);
-      const latestVehicleReminder = (row.vehicles || [])
-        .map((v) => v.wofReminderSentAt)
-        .filter(Boolean)
-        .sort()
-        .at(-1) || "";
-      const latestSmsReminder = (row.vehicles || [])
-        .map((v) => v.wofSmsReminderSentAt)
-        .filter(Boolean)
-        .sort()
-        .at(-1) || "";
+      const latestVehicleReminder =
+        (row.vehicles || [])
+          .map((v) => v.wofReminderSentAt)
+          .filter(Boolean)
+          .sort()
+          .at(-1) || "";
+      const latestSmsReminder =
+        (row.vehicles || [])
+          .map((v) => v.wofSmsReminderSentAt)
+          .filter(Boolean)
+          .sort()
+          .at(-1) || "";
       const seq = row.customerId ? Number(seqById.get(row.customerId)) || 0 : 0;
       const phoneOk = Boolean(websms.normalizeNzMobile(row.customerPhone));
       return {
@@ -3652,6 +3697,100 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+function findCustomerByMobile(mobile) {
+  const want = websms.normalizeNzMobile(mobile);
+  if (!want) return null;
+  for (const c of readSavedCustomers()) {
+    if (websms.normalizeNzMobile(c.customerPhone) === want) {
+      const names = namesFromCustomer(c);
+      const vehicles = normalizeVehicles(c, c);
+      return {
+        customerId: c.id,
+        customerName: names.customerName || "",
+        registration: vehicles[0]?.registration || c.registration || "",
+      };
+    }
+  }
+  return null;
+}
+
+function formatSmsPhoneDisplay(value) {
+  const n = websms.normalizeNzMobile(value) || String(value || "").replace(/\D/g, "");
+  if (!n) return "";
+  if (n.startsWith("64") && n.length >= 10) return `0${n.slice(2)}`;
+  return n;
+}
+
+function readSmsLog() {
+  const rows = readJsonArray(SMS_LOG_FILE, "sms log");
+  const legacy = readJsonArray(SMS_INBOUND_FILE, "sms inbound");
+  if (!legacy.length) return rows;
+  const seen = new Set(rows.map((r) => r.id).filter(Boolean));
+  const seenMsg = new Set(
+    rows
+      .filter((r) => r.direction === "in" && r.messageId)
+      .map((r) => String(r.messageId))
+  );
+  let changed = false;
+  for (const row of legacy) {
+    const id = row.id || randomUUID();
+    if (seen.has(id)) continue;
+    if (row.messageId && seenMsg.has(String(row.messageId))) continue;
+    const matched = findCustomerByMobile(row.from);
+    rows.push({
+      id,
+      direction: "in",
+      kind: "reply",
+      at: row.receivedAt || row.at || nowIso(),
+      from: String(row.from || "").trim(),
+      to: String(row.to || "").trim(),
+      body: String(row.body || "").trim(),
+      messageId: String(row.messageId || "").trim(),
+      replyTo: String(row.replyTo || "").trim(),
+      customerId: matched?.customerId || "",
+      customerName: matched?.customerName || "",
+      registration: matched?.registration || "",
+      sandbox: false,
+      handled: Boolean(row.handled),
+    });
+    seen.add(id);
+    changed = true;
+  }
+  if (changed) {
+    rows.sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
+    writeJsonArray(SMS_LOG_FILE, rows.length > 1000 ? rows.slice(-1000) : rows);
+  }
+  return rows;
+}
+
+function appendSmsLog(entry = {}) {
+  const rows = readSmsLog();
+  const matched =
+    entry.customerId
+      ? null
+      : findCustomerByMobile(entry.direction === "in" ? entry.from : entry.to);
+  const row = {
+    id: entry.id || randomUUID(),
+    direction: entry.direction === "in" ? "in" : "out",
+    kind: String(entry.kind || (entry.direction === "in" ? "reply" : "out")).trim(),
+    at: entry.at || nowIso(),
+    from: String(entry.from || "").trim(),
+    to: String(entry.to || "").trim(),
+    body: String(entry.body || "").trim(),
+    messageId: String(entry.messageId || "").trim(),
+    replyTo: String(entry.replyTo || "").trim(),
+    customerId: String(entry.customerId || matched?.customerId || "").trim(),
+    customerName: String(entry.customerName || matched?.customerName || "").trim(),
+    registration: String(entry.registration || matched?.registration || "").trim(),
+    vehicleId: String(entry.vehicleId || "").trim(),
+    sandbox: Boolean(entry.sandbox),
+    handled: Boolean(entry.handled),
+  };
+  rows.push(row);
+  writeJsonArray(SMS_LOG_FILE, rows.length > 1000 ? rows.slice(-1000) : rows);
+  return row;
+}
+
 /**
  * WebSMS Connexus webhook — public (no admin login).
  * Set in WebSMS Members Area → API Keys → Webhook URL to:
@@ -3673,24 +3812,37 @@ app.post("/api/websms/webhook", (req, res) => {
   const type = String(payload.type || "").trim();
   try {
     if (type === "SMS" || type === "mo" || type === "MO") {
-      const rows = readJsonArray(SMS_INBOUND_FILE, "sms inbound");
-      rows.push({
-        id: randomUUID(),
-        receivedAt: nowIso(),
-        type: "SMS",
-        from: String(payload.from || "").trim(),
+      const from = String(payload.from || "").trim();
+      const body = String(payload.body || "").trim();
+      const logged = appendSmsLog({
+        direction: "in",
+        kind: "reply",
+        from,
         to: String(payload.to || "").trim(),
-        body: String(payload.body || "").trim(),
+        body,
         messageId: String(payload.messageId || payload.connexusMessageId || "").trim(),
         replyTo: String(payload.replyTo || payload.replyToConnexusId || "").trim(),
-        replyToCustomerMessageId: String(payload.replyToCustomerMessageId || "").trim(),
-        raw: payload,
-        handled: false,
       });
-      writeJsonArray(SMS_INBOUND_FILE, rows.length > 500 ? rows.slice(-500) : rows);
-      console.log(
-        `WebSMS inbound from ${payload.from || "?"}: ${String(payload.body || "").slice(0, 80)}`
-      );
+      // Keep legacy file in sync (same id) so migration does not duplicate.
+      try {
+        const legacy = readJsonArray(SMS_INBOUND_FILE, "sms inbound");
+        legacy.push({
+          id: logged.id,
+          receivedAt: logged.at,
+          type: "SMS",
+          from,
+          to: logged.to,
+          body,
+          messageId: logged.messageId,
+          replyTo: logged.replyTo,
+          raw: payload,
+          handled: false,
+        });
+        writeJsonArray(SMS_INBOUND_FILE, legacy.length > 500 ? legacy.slice(-500) : legacy);
+      } catch (legacyErr) {
+        console.error("Legacy sms-inbound write failed:", legacyErr);
+      }
+      console.log(`WebSMS inbound from ${from || "?"}: ${body.slice(0, 80)}`);
     } else if (type === "dlr" || type === "DLR") {
       console.log(
         `WebSMS DLR ${payload.status || "?"} messageId=${payload.messageId || payload.connexusMessageId || ""}`
@@ -3700,6 +3852,22 @@ app.post("/api/websms/webhook", (req, res) => {
     }
   } catch (err) {
     console.error("WebSMS webhook processing failed:", err);
+  }
+});
+
+app.get("/api/sms-inbox", requireAdmin, (_req, res) => {
+  try {
+    const rows = readSmsLog()
+      .slice()
+      .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")))
+      .map((row) => ({
+        ...row,
+        phoneDisplay: formatSmsPhoneDisplay(row.direction === "in" ? row.from : row.to),
+      }));
+    res.json(rows);
+  } catch (err) {
+    console.error("SMS inbox failed:", err);
+    res.status(500).json({ error: "Could not load SMS inbox." });
   }
 });
 
@@ -3843,22 +4011,7 @@ app.post("/api/customers", requireAdmin, (req, res) => {
       err.status = 400;
       throw err;
     }
-    const sameName = findCustomerWithSameName(rows, fields.customerName);
-    if (sameName) {
-      const err = new Error(
-        `A customer named ${fields.customerName} already exists. Open that record instead.`
-      );
-      err.status = 400;
-      throw err;
-    }
-    const sameEmail = findCustomerWithSameEmail(rows, fields.customerEmail);
-    if (sameEmail) {
-      const err = new Error(
-        `${fields.customerEmail} is already on ${sameEmail.customerName}. Open that record instead.`
-      );
-      err.status = 400;
-      throw err;
-    }
+    // Same name / same email allowed — one customer record = one plate.
     const now = nowIso();
     const seq = nextCustomerSeq(rows);
     const row = {
@@ -3885,19 +4038,6 @@ app.put("/api/customers/:id", requireAdmin, (req, res) => {
     if (index < 0) return res.status(404).json({ error: "Customer not found" });
     const current = rows[index];
     const fields = normalizeSavedCustomer(req.body, current);
-    const prevNames = namesFromCustomer(current);
-    const nameChanged =
-      customerNameKey(fields.customerName) !== customerNameKey(prevNames.customerName);
-    if (nameChanged) {
-      const sameName = findCustomerWithSameName(rows, fields.customerName, current.id);
-      if (sameName) {
-        const err = new Error(
-          `A customer named ${fields.customerName} already exists. Use a different name.`
-        );
-        err.status = 400;
-        throw err;
-      }
-    }
     // Only re-check plates when the client sent a vehicles array (full edit).
     // Contact-only inline saves omit vehicles and keep the stored list.
     if (Array.isArray(req.body?.vehicles)) {
@@ -3908,17 +4048,6 @@ app.put("/api/customers/:id", requireAdmin, (req, res) => {
             .map((v) => v.registration)
             .filter(Boolean)
             .join(", ")} is already on ${plateOwner.customerName}. Open that record instead.`
-        );
-        err.status = 400;
-        throw err;
-      }
-    }
-    const emailChanged = emailKey(fields.customerEmail) !== emailKey(current.customerEmail);
-    if (emailChanged) {
-      const sameEmail = findCustomerWithSameEmail(rows, fields.customerEmail, current.id);
-      if (sameEmail) {
-        const err = new Error(
-          `${fields.customerEmail} is already on ${sameEmail.customerName}. Use a different email.`
         );
         err.status = 400;
         throw err;
@@ -4761,8 +4890,8 @@ async function sendWofReminderSms({ customerId, vehicleId = "" }) {
   const registration = String(target.registration || "").trim().toUpperCase();
   const expiryLabel = formatDateShort(expiry) || expiry;
   const body =
-    `${business.name}: WOF for ${registration || "your vehicle"} expires ${expiryLabel}. ` +
-    `Book ${business.phoneDisplay}`;
+    `Deane Auto: WOF for ${registration || "your vehicle"} expires ${expiryLabel}. ` +
+    `Reply e.g. 12/09/26 10am to request a booking, or call ${business.phoneTel}`;
 
   const sent = await websms.sendSms({
     to,
@@ -4771,6 +4900,25 @@ async function sendWofReminderSms({ customerId, vehicleId = "" }) {
   });
 
   const sentAt = nowIso();
+  try {
+    appendSmsLog({
+      direction: "out",
+      kind: "wof_reminder",
+      at: sentAt,
+      from: String(process.env.WEBSMS_FROM || "").trim(),
+      to: sent.to,
+      body,
+      messageId: sent.messageId || "",
+      customerId: customer.id,
+      customerName: names.customerName || "",
+      registration,
+      vehicleId: target.id || "",
+      sandbox: Boolean(sent.sandbox),
+    });
+  } catch (logErr) {
+    console.error("Could not write SMS inbox outbound log:", logErr);
+  }
+
   const latestRows = readSavedCustomers();
   const latest = latestRows.find((c) => c.id === customer.id);
   if (latest) {

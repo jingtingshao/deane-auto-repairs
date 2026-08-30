@@ -71,6 +71,7 @@ function setSection(name) {
   const reportsSection = document.getElementById("reports-section");
   const billingSection = document.getElementById("billing-section");
   const customersSection = document.getElementById("customers-section");
+  const smsInboxSection = document.getElementById("sms-inbox-section");
   const jobsSection = document.getElementById("jobs-section");
   const calendarSection = document.getElementById("calendar-section");
   const supplierInvoicesSection = document.getElementById("supplier-invoices-section");
@@ -81,11 +82,12 @@ function setSection(name) {
   if (reportsSection) reportsSection.hidden = name !== "reports";
   if (billingSection) billingSection.hidden = !billingOpen;
   if (customersSection) customersSection.hidden = name !== "customers";
+  if (smsInboxSection) smsInboxSection.hidden = name !== "sms_inbox";
   if (jobsSection) jobsSection.hidden = name !== "jobs";
   if (calendarSection) calendarSection.hidden = name !== "calendar";
   if (supplierInvoicesSection) supplierInvoicesSection.hidden = name !== "supplier_invoices";
   if (btnNew) {
-    if (name === "supplier_invoices" || name === "calendar") {
+    if (name === "supplier_invoices" || name === "calendar" || name === "sms_inbox") {
       btnNew.hidden = true;
     } else {
       btnNew.hidden = false;
@@ -98,6 +100,7 @@ function setSection(name) {
     quotes: "nav-quotes",
     invoices: "nav-invoices",
     customers: "nav-customers",
+    sms_inbox: "nav-sms-inbox",
     jobs: "nav-jobs",
     calendar: "nav-calendar",
     supplier_invoices: "nav-supplier-invoices",
@@ -134,6 +137,10 @@ function setSection(name) {
   if (name === "customers") {
     setOverline("CUSTOMERS");
     viewTitle.textContent = "Customers";
+  }
+  if (name === "sms_inbox") {
+    setOverline("SMS INBOX");
+    viewTitle.textContent = "SMS Inbox";
   }
 }
 
@@ -542,6 +549,11 @@ document.getElementById("nav-customers")?.addEventListener("click", () => {
   if (window.DeaneCustomers?.showList) {
     window.DeaneCustomers.showList();
   }
+});
+
+document.getElementById("nav-sms-inbox")?.addEventListener("click", () => {
+  setSection("sms_inbox");
+  window.DeaneSmsInbox?.showList?.();
 });
 
 document.getElementById("btn-back").addEventListener("click", async () => {

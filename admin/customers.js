@@ -13,7 +13,8 @@ let customerFilter = "all";
 let customerLetter = "";
 let customerShowAll = false;
 let editingCustomerId = "";
-let editingListCustomerId = "";
+let editingListKey = "";
+let editingVehicleId = "";
 let customerSortKey = "lastName";
 let customersListBound = false;
 let customerSortDir = "asc";
@@ -389,18 +390,14 @@ function renderCustomers() {
           ${rows
             .map((row) => {
               const names = namesFromRow(row);
-              const editing =
-                Boolean(row.customerId) && editingListCustomerId === row.customerId;
-              const plates =
-                (Array.isArray(row.registrations) && row.registrations.length
-                  ? row.registrations
-                  : String(row.registration || "").split(",")
-                )
-                  .map((p) => String(p || "").trim().toUpperCase())
-                  .filter(Boolean)
-                  .join(", ") || "—";
+              const editing = Boolean(row.key) && editingListKey === row.key;
+              const plates = String(row.registration || "")
+                .split(",")
+                .map((p) => String(p || "").trim().toUpperCase())
+                .filter(Boolean)
+                .join(", ") || "—";
               return `
-            <tr class="customer-row${editing ? " is-editing-inline" : ""}" data-key="${Admin.escapeAttr(row.key)}" data-customer-id="${Admin.escapeAttr(row.customerId || "")}">
+            <tr class="customer-row${editing ? " is-editing-inline" : ""}" data-key="${Admin.escapeAttr(row.key)}" data-customer-id="${Admin.escapeAttr(row.customerId || "")}" data-vehicle-id="${Admin.escapeAttr(row.vehicleId || "")}">
               <td class="billing-number customer-index">${Number(row.customerSeq || row.dailySeq) || "—"}</td>
               <td class="customer-plate">${Admin.escapeHtml(plates)}</td>
               <td class="customer-first">
@@ -451,7 +448,7 @@ function renderCustomers() {
                   editing
                     ? `<button type="button" class="primary compact" data-inline-save="${Admin.escapeAttr(row.customerId)}">Save</button>
                   <button type="button" class="ghost compact" data-inline-cancel="1">Cancel</button>
-                  <button type="button" class="ghost compact" data-vehicles-id="${Admin.escapeAttr(row.customerId)}">Vehicles</button>`
+                  <button type="button" class="ghost compact" data-plate-id="${Admin.escapeAttr(row.customerId)}" data-plate-key="${Admin.escapeAttr(row.key)}">Plate</button>`
                     : `<button type="button" class="ghost" data-edit-id="${Admin.escapeAttr(row.customerId || "")}" data-edit-key="${Admin.escapeAttr(row.key)}">${
                         row.customerId ? "Edit" : "Open"
                       }</button>
@@ -500,7 +497,7 @@ function renderCustomers() {
         if (id) saveInlineCustomer(id, el.closest("tr")?.querySelector("[data-inline-save]"));
       }
       if (event.key === "Escape") {
-        editingListCustomerId = "";
+        editingListKey = "";
         renderCustomers();
       }
     });
@@ -581,11 +578,11 @@ function bindCustomersListOnce() {
         : customerRows.find((r) => r.key === editBtn.getAttribute("data-edit-key"));
       if (!found) return;
       if (found.customerId) {
-        editingListCustomerId = found.customerId;
+        editingListKey = found.key;
         hideCustomerForm();
         renderCustomers();
         const editRow = [...customersList.querySelectorAll("tr.customer-row")].find(
-          (tr) => tr.getAttribute("data-customer-id") === found.customerId
+          (tr) => tr.getAttribute("data-key") === found.key
         );
         editRow?.querySelector('[data-inline="firstName"]')?.focus();
         return;
@@ -597,7 +594,7 @@ function bindCustomersListOnce() {
     const cancelBtn = event.target.closest("[data-inline-cancel]");
     if (cancelBtn) {
       event.stopPropagation();
-      editingListCustomerId = "";
+      editingListKey = "";
       renderCustomers();
       return;
     }
@@ -610,13 +607,16 @@ function bindCustomersListOnce() {
       return;
     }
 
-    const vehiclesBtn = event.target.closest("[data-vehicles-id]");
-    if (vehiclesBtn) {
+    const plateBtn = event.target.closest("[data-plate-id], [data-vehicles-id]");
+    if (plateBtn) {
       event.stopPropagation();
-      const id = vehiclesBtn.getAttribute("data-vehicles-id") || "";
-      const found = customerRows.find((r) => r.customerId === id);
+      const key = plateBtn.getAttribute("data-plate-key") || "";
+      const id = plateBtn.getAttribute("data-plate-id") || plateBtn.getAttribute("data-vehicles-id") || "";
+      const found =
+        (key && customerRows.find((r) => r.key === key)) ||
+        customerRows.find((r) => r.customerId === id);
       if (!found) return;
-      editingListCustomerId = "";
+      editingListKey = "";
       showCustomerForm(found);
     }
   });
@@ -666,7 +666,7 @@ async function saveInlineCustomer(customerId, btn) {
         customerAddress,
       }),
     });
-    editingListCustomerId = "";
+    editingListKey = "";
     await loadCustomers();
     if (typeof Admin.showStatus === "function") Admin.showStatus("Customer saved");
     else alert("Customer saved.");
@@ -731,6 +731,7 @@ function showCustomerForm(row = null) {
     return;
   }
   editingCustomerId = row?.customerId || "";
+  editingVehicleId = row?.vehicleId || row?.vehicles?.[0]?.id || "";
   form.removeAttribute("hidden");
   form.hidden = false;
   clearCustomerSaveStatus();
@@ -747,12 +748,17 @@ function showCustomerForm(row = null) {
   if (address) address.value = row?.customerAddress || "";
   if (phone) phone.value = row?.customerPhone || "";
   if (email) email.value = row?.customerEmail || "";
-  const vehicles =
+  const focusId = editingVehicleId;
+  let vehicles =
     Array.isArray(row?.vehicles) && row.vehicles.length
       ? row.vehicles
       : row?.registration
-        ? [{ registration: row.registration, vehicle: row.vehicle || "" }]
+        ? [{ registration: row.registration, vehicle: row.vehicle || "", id: focusId }]
         : [{ registration: "", vehicle: "" }];
+  if (focusId && vehicles.length > 1) {
+    vehicles = vehicles.filter((v) => v.id === focusId);
+  }
+  if (vehicles.length > 1) vehicles = [vehicles[0]];
   renderVehicleRows(vehicles);
   if (customerDeleteBtn) {
     customerDeleteBtn.hidden = !(editingCustomerId && row?.canDelete);
@@ -769,30 +775,18 @@ function showCustomerForm(row = null) {
 function renderVehicleRows(vehicles) {
   const wrap = document.getElementById("customer-vehicles");
   if (!wrap) return;
-  const rows = vehicles?.length ? vehicles : [{ registration: "", vehicle: "" }];
-  wrap.innerHTML = rows
-    .map(
-      (v, index) => `
-      <div class="vehicle-row" data-index="${index}" data-id="${Admin.escapeAttr(v.id || "")}">
+  const row = vehicles?.[0] || { registration: "", vehicle: "" };
+  wrap.innerHTML = `
+      <div class="vehicle-row" data-index="0" data-id="${Admin.escapeAttr(row.id || "")}">
         <label>
           Registration
-          <input class="vehicle-rego" value="${Admin.escapeAttr(String(v.registration || "").toUpperCase())}" required autocapitalize="characters" spellcheck="false" />
+          <input class="vehicle-rego" value="${Admin.escapeAttr(String(row.registration || "").toUpperCase())}" required autocapitalize="characters" spellcheck="false" />
         </label>
         <label>
           Vehicle
-          <input class="vehicle-desc" value="${Admin.escapeAttr(capitalizePersonName(v.vehicle || ""))}" placeholder="e.g. Toyota Camry" autocapitalize="words" />
+          <input class="vehicle-desc" value="${Admin.escapeAttr(capitalizePersonName(row.vehicle || ""))}" placeholder="e.g. Toyota Camry" autocapitalize="words" />
         </label>
-        <button type="button" class="ghost vehicle-remove" data-remove="${index}" ${rows.length <= 1 ? "hidden" : ""}>×</button>
-      </div>`
-    )
-    .join("");
-  wrap.querySelectorAll("[data-remove]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const next = collectVehiclesFromForm();
-      next.splice(Number(btn.dataset.remove), 1);
-      renderVehicleRows(next.length ? next : [{ registration: "", vehicle: "" }]);
-    });
-  });
+      </div>`;
 }
 
 function collectVehiclesFromForm() {
@@ -812,6 +806,7 @@ function hideCustomerForm() {
   if (!form) return;
   form.reset();
   editingCustomerId = "";
+  editingVehicleId = "";
   clearCustomerSaveStatus();
   renderVehicleRows([{ registration: "", vehicle: "" }]);
   if (customerDeleteBtn) customerDeleteBtn.hidden = true;
@@ -826,7 +821,7 @@ async function saveCustomer(event) {
   event?.preventDefault?.();
   const btn = document.getElementById("btn-customer-save");
   const status = document.getElementById("customer-save-status");
-  const vehicles = collectVehiclesFromForm().filter((v) => v.registration);
+  const vehicles = collectVehiclesFromForm().filter((v) => v.registration).slice(0, 1);
   const body = {
     firstName: capitalizePersonName(
       (document.getElementById("customer-first-name")?.value || "").trim()
@@ -837,6 +832,7 @@ async function saveCustomer(event) {
     customerAddress: (document.getElementById("customer-address")?.value || "").trim(),
     customerPhone: (document.getElementById("customer-phone")?.value || "").trim(),
     customerEmail: (document.getElementById("customer-email")?.value || "").trim(),
+    vehicleId: editingVehicleId || vehicles[0]?.id || "",
     vehicles,
   };
   if (!body.firstName) {
@@ -850,17 +846,8 @@ async function saveCustomer(event) {
     return;
   }
   const fullName = `${body.firstName} ${body.lastName}`.replace(/\s+/g, " ").trim();
-  const nameKey = fullName.toLowerCase();
-  const duplicate = customerRows.find((row) => {
-    if (editingCustomerId && row.customerId === editingCustomerId) return false;
-    return displayName(row).toLowerCase().replace(/\s+/g, " ") === nameKey;
-  });
-  if (duplicate) {
-    alert(`A customer named ${fullName} already exists. Open that record instead.`);
-    return;
-  }
   if (!vehicles.length) {
-    alert("Enter at least one registration / plate.");
+    alert("Enter a registration / plate.");
     document.querySelector(".vehicle-rego")?.focus();
     return;
   }
@@ -868,28 +855,11 @@ async function saveCustomer(event) {
   const plateHits = matches.filter((hit) =>
     hit.reasons.some((reason) => String(reason).startsWith("plate"))
   );
-  const emailHits = matches.filter((hit) => hit.reasons.includes("email"));
   if (plateHits.length) {
     alert(
       `This plate is already on ${plateHits[0].name}. Open that record instead.`
     );
     return;
-  }
-  if (emailHits.length) {
-    alert(
-      `This email is already on ${emailHits[0].name}. Open that record instead.`
-    );
-    return;
-  }
-  const phoneHits = matches.filter((hit) => hit.reasons.includes("phone"));
-  if (phoneHits.length) {
-    const detail = phoneHits
-      .map((hit) => `${hit.name} (${hit.reasons.join(", ")})`)
-      .join("\n");
-    const ok = confirm(
-      `This phone number may already exist:\n\n${detail}\n\nSave anyway?`
-    );
-    if (!ok) return;
   }
   if (status) {
     status.hidden = false;
@@ -1165,14 +1135,6 @@ document.getElementById("customer-vehicles")?.addEventListener("input", (e) => {
 });
 
 document.getElementById("btn-customer-cancel")?.addEventListener("click", hideCustomerForm);
-
-document.getElementById("btn-add-vehicle")?.addEventListener("click", () => {
-  const next = collectVehiclesFromForm();
-  next.push({ registration: "", vehicle: "" });
-  renderVehicleRows(next);
-  const inputs = document.querySelectorAll(".vehicle-rego");
-  inputs[inputs.length - 1]?.focus();
-});
 
 renderLetterBar();
 renderVehicleRows([{ registration: "", vehicle: "" }]);

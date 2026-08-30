@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260830savefix3" />
+    <link rel="stylesheet" href="admin.css?v=20260830smsinbox" />
     <link rel="stylesheet" href="admin-refresh.css?v=20260826greencomplete" />
   </head>
   <body>
@@ -42,6 +42,7 @@
           <button type="button" id="nav-quotes"><b>$</b> Quotes <i id="nav-quotes-count" hidden>0</i></button>
           <button type="button" id="nav-invoices"><b>$</b> Invoices <i id="nav-invoices-count" hidden>0</i></button>
           <button type="button" id="nav-customers"><b>◉</b> Customers</button>
+          <button type="button" id="nav-sms-inbox"><b>✉</b> SMS Inbox</button>
           <button type="button" id="nav-reports"><b>▧</b> Service reports</button>
         </nav>
         <div class="sidebar-foot">
@@ -532,7 +533,7 @@
               <button type="button" id="btn-wof-sms-remind-all" class="ghost" hidden>SMS all due soon</button>
             </div>
           </div>
-          <p class="muted small">Search or tap a last-name letter. Click <strong>Edit</strong> on a row to change name, address, phone or email in the list. Use <strong>Vehicles</strong> for plates. <span id="customer-storage-hint"></span></p>
+          <p class="muted small">One row = one plate. Same name is OK for another car — create a new customer. Click <strong>Edit</strong> for contact details, <strong>Plate</strong> to change rego. <span id="customer-storage-hint"></span></p>
           <form id="customer-form" class="report-form customer-editor" hidden novalidate>
             <fieldset>
               <legend id="customer-form-legend">Customer details</legend>
@@ -545,8 +546,7 @@
               <label>Address<textarea id="customer-address" name="customerAddress" rows="2"></textarea></label>
               <div class="vehicles-block">
                 <div class="vehicles-head">
-                  <p class="vehicles-label">Vehicles</p>
-                  <button type="button" id="btn-add-vehicle" class="ghost">+ Add vehicle</button>
+                  <p class="vehicles-label">Vehicle (one plate per customer)</p>
                 </div>
                 <div id="customer-vehicles" class="vehicle-rows"></div>
               </div>
@@ -560,6 +560,24 @@
             </fieldset>
           </form>
           <div id="customers-list" class="report-list"></div>
+        </section>
+
+        <section id="sms-inbox-section" hidden>
+          <p class="muted small">
+            Outbound WOF reminders and customer replies via WebSMS. Newest first.
+            Webhook:
+            <code>https://deane-auto-repairs.onrender.com/api/websms/webhook</code>
+          </p>
+          <label class="list-search">
+            Search SMS
+            <input id="sms-inbox-search" type="search" placeholder="Phone, name, plate or message" autocomplete="off" />
+          </label>
+          <div id="sms-inbox-filter" class="filter-row">
+            <button type="button" class="ghost is-active" data-sms-filter="all">All</button>
+            <button type="button" class="ghost" data-sms-filter="out">Sent</button>
+            <button type="button" class="ghost" data-sms-filter="in">Replies</button>
+          </div>
+          <div id="sms-inbox-list" class="report-list"></div>
         </section>
 
         <section id="billing-section" hidden>
@@ -755,12 +773,13 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260830partyfix"></script>
+    <script src="admin.js?v=20260830smsinbox"></script>
     <script src="dashboard.js?v=20260828draftinvoiced"></script>
     <script src="calendar.js?v=20260830partyfix"></script>
     <script src="jobs.js?v=20260830noparts"></script>
     <script src="supplier-invoices.js?v=20260829nopreview"></script>
     <script src="billing.js?v=20260830partyfix"></script>
-    <script src="customers.js?v=20260830savefix3"></script>
+    <script src="customers.js?v=20260830oneplate"></script>
+    <script src="sms-inbox.js?v=20260830inbox"></script>
   </body>
 </html>

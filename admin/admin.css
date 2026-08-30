@@ -768,6 +768,38 @@ label.check input {
   font-weight: 700;
 }
 
+.sms-inbox-table .sms-body {
+  max-width: 28rem;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.sms-inbox-table .sms-when {
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.sms-dir {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+}
+
+.sms-dir.out {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.sms-dir.in {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
 .customer-address-text {
   display: -webkit-box;
   -webkit-line-clamp: 2;

@@ -10,6 +10,7 @@ data/supplier-invoices.json
 data/invoice-candidates.json
 data/part-audit-log.json
 data/sms-inbound.json
+data/sms-log.json
 data/backup-status.json
 data/*.bak
 data/*.tmp
