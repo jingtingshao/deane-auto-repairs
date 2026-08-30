@@ -195,7 +195,7 @@ a[href^="tel:"] {
 .hero {
   position: relative;
   display: grid;
-  min-height: 625px;
+  min-height: 520px;
   overflow: hidden;
   color: #fff;
   align-items: center;
@@ -222,7 +222,7 @@ a[href^="tel:"] {
 
 .hero-content {
   position: relative;
-  padding: 90px 0 125px;
+  padding: 72px 0 80px;
 }
 
 .kicker,
@@ -302,33 +302,6 @@ p {
 .text-link span {
   margin-left: 11px;
   color: var(--lime);
-}
-
-.hero-footer {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  display: grid;
-  grid-template-columns: 1fr;
-  border-top: 1px solid #ffffff66;
-}
-
-.hero-footer div {
-  display: flex;
-  min-height: 74px;
-  padding: 17px 0;
-  flex-direction: column;
-  justify-content: center;
-  border-right: 0;
-}
-
-.hero-footer strong {
-  font: 700 25px var(--display);
-}
-
-.hero-footer span {
-  font-size: 13px;
 }
 
 .trust-bar {
@@ -431,7 +404,7 @@ p {
   background: #0d171eb3;
 }
 
-.service-card > *:not(.photo-overlay):not(.tag) {
+.service-card > *:not(.photo-overlay):not(.tag):not(.icon) {
   position: relative;
   z-index: 1;
 }
@@ -444,8 +417,10 @@ p {
   position: absolute;
   top: 16px;
   right: 22px;
+  z-index: 2;
   color: var(--lime);
   font: 36px var(--display);
+  line-height: 1;
 }
 
 .service-card h3 {
@@ -586,6 +561,7 @@ p {
 }
 
 .location {
+  padding: 72px 0;
   background: #ebe7dc;
 }
 
@@ -613,6 +589,9 @@ p {
 }
 
 .hours-line {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.4em;
   margin-top: 1rem;
 }
 
@@ -726,7 +705,7 @@ p {
   display: grid;
   grid-template-columns: 0.9fr 1.1fr;
   gap: 80px;
-  align-items: center;
+  align-items: start;
 }
 
 .booking h2 {
@@ -881,7 +860,7 @@ footer {
   }
 
   .hero {
-    min-height: 590px;
+    min-height: 480px;
   }
 
   .hero h1 {
@@ -889,11 +868,7 @@ footer {
   }
 
   .hero-content {
-    padding: 70px 0 110px;
-  }
-
-  .hero-footer {
-    grid-template-columns: 1fr;
+    padding: 56px 0 64px;
   }
 
   .trust-grid,
@@ -919,6 +894,10 @@ footer {
     padding: 75px 0;
   }
 
+  .location {
+    padding: 48px 0;
+  }
+
   .service-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -935,10 +914,6 @@ footer {
 @media (max-width: 560px) {
   .hero h1 {
     font-size: 3.6rem;
-  }
-
-  .hero-footer {
-    display: none;
   }
 
   .hero-actions .button,
