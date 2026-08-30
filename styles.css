@@ -951,6 +951,15 @@ footer {
     grid-template-columns: 1fr;
   }
 
+  .service-card .tag {
+    top: 22px;
+    right: -48px;
+    width: 168px;
+    padding: 8px 0;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+  }
+
   .form-row {
     grid-template-columns: 1fr;
   }
