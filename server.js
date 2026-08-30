@@ -4427,6 +4427,17 @@ app.post("/api/admin/restore-workshop", requireAdmin, (req, res) => {
     } else {
       bumpCustomerHighWater(customers);
     }
+
+    // Optional extras — used to fully wipe / sync calendar, SMS, parts imports.
+    if (Array.isArray(req.body.appointments)) writeAppointments(req.body.appointments);
+    if (Array.isArray(req.body.supplierInvoices)) writeSupplierInvoices(req.body.supplierInvoices);
+    if (Array.isArray(req.body.invoiceCandidates)) {
+      writeJsonArray(INVOICE_CANDIDATES_FILE, req.body.invoiceCandidates);
+    }
+    if (Array.isArray(req.body.partAuditLog)) writeJsonArray(PART_AUDIT_FILE, req.body.partAuditLog);
+    if (Array.isArray(req.body.smsLog)) writeJsonArray(SMS_LOG_FILE, req.body.smsLog);
+    if (Array.isArray(req.body.smsInbound)) writeJsonArray(SMS_INBOUND_FILE, req.body.smsInbound);
+
     res.json({
       ok: true,
       dataDir: DATA_DIR,
@@ -4435,6 +4446,11 @@ app.post("/api/admin/restore-workshop", requireAdmin, (req, res) => {
         billing: billing.length,
         jobs: jobs.length,
         reports: reports.length,
+        appointments: Array.isArray(req.body.appointments) ? req.body.appointments.length : undefined,
+        supplierInvoices: Array.isArray(req.body.supplierInvoices)
+          ? req.body.supplierInvoices.length
+          : undefined,
+        smsLog: Array.isArray(req.body.smsLog) ? req.body.smsLog.length : undefined,
       },
     });
   } catch (err) {

@@ -1,5 +1,5 @@
 /**
- * Push local workshop JSON onto the live Render disk.
+ * Push local workshop JSON onto the live Render disk (or wipe if local is empty).
  * Uses ADMIN_PIN from .env to sign in. Does not print secrets.
  *
  *   node scripts/restore-to-render.js
@@ -10,14 +10,21 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.join(__dirname, "..");
-const DATA = path.join(ROOT, "data");
+const DATA_CANDIDATES = [path.join(ROOT, "DATA"), path.join(ROOT, "data")];
 const BASE = (
   process.env.RENDER_RESTORE_URL || "https://deane-auto-repairs.onrender.com"
 ).replace(/\/$/, "");
 const PIN = String(process.env.ADMIN_PIN || "").trim();
 
+function dataDir() {
+  for (const dir of DATA_CANDIDATES) {
+    if (fs.existsSync(path.join(dir, "customers.json"))) return dir;
+  }
+  return DATA_CANDIDATES[1];
+}
+
 function readJson(file, fallback) {
-  const full = path.join(DATA, file);
+  const full = path.join(dataDir(), file);
   if (!fs.existsSync(full)) return fallback;
   return JSON.parse(fs.readFileSync(full, "utf8"));
 }
@@ -76,18 +83,26 @@ async function main() {
     console.error("ADMIN_PIN missing in .env");
     process.exit(1);
   }
+  const localRoot = dataDir();
   const customers = readJson("customers.json", []);
   const billing = readJson("billing.json", []);
   const jobs = readJson("jobs.json", []);
   const reports = readJson("reports.json", []);
+  const appointments = readJson("appointments.json", []);
+  const supplierInvoices = readJson("supplier-invoices.json", []);
+  const invoiceCandidates = readJson("invoice-candidates.json", []);
+  const partAuditLog = readJson("part-audit-log.json", []);
+  const smsLog = readJson("sms-log.json", []);
+  const smsInbound = readJson("sms-inbound.json", []);
   const billingSeq = readJson("billing-seq.json", null);
   const customersSeq = readJson("customers-seq.json", null);
   if (!Array.isArray(customers) || !Array.isArray(billing)) {
     throw new Error("Local data files are not valid JSON arrays.");
   }
   console.log(`Target: ${BASE}`);
+  console.log(`Local data: ${localRoot}`);
   console.log(
-    `Local counts: customers ${customers.length}, billing ${billing.length}, jobs ${jobs.length}, reports ${reports.length}`
+    `Local counts: customers ${customers.length}, billing ${billing.length}, jobs ${jobs.length}, reports ${reports.length}, appointments ${appointments.length}, sms ${smsLog.length}`
   );
   const live = await waitForRestoreEndpoint();
   console.log(`Render dataDir: ${live.dataDir}`);
@@ -108,6 +123,12 @@ async function main() {
     billing,
     jobs,
     reports,
+    appointments,
+    supplierInvoices,
+    invoiceCandidates,
+    partAuditLog,
+    smsLog,
+    smsInbound,
     billingSeq: billingSeq && typeof billingSeq === "object" ? billingSeq : undefined,
     customersSeq:
       customersSeq && typeof customersSeq === "object" ? customersSeq : undefined,
@@ -122,7 +143,7 @@ async function main() {
     console.error("Restore failed:", result.status, result.data);
     process.exit(1);
   }
-  console.log("Restored:", result.data.counts);
+  console.log("Restored / wiped:", result.data.counts);
 }
 
 main().catch((err) => {
