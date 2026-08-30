@@ -509,14 +509,19 @@ p {
 
 .tag {
   position: absolute;
-  top: 18px;
-  right: -30px;
+  top: 16px;
+  right: -38px;
   z-index: 2;
-  padding: 4px 33px;
+  width: 132px;
+  padding: 6px 0;
   background: var(--lime);
   color: var(--ink);
-  font: 8px var(--mono);
-  transform: rotate(43deg);
+  font: 8px / 1.2 var(--mono);
+  letter-spacing: 0.08em;
+  text-align: center;
+  white-space: nowrap;
+  transform: rotate(45deg);
+  transform-origin: center;
 }
 
 .services-aside {
