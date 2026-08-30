@@ -641,7 +641,35 @@ label.check input {
 }
 
 .customer-list-table td.customer-actions {
-  width: 8.4rem;
+  width: 11rem;
+  min-width: 9.5rem;
+}
+
+.customer-list-table tr.is-editing-inline td.customer-actions {
+  width: 14rem;
+  min-width: 12rem;
+}
+
+.customer-list-table tr.is-editing-inline td {
+  background: #fff8e8;
+  vertical-align: top;
+}
+
+.customer-list-table tr.is-editing-inline input,
+.customer-list-table tr.is-editing-inline textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.customer-list-table tr.is-editing-inline textarea {
+  resize: vertical;
+  min-height: 2.6rem;
 }
 
 .billing-table th,

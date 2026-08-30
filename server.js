@@ -2380,14 +2380,25 @@ function mergeCustomer(map, incoming) {
 
   const names = namesFromCustomer(incoming);
   const curNames = namesFromCustomer(cur);
+  // Saved Customers profile wins for contact fields. Reports/billing only fill gaps
+  // (otherwise an old invoice phone/name overwrites a successful Save and looks like save failed).
+  const savedWins = Boolean(cur.customerId);
   map.set(key, {
     ...cur,
-    firstName: names.firstName || curNames.firstName || "",
-    lastName: names.lastName || curNames.lastName || "",
-    customerName: names.customerName || curNames.customerName || "",
-    customerAddress: incoming.customerAddress || cur.customerAddress,
-    customerEmail: incoming.customerEmail || cur.customerEmail,
-    customerPhone: incoming.customerPhone || cur.customerPhone,
+    firstName: savedWins ? curNames.firstName || "" : names.firstName || curNames.firstName || "",
+    lastName: savedWins ? curNames.lastName || "" : names.lastName || curNames.lastName || "",
+    customerName: savedWins
+      ? curNames.customerName || ""
+      : names.customerName || curNames.customerName || "",
+    customerAddress: savedWins
+      ? String(cur.customerAddress || "")
+      : incoming.customerAddress || cur.customerAddress || "",
+    customerEmail: savedWins
+      ? String(cur.customerEmail || "")
+      : incoming.customerEmail || cur.customerEmail || "",
+    customerPhone: savedWins
+      ? String(cur.customerPhone || "")
+      : incoming.customerPhone || cur.customerPhone || "",
     vehicles,
     registrations,
     registration: registrations.join(", "),
@@ -3872,42 +3883,55 @@ app.put("/api/customers/:id", requireAdmin, (req, res) => {
     const rows = readSavedCustomers();
     const index = rows.findIndex((c) => c.id === req.params.id);
     if (index < 0) return res.status(404).json({ error: "Customer not found" });
-    const fields = normalizeSavedCustomer(req.body, rows[index]);
-    const sameName = findCustomerWithSameName(rows, fields.customerName, rows[index].id);
-    if (sameName) {
-      const err = new Error(
-        `A customer named ${fields.customerName} already exists. Use a different name.`
-      );
-      err.status = 400;
-      throw err;
+    const current = rows[index];
+    const fields = normalizeSavedCustomer(req.body, current);
+    const prevNames = namesFromCustomer(current);
+    const nameChanged =
+      customerNameKey(fields.customerName) !== customerNameKey(prevNames.customerName);
+    if (nameChanged) {
+      const sameName = findCustomerWithSameName(rows, fields.customerName, current.id);
+      if (sameName) {
+        const err = new Error(
+          `A customer named ${fields.customerName} already exists. Use a different name.`
+        );
+        err.status = 400;
+        throw err;
+      }
     }
-    const plateOwner = findCustomerWithSamePlate(rows, fields.vehicles, rows[index].id);
-    if (plateOwner) {
-      const err = new Error(
-        `Plate ${fields.vehicles
-          .map((v) => v.registration)
-          .filter(Boolean)
-          .join(", ")} is already on ${plateOwner.customerName}. Open that record instead.`
-      );
-      err.status = 400;
-      throw err;
+    // Only re-check plates when the client sent a vehicles array (full edit).
+    // Contact-only inline saves omit vehicles and keep the stored list.
+    if (Array.isArray(req.body?.vehicles)) {
+      const plateOwner = findCustomerWithSamePlate(rows, fields.vehicles, current.id);
+      if (plateOwner) {
+        const err = new Error(
+          `Plate ${fields.vehicles
+            .map((v) => v.registration)
+            .filter(Boolean)
+            .join(", ")} is already on ${plateOwner.customerName}. Open that record instead.`
+        );
+        err.status = 400;
+        throw err;
+      }
     }
-    const sameEmail = findCustomerWithSameEmail(rows, fields.customerEmail, rows[index].id);
-    if (sameEmail) {
-      const err = new Error(
-        `${fields.customerEmail} is already on ${sameEmail.customerName}. Use a different email.`
-      );
-      err.status = 400;
-      throw err;
+    const emailChanged = emailKey(fields.customerEmail) !== emailKey(current.customerEmail);
+    if (emailChanged) {
+      const sameEmail = findCustomerWithSameEmail(rows, fields.customerEmail, current.id);
+      if (sameEmail) {
+        const err = new Error(
+          `${fields.customerEmail} is already on ${sameEmail.customerName}. Use a different email.`
+        );
+        err.status = 400;
+        throw err;
+      }
     }
     rows[index] = {
-      ...rows[index],
+      ...current,
       ...fields,
-      id: rows[index].id,
-      createdAt: rows[index].createdAt,
-      dailySeq: rows[index].dailySeq,
-      customerSeq: rows[index].customerSeq || rows[index].dailySeq,
-      dailySeqDate: rows[index].dailySeqDate,
+      id: current.id,
+      createdAt: current.createdAt,
+      dailySeq: current.dailySeq,
+      customerSeq: current.customerSeq || current.dailySeq,
+      dailySeqDate: current.dailySeqDate,
       updatedAt: nowIso(),
     };
     writeSavedCustomers(rows);

@@ -13,7 +13,9 @@ let customerFilter = "all";
 let customerLetter = "";
 let customerShowAll = false;
 let editingCustomerId = "";
+let editingListCustomerId = "";
 let customerSortKey = "lastName";
+let customersListBound = false;
 let customerSortDir = "asc";
 const RECENT_CUSTOMER_LIMIT = 25;
 
@@ -385,34 +387,59 @@ function renderCustomers() {
         </thead>
         <tbody>
           ${rows
-            .map(
-              (row) => `
-            <tr class="customer-row" data-key="${Admin.escapeAttr(row.key)}">
-              <td class="billing-number customer-index">${Number(row.customerSeq || row.dailySeq) || "—"}</td>
-              <td class="customer-plate">${Admin.escapeHtml(
+            .map((row) => {
+              const names = namesFromRow(row);
+              const editing =
+                Boolean(row.customerId) && editingListCustomerId === row.customerId;
+              const plates =
                 (Array.isArray(row.registrations) && row.registrations.length
                   ? row.registrations
                   : String(row.registration || "").split(",")
                 )
                   .map((p) => String(p || "").trim().toUpperCase())
                   .filter(Boolean)
-                  .join(", ") || "—"
-              )}</td>
-              <td><button type="button" class="customer-name-link" data-invoices="1">${Admin.escapeHtml(namesFromRow(row).firstName || "—")}</button></td>
-              <td><button type="button" class="customer-name-link" data-invoices="1">${Admin.escapeHtml(namesFromRow(row).lastName || "—")}</button></td>
-              <td class="customer-address"><span class="customer-address-text">${Admin.escapeHtml(row.customerAddress || "—")}</span></td>
+                  .join(", ") || "—";
+              return `
+            <tr class="customer-row${editing ? " is-editing-inline" : ""}" data-key="${Admin.escapeAttr(row.key)}" data-customer-id="${Admin.escapeAttr(row.customerId || "")}">
+              <td class="billing-number customer-index">${Number(row.customerSeq || row.dailySeq) || "—"}</td>
+              <td class="customer-plate">${Admin.escapeHtml(plates)}</td>
+              <td class="customer-first">
+                ${
+                  editing
+                    ? `<input data-inline="firstName" value="${Admin.escapeAttr(names.firstName)}" autocomplete="given-name" />`
+                    : Admin.escapeHtml(names.firstName || "—")
+                }
+              </td>
+              <td class="customer-last">
+                ${
+                  editing
+                    ? `<input data-inline="lastName" value="${Admin.escapeAttr(names.lastName)}" autocomplete="family-name" />`
+                    : Admin.escapeHtml(names.lastName || "—")
+                }
+              </td>
+              <td class="customer-address">
+                ${
+                  editing
+                    ? `<textarea data-inline="customerAddress" rows="2">${Admin.escapeHtml(row.customerAddress || "")}</textarea>`
+                    : `<span class="customer-address-text">${Admin.escapeHtml(row.customerAddress || "—")}</span>`
+                }
+              </td>
               <td class="customer-phone">
                 ${
-                  row.customerPhone
-                    ? `<a href="tel:${Admin.escapeAttr(row.customerPhone)}">${Admin.escapeHtml(row.customerPhone)}</a>`
-                    : "—"
+                  editing
+                    ? `<input data-inline="customerPhone" type="tel" value="${Admin.escapeAttr(row.customerPhone || "")}" />`
+                    : row.customerPhone
+                      ? `<a href="tel:${Admin.escapeAttr(row.customerPhone)}">${Admin.escapeHtml(row.customerPhone)}</a>`
+                      : "—"
                 }
               </td>
               <td class="customer-email">
                 ${
-                  row.customerEmail
-                    ? `<a href="mailto:${Admin.escapeAttr(row.customerEmail)}">${Admin.escapeHtml(row.customerEmail)}</a>`
-                    : "—"
+                  editing
+                    ? `<input data-inline="customerEmail" type="email" value="${Admin.escapeAttr(row.customerEmail || "")}" />`
+                    : row.customerEmail
+                      ? `<a href="mailto:${Admin.escapeAttr(row.customerEmail)}">${Admin.escapeHtml(row.customerEmail)}</a>`
+                      : "—"
                 }
               </td>
               <td class="customer-wof">
@@ -420,78 +447,62 @@ function renderCustomers() {
                 <div class="muted small">${Admin.escapeHtml(Admin.formatDateShort(row.wofExpiry) || "—")}</div>
               </td>
               <td class="customer-actions">
-                <button type="button" class="ghost" data-edit-key="${Admin.escapeAttr(row.key)}">Edit</button>
                 ${
-                  row.lastReportId
+                  editing
+                    ? `<button type="button" class="primary compact" data-inline-save="${Admin.escapeAttr(row.customerId)}">Save</button>
+                  <button type="button" class="ghost compact" data-inline-cancel="1">Cancel</button>
+                  <button type="button" class="ghost compact" data-vehicles-id="${Admin.escapeAttr(row.customerId)}">Vehicles</button>`
+                    : `<button type="button" class="ghost" data-edit-id="${Admin.escapeAttr(row.customerId || "")}" data-edit-key="${Admin.escapeAttr(row.key)}">${
+                        row.customerId ? "Edit" : "Open"
+                      }</button>
+                  <button type="button" class="ghost" data-invoices="1">Invoices</button>`
+                }
+                ${
+                  !editing && row.lastReportId
                     ? `<button type="button" class="ghost" data-open-report="${Admin.escapeAttr(row.lastReportId)}">Report</button>`
                     : ""
                 }
                 ${
-                  row.canDelete
+                  !editing && row.canDelete
                     ? `<button type="button" class="danger" data-delete-id="${Admin.escapeAttr(row.customerId)}">Delete</button>`
                     : ""
                 }
                 ${
-                  row.canWofReminder || canSendWofReminder(row)
+                  !editing && (row.canWofReminder || canSendWofReminder(row))
                     ? `<button type="button" class="primary compact" data-remind-key="${Admin.escapeAttr(row.key)}">Email</button>`
-                    : row.wofReminderSentAt
+                    : !editing && row.wofReminderSentAt
                     ? `<span class="reminder-sent">Email ${Admin.escapeHtml(formatReminderSent(row.wofReminderSentAt))}</span>`
                     : ""
                 }
                 ${
-                  row.canWofSmsReminder || canSendWofSmsReminder(row)
+                  !editing && (row.canWofSmsReminder || canSendWofSmsReminder(row))
                     ? `<button type="button" class="ghost compact" data-sms-remind-key="${Admin.escapeAttr(row.key)}">SMS</button>`
-                    : row.wofSmsReminderSentAt
+                    : !editing && row.wofSmsReminderSentAt
                     ? `<span class="reminder-sent">SMS ${Admin.escapeHtml(formatReminderSent(row.wofSmsReminderSentAt))}</span>`
                     : ""
                 }
               </td>
-            </tr>`
-            )
+            </tr>`;
+            })
             .join("")}
         </tbody>
       </table>
     </div>`;
 
-  customersList.querySelector("#btn-customers-show-all")?.addEventListener("click", () => {
-    customerShowAll = true;
-    renderCustomers();
-  });
+  bindCustomersListOnce();
 
-  customersList.querySelectorAll("[data-sort]").forEach((th) => {
-    th.addEventListener("click", (event) => {
-      event.stopPropagation();
-      const key = th.dataset.sort;
-      if (customerSortKey === key) {
-        customerSortDir = customerSortDir === "asc" ? "desc" : "asc";
-      } else {
-        customerSortKey = key;
-        customerSortDir = "asc";
+  customersList.querySelectorAll("tr.customer-row.is-editing-inline input, tr.customer-row.is-editing-inline textarea").forEach((el) => {
+    el.addEventListener("click", (event) => event.stopPropagation());
+    el.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && el.tagName !== "TEXTAREA") {
+        event.preventDefault();
+        const id = el.closest("tr")?.getAttribute("data-customer-id") || "";
+        if (id) saveInlineCustomer(id, el.closest("tr")?.querySelector("[data-inline-save]"));
       }
-      renderCustomers();
-    });
-  });
-
-  customersList.querySelectorAll("[data-invoices]").forEach((btn) => {
-    btn.addEventListener("click", (event) => {
-      event.stopPropagation();
-      const found = customerRows.find((r) => r.key === btn.closest("tr")?.dataset.key);
-      if (found) openCustomerInvoices(found);
-    });
-  });
-
-  customersList.querySelectorAll("tr.customer-row").forEach((row) => {
-    row.addEventListener("click", () => {
-      const found = customerRows.find((r) => r.key === row.dataset.key);
-      if (found) showCustomerForm(found);
-    });
-  });
-
-  customersList.querySelectorAll("[data-edit-key]").forEach((btn) => {
-    btn.addEventListener("click", (event) => {
-      event.stopPropagation();
-      const found = customerRows.find((r) => r.key === btn.dataset.editKey);
-      if (found) showCustomerForm(found);
+      if (event.key === "Escape") {
+        editingListCustomerId = "";
+        renderCustomers();
+      }
     });
   });
 
@@ -525,6 +536,148 @@ function renderCustomers() {
     link.addEventListener("click", (event) => event.stopPropagation());
   });
   updateBulkRemindButton();
+}
+
+function bindCustomersListOnce() {
+  if (!customersList || customersListBound) return;
+  customersListBound = true;
+  customersList.addEventListener("click", (event) => {
+    const showAll = event.target.closest("#btn-customers-show-all");
+    if (showAll) {
+      customerShowAll = true;
+      renderCustomers();
+      return;
+    }
+
+    const sortTh = event.target.closest("[data-sort]");
+    if (sortTh && customersList.contains(sortTh)) {
+      event.stopPropagation();
+      const key = sortTh.getAttribute("data-sort");
+      if (customerSortKey === key) {
+        customerSortDir = customerSortDir === "asc" ? "desc" : "asc";
+      } else {
+        customerSortKey = key;
+        customerSortDir = "asc";
+      }
+      renderCustomers();
+      return;
+    }
+
+    const invoicesBtn = event.target.closest("[data-invoices]");
+    if (invoicesBtn) {
+      event.stopPropagation();
+      const key = invoicesBtn.closest("tr")?.getAttribute("data-key") || "";
+      const found = customerRows.find((r) => r.key === key);
+      if (found) openCustomerInvoices(found);
+      return;
+    }
+
+    const editBtn = event.target.closest("[data-edit-id], [data-edit-key]");
+    if (editBtn) {
+      event.stopPropagation();
+      const id = editBtn.getAttribute("data-edit-id") || "";
+      const found = id
+        ? customerRows.find((r) => r.customerId === id)
+        : customerRows.find((r) => r.key === editBtn.getAttribute("data-edit-key"));
+      if (!found) return;
+      if (found.customerId) {
+        editingListCustomerId = found.customerId;
+        hideCustomerForm();
+        renderCustomers();
+        const editRow = [...customersList.querySelectorAll("tr.customer-row")].find(
+          (tr) => tr.getAttribute("data-customer-id") === found.customerId
+        );
+        editRow?.querySelector('[data-inline="firstName"]')?.focus();
+        return;
+      }
+      showCustomerForm(found);
+      return;
+    }
+
+    const cancelBtn = event.target.closest("[data-inline-cancel]");
+    if (cancelBtn) {
+      event.stopPropagation();
+      editingListCustomerId = "";
+      renderCustomers();
+      return;
+    }
+
+    const saveBtn = event.target.closest("[data-inline-save]");
+    if (saveBtn) {
+      event.stopPropagation();
+      const id = saveBtn.getAttribute("data-inline-save") || "";
+      saveInlineCustomer(id, saveBtn);
+      return;
+    }
+
+    const vehiclesBtn = event.target.closest("[data-vehicles-id]");
+    if (vehiclesBtn) {
+      event.stopPropagation();
+      const id = vehiclesBtn.getAttribute("data-vehicles-id") || "";
+      const found = customerRows.find((r) => r.customerId === id);
+      if (!found) return;
+      editingListCustomerId = "";
+      showCustomerForm(found);
+    }
+  });
+}
+
+async function saveInlineCustomer(customerId, btn) {
+  const id = String(customerId || "").trim();
+  const row = customerRows.find((r) => r.customerId === id);
+  const rowEl =
+    btn?.closest?.("tr[data-customer-id]") ||
+    [...(customersList?.querySelectorAll("tr.customer-row") || [])].find(
+      (tr) => tr.getAttribute("data-customer-id") === id
+    );
+  if (!id || !row || !rowEl) {
+    alert("Could not find this customer row. Press Ctrl+F5 and try again.");
+    return;
+  }
+  const read = (field) => String(rowEl.querySelector(`[data-inline="${field}"]`)?.value || "").trim();
+  const firstName = capitalizePersonName(read("firstName"));
+  const lastName = capitalizePersonName(read("lastName"));
+  const customerPhone = read("customerPhone");
+  const customerEmail = read("customerEmail");
+  const customerAddress = read("customerAddress");
+  if (!firstName) {
+    alert("Enter the first name.");
+    rowEl.querySelector('[data-inline="firstName"]')?.focus();
+    return;
+  }
+  if (!lastName) {
+    alert("Enter the last name.");
+    rowEl.querySelector('[data-inline="lastName"]')?.focus();
+    return;
+  }
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Saving…";
+    }
+    // Contact-only: omit vehicles so the server keeps the stored plate list.
+    await Admin.api(`/api/customers/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        firstName,
+        lastName,
+        customerPhone,
+        customerEmail,
+        customerAddress,
+      }),
+    });
+    editingListCustomerId = "";
+    await loadCustomers();
+    if (typeof Admin.showStatus === "function") Admin.showStatus("Customer saved");
+    else alert("Customer saved.");
+  } catch (err) {
+    console.error("Inline customer save failed:", err);
+    alert(err.message || "Could not save.");
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Save";
+    }
+  }
 }
 
 function openCustomerInvoices(row) {
