@@ -110,7 +110,9 @@
   const setLoading = (loading) => {
     if (!submitBtn) return;
     submitBtn.disabled = loading;
-    submitBtn.textContent = loading ? "Sending…" : "Send booking enquiry";
+    submitBtn.innerHTML = loading
+      ? "Sending… <span>→</span>"
+      : 'Request a booking <span>→</span>';
   };
 
   if (form && status) {
