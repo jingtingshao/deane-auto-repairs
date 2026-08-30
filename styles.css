@@ -525,6 +525,15 @@ p {
   font-size: 0.95rem;
 }
 
+.about {
+  background: var(--ink);
+  color: #fff;
+}
+
+.about .eyebrow {
+  color: var(--lime);
+}
+
 .about-grid,
 .location-grid {
   display: grid;
@@ -536,7 +545,37 @@ p {
 .about-copy p {
   max-width: 42rem;
   font-size: 1.12rem;
-  color: #3a4550;
+  color: #c4ccd2;
+}
+
+.about-points {
+  margin-top: 3rem;
+  border-top: 1px solid #ffffff44;
+}
+
+.about-points article {
+  display: grid;
+  grid-template-columns: 46px 1fr;
+  gap: 15px;
+  padding: 19px 0;
+  border-bottom: 1px solid #ffffff44;
+}
+
+.about-points span {
+  color: var(--lime);
+  font: 10px var(--mono);
+}
+
+.about-points h3 {
+  margin-bottom: 4px;
+  font: 700 23px var(--display);
+  text-transform: uppercase;
+}
+
+.about-points p {
+  margin: 0;
+  color: #c4ccd2;
+  font-size: 15px;
 }
 
 .location {
