@@ -46,3 +46,9 @@ services:
         value: "2"
       - key: BACKUP_KEEP_COUNT
         value: "14"
+      - key: WEBSMS_CLIENT_ID
+        sync: false
+      - key: WEBSMS_CLIENT_SECRET
+        sync: false
+      - key: WEBSMS_WEBHOOK_SECRET
+        sync: false

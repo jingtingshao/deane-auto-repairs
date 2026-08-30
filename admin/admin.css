@@ -501,7 +501,8 @@ label.check input {
   max-width: 16rem;
 }
 
-#billing-plate-find-status.is-ok {
+#billing-plate-find-status.is-ok,
+#cal-party-find-status.is-ok {
   color: var(--ok);
   font-weight: 700;
 }
@@ -2326,4 +2327,183 @@ label.check input {
     flex-direction: column;
     margin-top: 0.8rem;
   }
+}
+
+.calendar-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 1rem;
+}
+
+.calendar-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.calendar-board {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.cal-day {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--cal-day-accent, #90a4ae);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  background: var(--cal-day-bg, #fff);
+}
+
+.cal-day header {
+  margin-bottom: 0.65rem;
+}
+
+.cal-day header strong,
+.cal-day-header strong {
+  color: var(--cal-day-ink, var(--ink));
+}
+
+/* Weekday tint — soft enough for workshop use, distinct Mon–Sat */
+.cal-day-mon {
+  --cal-day-bg: #eef5ff;
+  --cal-day-accent: #1565c0;
+  --cal-day-ink: #0d47a1;
+}
+.cal-day-tue {
+  --cal-day-bg: #e8f7f4;
+  --cal-day-accent: #00897b;
+  --cal-day-ink: #00695c;
+}
+.cal-day-wed {
+  --cal-day-bg: #eef8ea;
+  --cal-day-accent: #43a047;
+  --cal-day-ink: #2e7d32;
+}
+.cal-day-thu {
+  --cal-day-bg: #fff8e7;
+  --cal-day-accent: #f9a825;
+  --cal-day-ink: #f57f17;
+}
+.cal-day-fri {
+  --cal-day-bg: #fff1ea;
+  --cal-day-accent: #ef6c00;
+  --cal-day-ink: #e65100;
+}
+.cal-day-sat {
+  --cal-day-bg: #f3eefb;
+  --cal-day-accent: #7e57c2;
+  --cal-day-ink: #5e35b1;
+}
+
+.cal-day-slots {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.cal-slot {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-left: 4px solid #1565c0;
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+  background: #fff;
+}
+
+.cal-slot.status-confirmed { border-left-color: #2e7d32; }
+.cal-slot.status-arrived { border-left-color: #c77700; }
+.cal-slot.status-job_created { border-left-color: #0d47a1; }
+.cal-slot.status-cancelled,
+.cal-slot.status-no_show { border-left-color: #9e9e9e; opacity: 0.85; }
+
+.cal-slot-time {
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.badge.booked { background: #e8f1fb; color: var(--blue); }
+.badge.confirmed { background: #e8f5e9; color: var(--ok); }
+.badge.arrived { background: #fff8e1; color: var(--watch); }
+.badge.job_created { background: #e3f2fd; color: #0d47a1; }
+.badge.cancelled,
+.badge.no_show { background: #eee; color: #555; }
+
+.job-appointments {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.job-appt-row {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.65rem 0.75rem;
+  background: #fff;
+}
+
+.calendar-board-fortnight,
+.calendar-board-month {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .calendar-board-fortnight,
+  .calendar-board-month {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .calendar-board-fortnight,
+  .calendar-board-month {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.cal-day {
+  cursor: default;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.cal-day.is-bookable {
+  cursor: pointer;
+}
+
+.cal-day.is-bookable:hover {
+  border-color: var(--cal-day-accent, #c5d8f0);
+  box-shadow: 0 4px 14px rgba(26, 35, 50, 0.08);
+}
+
+.cal-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+}
+
+.cal-day-header strong {
+  margin: 0;
+}
+
+.cal-day-add {
+  flex-shrink: 0;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.cal-day.is-past {
+  opacity: 0.85;
+  cursor: default;
 }

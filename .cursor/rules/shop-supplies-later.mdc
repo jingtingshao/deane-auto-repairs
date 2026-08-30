@@ -1,0 +1,18 @@
+# Deane Auto Repairs — Shop supplies on Parts invoices
+
+Updated 29 Aug 2026.
+
+## Done: Consumable + Tool line categories
+On Parts invoices (Repco / BNT / PartMaster Extracted Items), lines can be marked:
+
+- **Consumable** — workshop supplies not for one vehicle (gloves, rags, WD-40, sandpaper, etc.)
+- **Tool** — tools/equipment bought for the shop (not for one vehicle)
+
+Both:
+- Do **not** attach to a job / inflate Customer charged
+- Count toward invoice **matched** (resolved) so `12/12 matched` when all lines are Accept / Consumable / Tool / Ignore
+- Roll into invoice tracking and the list **this month** summary (by invoice date, Auckland)
+
+## Do not
+- Match shop consumables/tools onto a random job just because Smart Match suggested it
+- Treat “Consumable” / “Tool” / “Shop supplies” as a supplier name; they are **line decisions**, not Repco/BNT/PartMaster

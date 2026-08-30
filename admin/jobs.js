@@ -23,6 +23,8 @@ const jobsFilter = document.getElementById("jobs-filter");
 const jobsForm = document.getElementById("jobs-form");
 const jobsPartsEl = document.getElementById("jobs-parts");
 const jobsQuoteLink = document.getElementById("jobs-quote-link");
+const createQuoteBtn = document.getElementById("btn-jobs-create-quote");
+const createInvoiceBtn = document.getElementById("btn-jobs-create-invoice");
 const openQuoteBtn = document.getElementById("btn-jobs-open-quote");
 const attachInvoiceBtn = document.getElementById("btn-jobs-attach-invoice");
 const collectBtn = document.getElementById("btn-jobs-collected");
@@ -73,7 +75,7 @@ function newPart(partial = {}) {
 function partsLabel(job) {
   const total = Number(job.partsTotal) || 0;
   const received = Number(job.partsReceived) || 0;
-  if (!total) return { text: "No parts", cls: "parts-none" };
+  if (!total) return null;
   if (received >= total) return { text: "Parts in", cls: "parts-ok" };
   return { text: `${received}/${total} parts in`, cls: "parts-wait" };
 }
@@ -254,7 +256,7 @@ function renderJobList() {
                 <td>${Admin.escapeHtml(job.vehicle || "—")}</td>
                 <td class="job-table-status">
                   <span class="badge ${Admin.escapeAttr(job.status)}">${Admin.escapeHtml(statusLabel(job.status))}</span>
-                  <span class="badge ${Admin.escapeAttr(parts.cls)}">${Admin.escapeHtml(parts.text)}</span>
+                  ${parts ? `<span class="badge ${Admin.escapeAttr(parts.cls)}">${Admin.escapeHtml(parts.text)}</span>` : ""}
                 </td>
               </tr>`;
             })
@@ -416,6 +418,9 @@ function fillForm(job) {
   if (workEl) workEl.readOnly = linked;
   const hasQuote = Boolean(job.quoteId);
   const hasInvoice = Boolean(job.invoiceId);
+  const canCreateBilling = Boolean(job.id) && !hasQuote && !hasInvoice;
+  if (createQuoteBtn) createQuoteBtn.hidden = !canCreateBilling;
+  if (createInvoiceBtn) createInvoiceBtn.hidden = !canCreateBilling;
   if (openQuoteBtn) {
     openQuoteBtn.hidden = !hasQuote && !hasInvoice;
     openQuoteBtn.textContent = hasInvoice ? "Open invoice" : "Open quote";
@@ -425,7 +430,10 @@ function fillForm(job) {
     attachInvoiceBtn.hidden = !(hasInvoice && pending);
   }
   if (jobsQuoteLink) {
-    if (hasQuote) {
+    if (hasInvoice) {
+      jobsQuoteLink.hidden = false;
+      jobsQuoteLink.textContent = `Linked invoice: ${job.invoiceNumber || job.invoiceId}`;
+    } else if (hasQuote) {
       jobsQuoteLink.hidden = false;
       jobsQuoteLink.textContent = `Linked quote: ${job.quoteNumber || job.quoteId}`;
     } else {
@@ -434,7 +442,38 @@ function fillForm(job) {
     }
   }
   renderJobPhotos();
+  loadJobAppointments();
   updateCollectedButton();
+}
+
+async function loadJobAppointments() {
+  const el = document.getElementById("job-appointments");
+  if (!el || !currentJob?.id) return;
+  try {
+    const rows = await Admin.api(`/api/appointments?jobId=${encodeURIComponent(currentJob.id)}`);
+    if (!rows.length) {
+      el.innerHTML = '<p class="muted small">No visits booked for this job yet.</p>';
+      return;
+    }
+    el.innerHTML = rows
+      .map((row) => {
+        const when = `${row.date} · ${row.startTime}–${row.endTime || ""} · ${row.durationMinutes || ""} min`;
+        return `<button type="button" class="job-appt-row" data-appt-id="${Admin.escapeAttr(row.id)}">
+          <strong>${Admin.escapeHtml(when)}</strong>
+          <span class="badge ${Admin.escapeAttr(row.status)}">${Admin.escapeHtml(row.status)}</span>
+          <span class="muted small">${Admin.escapeHtml(row.workSummary || "")}</span>
+        </button>`;
+      })
+      .join("");
+    el.querySelectorAll("[data-appt-id]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        Admin.setSection("calendar");
+        window.DeaneCalendar?.openAppointment?.(btn.dataset.apptId);
+      });
+    });
+  } catch {
+    el.innerHTML = '<p class="muted small">Could not load appointments.</p>';
+  }
 }
 
 function photoList(key) {
@@ -681,6 +720,28 @@ openQuoteBtn?.addEventListener("click", async () => {
   await window.DeaneBilling?.openDoc(docId);
 });
 
+async function createBillingFromJob(kind) {
+  if (!currentJob?.id) return;
+  try {
+    await saveJob();
+  } catch (err) {
+    alert(err.message || "Save the job card first.");
+    return;
+  }
+  if (!window.DeaneBilling?.createFromJob) {
+    alert("Billing page did not load. Refresh Admin and try again.");
+    return;
+  }
+  try {
+    await window.DeaneBilling.createFromJob(currentJob, kind);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+createQuoteBtn?.addEventListener("click", () => createBillingFromJob("quote"));
+createInvoiceBtn?.addEventListener("click", () => createBillingFromJob("invoice"));
+
 attachInvoiceBtn?.addEventListener("click", async () => {
   if (!currentJob?.id || !currentJob.invoiceId) return;
   try {
@@ -714,6 +775,27 @@ document.getElementById("btn-jobs-delete")?.addEventListener("click", async () =
   } catch (err) {
     alert(err.message);
   }
+});
+
+document.getElementById("btn-job-add-appointment")?.addEventListener("click", async () => {
+  if (!currentJob) return;
+  try {
+    await jobAutosave.flush();
+  } catch {
+    /* still open calendar */
+  }
+  Admin.setSection("calendar");
+  await window.DeaneCalendar?.newAppointment?.({
+    date: Admin.todayIso(),
+    customerName: currentJob.customerName,
+    customerPhone: currentJob.customerPhone,
+    customerEmail: currentJob.customerEmail,
+    registration: currentJob.registration,
+    vehicle: currentJob.vehicle,
+    workSummary: currentJob.workRequested,
+    jobId: currentJob.id,
+    jobNumber: currentJob.number,
+  });
 });
 
 jobsForm?.addEventListener("input", (e) => {

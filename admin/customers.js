@@ -29,6 +29,65 @@ function canSendWofReminder(row) {
   );
 }
 
+function canSendWofSmsReminder(row) {
+  return Boolean(row?.customerId && row.canWofSmsReminder);
+}
+
+function eligibleWofReminderRows() {
+  const seen = new Set();
+  const out = [];
+  for (const row of customerRows) {
+    if (!canSendWofReminder(row)) continue;
+    const key = `${row.customerId}|${row.wofReminderVehicleId || row.registration || ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
+function eligibleWofSmsReminderRows() {
+  const seen = new Set();
+  const out = [];
+  for (const row of customerRows) {
+    if (!canSendWofSmsReminder(row)) continue;
+    const key = `${row.customerId}|${row.wofSmsReminderVehicleId || row.registration || ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
+function updateBulkRemindButton() {
+  const btn = document.getElementById("btn-wof-remind-all");
+  if (btn) {
+    const n = eligibleWofReminderRows().length;
+    if (!n) {
+      btn.hidden = true;
+      btn.disabled = false;
+      btn.textContent = "Remind all due soon";
+    } else {
+      btn.hidden = false;
+      btn.disabled = false;
+      btn.textContent = `Remind all due soon (${n})`;
+    }
+  }
+  const smsBtn = document.getElementById("btn-wof-sms-remind-all");
+  if (smsBtn) {
+    const n = eligibleWofSmsReminderRows().length;
+    if (!n) {
+      smsBtn.hidden = true;
+      smsBtn.disabled = false;
+      smsBtn.textContent = "SMS all due soon";
+    } else {
+      smsBtn.hidden = false;
+      smsBtn.disabled = false;
+      smsBtn.textContent = `SMS all due soon (${n})`;
+    }
+  }
+}
+
 function wofLabel(row) {
   if (row.wofStatus === "overdue") {
     return `Overdue ${Math.abs(row.daysUntil)}d`;
@@ -271,6 +330,7 @@ function renderCustomers() {
   if (!customerRows.length) {
     customersList.innerHTML =
       '<div class="empty">No customers yet. Click <strong>New customer</strong> (top right).</div>';
+    updateBulkRemindButton();
     return;
   }
 
@@ -286,6 +346,7 @@ function renderCustomers() {
 
   if (!filtered.length) {
     customersList.innerHTML = '<div class="empty">No matching customers. Try another name, plate, or letter.</div>';
+    updateBulkRemindButton();
     return;
   }
 
@@ -372,9 +433,16 @@ function renderCustomers() {
                 }
                 ${
                   row.canWofReminder || canSendWofReminder(row)
-                    ? `<button type="button" class="primary compact" data-remind-key="${Admin.escapeAttr(row.key)}">Remind</button>`
+                    ? `<button type="button" class="primary compact" data-remind-key="${Admin.escapeAttr(row.key)}">Email</button>`
                     : row.wofReminderSentAt
-                    ? `<span class="reminder-sent">Sent ${Admin.escapeHtml(formatReminderSent(row.wofReminderSentAt))}</span>`
+                    ? `<span class="reminder-sent">Email ${Admin.escapeHtml(formatReminderSent(row.wofReminderSentAt))}</span>`
+                    : ""
+                }
+                ${
+                  row.canWofSmsReminder || canSendWofSmsReminder(row)
+                    ? `<button type="button" class="ghost compact" data-sms-remind-key="${Admin.escapeAttr(row.key)}">SMS</button>`
+                    : row.wofSmsReminderSentAt
+                    ? `<span class="reminder-sent">SMS ${Admin.escapeHtml(formatReminderSent(row.wofSmsReminderSentAt))}</span>`
                     : ""
                 }
               </td>
@@ -441,6 +509,12 @@ function renderCustomers() {
       sendReminder(btn.dataset.remindKey, btn);
     });
   });
+  customersList.querySelectorAll("[data-sms-remind-key]").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      sendSmsReminder(btn.dataset.smsRemindKey, btn);
+    });
+  });
   customersList.querySelectorAll("[data-delete-id]").forEach((btn) => {
     btn.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -450,6 +524,7 @@ function renderCustomers() {
   customersList.querySelectorAll("a").forEach((link) => {
     link.addEventListener("click", (event) => event.stopPropagation());
   });
+  updateBulkRemindButton();
 }
 
 function openCustomerInvoices(row) {
@@ -741,7 +816,131 @@ async function sendReminder(key, btn) {
     alert(err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = "Remind";
+    btn.textContent = "Email";
+  }
+}
+
+async function sendSmsReminder(key, btn) {
+  const row = customerRows.find((r) => r.key === key);
+  if (!row) return;
+  if (!canSendWofSmsReminder(row)) {
+    if (row.wofSmsReminderSentAt) {
+      alert(`SMS reminder already sent on ${formatReminderSent(row.wofSmsReminderSentAt)}.`);
+      return;
+    }
+    alert(
+      "SMS reminder is only for customers whose WOF expires in the next 30 days, with a NZ mobile on file. Check WebSMS keys if the button never appears."
+    );
+    return;
+  }
+  if (!confirm(`Send a WOF SMS reminder to ${row.customerPhone}?`)) return;
+  try {
+    btn.disabled = true;
+    btn.textContent = "Sending…";
+    const result = await Admin.api("/api/customers/wof-sms-reminder", {
+      method: "POST",
+      body: JSON.stringify({
+        customerId: row.customerId,
+        vehicleId: row.wofSmsReminderVehicleId || "",
+      }),
+    });
+    if (result.alreadySent) {
+      alert(`SMS reminder already sent on ${formatReminderSent(result.sentAt)}.`);
+    } else {
+      alert(
+        `SMS sent to ${result.to}${result.sandbox ? " (sandbox — not billed)" : ""}`
+      );
+    }
+    await loadCustomers();
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "SMS";
+  }
+}
+
+async function sendBulkReminders() {
+  const eligible = eligibleWofReminderRows();
+  const btn = document.getElementById("btn-wof-remind-all");
+  if (!eligible.length) {
+    alert("No due-soon customers with an email are waiting for a reminder.");
+    updateBulkRemindButton();
+    return;
+  }
+  if (
+    !confirm(
+      `Send WOF reminder emails to ${eligible.length} customer${eligible.length === 1 ? "" : "s"}?\n\nOnly Due in 30 days, with email, not already reminded.`
+    )
+  ) {
+    return;
+  }
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = `Sending ${eligible.length}…`;
+    }
+    const result = await Admin.api("/api/customers/wof-reminder-bulk", {
+      method: "POST",
+      body: "{}",
+    });
+    await loadCustomers();
+    const failed = Array.isArray(result.failed) ? result.failed : [];
+    let msg = `Bulk reminder done.\nSent: ${result.sent || 0}\nAlready sent: ${result.alreadySent || 0}\nFailed: ${failed.length}`;
+    if (failed.length) {
+      const sample = failed
+        .slice(0, 3)
+        .map((f) => `${f.customerName || f.to || "Customer"}: ${f.error}`)
+        .join("\n");
+      msg += `\n\n${sample}`;
+    }
+    alert(msg);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    updateBulkRemindButton();
+  }
+}
+
+async function sendBulkSmsReminders() {
+  const eligible = eligibleWofSmsReminderRows();
+  const btn = document.getElementById("btn-wof-sms-remind-all");
+  if (!eligible.length) {
+    alert("No due-soon customers with a NZ mobile are waiting for an SMS reminder.");
+    updateBulkRemindButton();
+    return;
+  }
+  if (
+    !confirm(
+      `Send WOF SMS reminders to ${eligible.length} customer${eligible.length === 1 ? "" : "s"}?\n\nOnly Due in 30 days, with mobile, not already SMS-reminded.`
+    )
+  ) {
+    return;
+  }
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = `Sending SMS ${eligible.length}…`;
+    }
+    const result = await Admin.api("/api/customers/wof-sms-reminder-bulk", {
+      method: "POST",
+      body: "{}",
+    });
+    await loadCustomers();
+    const failed = Array.isArray(result.failed) ? result.failed : [];
+    let msg = `Bulk SMS done.\nSent: ${result.sent || 0}\nAlready sent: ${result.alreadySent || 0}\nFailed: ${failed.length}`;
+    if (failed.length) {
+      const sample = failed
+        .slice(0, 3)
+        .map((f) => `${f.customerName || f.to || "Customer"}: ${f.error}`)
+        .join("\n");
+      msg += `\n\n${sample}`;
+    }
+    alert(msg);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    updateBulkRemindButton();
   }
 }
 
@@ -787,6 +986,13 @@ customersFilter?.querySelectorAll("[data-filter]").forEach((btn) => {
     });
     renderCustomers();
   });
+});
+
+document.getElementById("btn-wof-remind-all")?.addEventListener("click", () => {
+  sendBulkReminders();
+});
+document.getElementById("btn-wof-sms-remind-all")?.addEventListener("click", () => {
+  sendBulkSmsReminders();
 });
 
 document.getElementById("customer-first-name")?.addEventListener("input", (e) => {

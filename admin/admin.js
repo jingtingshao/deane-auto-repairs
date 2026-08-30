@@ -72,6 +72,7 @@ function setSection(name) {
   const billingSection = document.getElementById("billing-section");
   const customersSection = document.getElementById("customers-section");
   const jobsSection = document.getElementById("jobs-section");
+  const calendarSection = document.getElementById("calendar-section");
   const supplierInvoicesSection = document.getElementById("supplier-invoices-section");
   const btnNew = document.getElementById("btn-new");
   const billingOpen = name === "quotes" || name === "invoices";
@@ -81,9 +82,10 @@ function setSection(name) {
   if (billingSection) billingSection.hidden = !billingOpen;
   if (customersSection) customersSection.hidden = name !== "customers";
   if (jobsSection) jobsSection.hidden = name !== "jobs";
+  if (calendarSection) calendarSection.hidden = name !== "calendar";
   if (supplierInvoicesSection) supplierInvoicesSection.hidden = name !== "supplier_invoices";
   if (btnNew) {
-    if (name === "supplier_invoices") {
+    if (name === "supplier_invoices" || name === "calendar") {
       btnNew.hidden = true;
     } else {
       btnNew.hidden = false;
@@ -97,6 +99,7 @@ function setSection(name) {
     invoices: "nav-invoices",
     customers: "nav-customers",
     jobs: "nav-jobs",
+    calendar: "nav-calendar",
     supplier_invoices: "nav-supplier-invoices",
   };
   Object.entries(navMap).forEach(([section, id]) => {
@@ -120,6 +123,10 @@ function setSection(name) {
     viewTitle.textContent = "Invoices";
   }
   if (name === "jobs") setOverline("JOB BOARD");
+  if (name === "calendar") {
+    setOverline("CALENDAR");
+    viewTitle.textContent = "Workshop calendar";
+  }
   if (name === "supplier_invoices") {
     setOverline("PARTS INVOICES");
     viewTitle.textContent = "Supplier invoices";
@@ -257,15 +264,8 @@ window.DeaneAdmin = {
     if (!doc) return null;
     const id = String(doc.customerId || "").trim();
     if (id) {
-      const byId = list.find((row) => row.customerId === id);
+      const byId = list.find((row) => row.customerId === id || row.id === id);
       if (byId) return byId;
-    }
-    const email = String(doc.customerEmail || "").trim().toLowerCase();
-    if (email) {
-      const byEmail = list.find(
-        (row) => String(row.customerEmail || "").trim().toLowerCase() === email
-      );
-      if (byEmail) return byEmail;
     }
     const plate = String(doc.registration || "")
       .toUpperCase()
@@ -282,13 +282,58 @@ window.DeaneAdmin = {
       if (byPlate) return byPlate;
     }
     const name = String(doc.customerName || "").trim().toLowerCase();
+    const email = String(doc.customerEmail || "").trim().toLowerCase();
+    // Email alone is too weak (shared inboxes) — require the same display name too.
+    if (email && name) {
+      const byEmailName = list.find((row) => {
+        const rowEmail = String(row.customerEmail || "").trim().toLowerCase();
+        const rowName = String(
+          [row.firstName, row.lastName].filter(Boolean).join(" ") || row.customerName || ""
+        )
+          .trim()
+          .toLowerCase();
+        return rowEmail === email && rowName === name;
+      });
+      if (byEmailName) return byEmailName;
+    }
     if (name) {
-      const matches = list.filter(
-        (row) => String(row.customerName || "").trim().toLowerCase() === name
-      );
+      const matches = list.filter((row) => {
+        const rowName = String(
+          [row.firstName, row.lastName].filter(Boolean).join(" ") || row.customerName || ""
+        )
+          .trim()
+          .toLowerCase();
+        return rowName === name;
+      });
       if (matches.length === 1) return matches[0];
     }
     return null;
+  },
+  sameParty(row, doc) {
+    if (!row || !doc) return false;
+    const plate = String(doc.registration || "")
+      .toUpperCase()
+      .replace(/[\s-]/g, "");
+    const plateHit =
+      Boolean(plate) &&
+      this.customerVehicles(row).some(
+        (v) =>
+          String(v.registration || "")
+            .toUpperCase()
+            .replace(/[\s-]/g, "") === plate
+      );
+    const docName = String(doc.customerName || "").trim().toLowerCase();
+    const rowName = String(
+      [row.firstName, row.lastName].filter(Boolean).join(" ") || row.customerName || ""
+    )
+      .trim()
+      .toLowerCase();
+    const nameHit = Boolean(docName && rowName && docName === rowName);
+    const id = String(doc.customerId || "").trim();
+    const idHit = Boolean(id && (row.customerId === id || row.id === id));
+    // Id alone is not enough if the form name was changed to someone else.
+    if (idHit) return nameHit || plateHit || (!docName && !plate);
+    return plateHit || nameHit;
   },
   fillCustomerSelect(selectEl, directory, selectedId = "") {
     if (!selectEl) return;
@@ -469,6 +514,11 @@ document.getElementById("nav-reports").addEventListener("click", async () => {
 document.getElementById("nav-jobs")?.addEventListener("click", () => {
   setSection("jobs");
   window.DeaneJobs?.showList();
+});
+
+document.getElementById("nav-calendar")?.addEventListener("click", () => {
+  setSection("calendar");
+  window.DeaneCalendar?.showList();
 });
 
 document.getElementById("nav-supplier-invoices")?.addEventListener("click", () => {

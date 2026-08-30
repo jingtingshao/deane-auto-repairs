@@ -126,12 +126,21 @@ function renderPresetButtons() {
   });
 }
 
-async function createDoc(presetId) {
+async function createDoc(presetId, extras = {}) {
   try {
     await loadCatalog();
     const preset = (catalogMeta?.presets || []).find((p) => p.id === presetId);
     if (!preset) throw new Error("Choose a package or custom quote.");
-    const lines = (preset.lines || []).map((line) => newLine(line));
+    const workNotes = String(extras.notes || "").trim();
+    const seedDescription = String(extras.lineDescription || workNotes || "").trim();
+    const lines = (preset.lines || []).map((line, index) =>
+      newLine(
+        index === 0 && seedDescription
+          ? { ...line, description: seedDescription, unitPriceIncl: Number(line.unitPriceIncl) || 0 }
+          : line
+      )
+    );
+    if (!lines.length) lines.push(newLine({ description: seedDescription, qty: 1, unitPriceIncl: 0 }));
     const totals = computeTotals(lines);
     const draft = {
       id: "",
@@ -140,14 +149,15 @@ async function createDoc(presetId) {
       number: "Not saved yet",
       status: "draft",
       preset: preset.id,
-      customerId: "",
-      vehicleId: "",
-      customerName: "",
-      customerEmail: "",
-      customerPhone: "",
-      registration: "",
-      vehicle: "",
-      notes: "",
+      customerId: String(extras.customerId || "").trim(),
+      vehicleId: String(extras.vehicleId || "").trim(),
+      customerName: String(extras.customerName || "").trim(),
+      customerEmail: String(extras.customerEmail || "").trim(),
+      customerPhone: String(extras.customerPhone || "").trim(),
+      registration: String(extras.registration || "").trim().toUpperCase(),
+      vehicle: String(extras.vehicle || "").trim(),
+      odometer: extras.odometer || "",
+      notes: workNotes,
       validUntil: "",
       lines,
       payments: [],
@@ -155,20 +165,55 @@ async function createDoc(presetId) {
       amountPaid: 0,
       history: [],
       totals,
-      jobId: "",
+      jobId: String(extras.jobId || "").trim(),
       reportId: "",
       quoteId: "",
       invoiceId: "",
     };
     await openUnsavedDoc(draft);
     Admin.showBillingStatus(
-      preset.kind === "invoice"
-        ? "Choose a customer, then Save to create the invoice"
-        : "Choose a customer, then Save to create the quote"
+      draft.jobId
+        ? draft.kind === "invoice"
+          ? "Linked to job — add labour/parts, then Save and send"
+          : "Linked to job — add quote lines, then Save and send"
+        : draft.kind === "invoice"
+          ? "Choose a customer, then Save to create the invoice"
+          : "Choose a customer, then Save to create the quote"
     );
   } catch (err) {
     alert(err.message);
   }
+}
+
+async function createFromJob(job, kind) {
+  if (!job?.id) throw new Error("Save the job card first.");
+  const wantInvoice = kind === "invoice";
+  if (wantInvoice && job.invoiceId) {
+    Admin.setSection("invoices");
+    await openDoc(job.invoiceId);
+    return;
+  }
+  if (!wantInvoice && job.quoteId) {
+    Admin.setSection("quotes");
+    await openDoc(job.quoteId);
+    return;
+  }
+  if (!wantInvoice && job.invoiceId) {
+    throw new Error("This job already has an invoice. Open it from the job card.");
+  }
+  const work = String(job.workRequested || "").trim();
+  await createDoc(wantInvoice ? "custom_invoice" : "custom", {
+    jobId: job.id,
+    customerId: job.customerId || "",
+    customerName: job.customerName || "",
+    customerEmail: job.customerEmail || "",
+    customerPhone: job.customerPhone || "",
+    registration: job.registration || "",
+    vehicle: job.vehicle || "",
+    odometer: job.odometer || "",
+    notes: work,
+    lineDescription: work,
+  });
 }
 
 async function openUnsavedDoc(doc) {
@@ -634,28 +679,61 @@ function syncBillingPartyFields() {
 
 function refreshBillingPartySelects(doc = currentBill) {
   const matched = Admin.matchCustomer(customerDirectory, doc);
-  Admin.fillCustomerSelect(
-    billingCustomerSelect,
-    customerDirectory,
-    matched?.customerId || doc?.customerId || ""
-  );
+  const trustMatch = matched && Admin.sameParty(matched, doc);
+  const linkedId = trustMatch
+    ? matched.customerId
+    : String(doc?.customerId || "").trim();
+  Admin.fillCustomerSelect(billingCustomerSelect, customerDirectory, linkedId);
+  const row = trustMatch
+    ? matched
+    : linkedId
+      ? customerDirectory.find((r) => r.customerId === linkedId) || null
+      : null;
   Admin.fillVehicleSelect(
     billingVehicleSelect,
-    selectedBillingCustomer() || matched,
+    row,
     doc?.vehicleId || doc?.registration || ""
   );
-  const row = selectedBillingCustomer() || matched;
-  Admin.applyPartyToForm(billingForm, row, selectedBillingVehicle(row));
-  if (!row && billingForm && doc) {
+  if (row && trustMatch) {
+    const vehicle =
+      selectedBillingVehicle(row) ||
+      Admin.customerVehicles(row).find(
+        (v) =>
+          String(v.registration || "")
+            .toUpperCase()
+            .replace(/[\s-]/g, "") ===
+          String(doc?.registration || "")
+            .toUpperCase()
+            .replace(/[\s-]/g, "")
+      ) ||
+      (Admin.customerVehicles(row).length === 1 ? Admin.customerVehicles(row)[0] : null);
+    Admin.applyPartyToForm(billingForm, row, vehicle);
+    // Keep job/appointment text when directory vehicle blank but doc has values.
+    if (doc?.registration && !billingInput("registration")?.value) {
+      const el = billingInput("registration");
+      if (el) el.value = doc.registration;
+    }
+    if (doc?.vehicle && !billingInput("vehicle")?.value) {
+      const el = billingInput("vehicle");
+      if (el) el.value = doc.vehicle;
+    }
+  } else if (billingForm && doc) {
+    Admin.applyPartyToForm(billingForm, null, null);
     const set = (name, value) => {
       const el = billingInput(name);
       if (el) el.value = value || "";
     };
-    set("customerName", doc.customerName);
-    set("customerEmail", doc.customerEmail);
-    set("customerPhone", doc.customerPhone);
-    set("registration", doc.registration);
-    set("vehicle", doc.vehicle);
+    const listed = String(doc.customerId || "").trim()
+      ? customerDirectory.find((r) => r.customerId === doc.customerId) || null
+      : null;
+    const keepId = listed && Admin.sameParty(listed, doc) ? listed.customerId : "";
+    set("customerId", keepId);
+    set("customerName", doc.customerName || "");
+    set("customerEmail", doc.customerEmail || "");
+    set("customerPhone", doc.customerPhone || "");
+    set("vehicleId", keepId ? doc.vehicleId || "" : "");
+    set("registration", doc.registration || "");
+    set("vehicle", doc.vehicle || "");
   }
 }
 
@@ -1087,6 +1165,7 @@ function collectBill() {
       description: capitalizeLineDescription(line.description),
     })),
   };
+  if (currentBill?.jobId) payload.jobId = currentBill.jobId;
   if (currentBill?.kind === "invoice") {
     payload.payments = paymentRows.map((p) => ({ ...p }));
     payload.wofExpiry = invoiceLinesHaveWof()
@@ -1578,5 +1657,5 @@ window.addEventListener("beforeunload", () => {
 billingForm?.addEventListener("input", scheduleBillAutosave);
 billingForm?.addEventListener("change", scheduleBillAutosave);
 
-window.DeaneBilling = { showList, openDoc };
+window.DeaneBilling = { showList, openDoc, createFromJob };
 })();

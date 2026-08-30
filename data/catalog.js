@@ -170,6 +170,13 @@ const PRESETS = [
     title: "Repair quote",
     lines: [{ description: "", qty: 1, unitPriceIncl: 0 }],
   },
+  {
+    id: "custom_invoice",
+    kind: "invoice",
+    label: "Custom invoice",
+    title: "Tax invoice",
+    lines: [{ description: "", qty: 1, unitPriceIncl: 0 }],
+  },
 ];
 
 const QUICK_ADDS = [

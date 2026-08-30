@@ -18,11 +18,13 @@ const {
 const business = require("./data/business");
 const catalog = require("./data/catalog");
 const jobsLib = require("./data/jobs");
+const appointmentsLib = require("./data/appointments");
 const { buildBillingPdf, safeFilename } = require("./data/billing-pdf");
 const { readJsonArray, writeJsonArray } = require("./data/json-store");
 const { blockedStaticPath, safeUploadPath, UPLOAD_EXTS } = require("./data/static-guard");
 const { todayIso, plusDays, nowIso, monthKey, monthShortLabel, monthLongLabel } = require("./data/nz-time");
 const driveBackup = require("./data/drive-backup");
+const websms = require("./data/websms");
 
 const PORT = Number(process.env.PORT) || 5173;
 const pdfParseLegacy =
@@ -112,9 +114,11 @@ const BILLING_SEQ_FILE = path.join(DATA_DIR, "billing-seq.json");
 const CUSTOMERS_FILE = path.join(DATA_DIR, "customers.json");
 const CUSTOMERS_SEQ_FILE = path.join(DATA_DIR, "customers-seq.json");
 const JOBS_FILE = path.join(DATA_DIR, "jobs.json");
+const APPOINTMENTS_FILE = path.join(DATA_DIR, "appointments.json");
 const SUPPLIER_INVOICES_FILE = path.join(DATA_DIR, "supplier-invoices.json");
 const INVOICE_CANDIDATES_FILE = path.join(DATA_DIR, "invoice-candidates.json");
 const PART_AUDIT_FILE = path.join(DATA_DIR, "part-audit-log.json");
+const SMS_INBOUND_FILE = path.join(DATA_DIR, "sms-inbound.json");
 const UPLOADS_DIR = (() => {
   const raw = String(process.env.UPLOADS_DIR || "").trim();
   if (raw && isWritableDir(path.resolve(raw))) return path.resolve(raw);
@@ -165,9 +169,11 @@ for (const file of [
   BILLING_FILE,
   CUSTOMERS_FILE,
   JOBS_FILE,
+  APPOINTMENTS_FILE,
   SUPPLIER_INVOICES_FILE,
   INVOICE_CANDIDATES_FILE,
   PART_AUDIT_FILE,
+  SMS_INBOUND_FILE,
 ]) {
   if (!fs.existsSync(file)) writeJsonArray(file, []);
 }
@@ -262,6 +268,67 @@ function ensureJobStatuses(jobs) {
 
 function writeJobs(jobs) {
   writeJsonArray(JOBS_FILE, jobs);
+}
+
+function readAppointments() {
+  return readJsonArray(APPOINTMENTS_FILE, "appointments").map((row) =>
+    appointmentsLib.normalizeAppointment(row, row.id || randomUUID())
+  );
+}
+
+function writeAppointments(rows) {
+  writeJsonArray(APPOINTMENTS_FILE, rows);
+}
+
+function syncAppointmentJobMeta(row) {
+  if (!row?.jobId) {
+    row.jobNumber = "";
+    return row;
+  }
+  const job = readJobs().find((j) => j.id === row.jobId);
+  if (!job) return row;
+  row.jobNumber = job.number || row.jobNumber || "";
+  if (!row.customerName && job.customerName) row.customerName = job.customerName;
+  if (!row.customerPhone && job.customerPhone) row.customerPhone = job.customerPhone;
+  if (!row.customerEmail && job.customerEmail) row.customerEmail = job.customerEmail;
+  if (!row.registration && job.registration) row.registration = job.registration;
+  if (!row.vehicle && job.vehicle) row.vehicle = job.vehicle;
+  return row;
+}
+
+function validateAppointmentInput(body = {}, { partial = false } = {}) {
+  const date =
+    body.date != null ? appointmentsLib.normalizeDate(body.date) : partial ? undefined : "";
+  const startTime =
+    body.startTime != null
+      ? appointmentsLib.normalizeTime(body.startTime)
+      : partial
+        ? undefined
+        : "";
+  if (!partial || body.date != null) {
+    appointmentsLib.assertBookableDate(date, todayIso());
+  }
+  if (!partial || body.startTime != null) {
+    if (!startTime) {
+      const err = new Error("Start time is required (HH:MM).");
+      err.status = 400;
+      throw err;
+    }
+  }
+  if (body.status != null && !appointmentsLib.isAppointmentStatus(body.status)) {
+    const err = new Error("Choose a valid appointment status.");
+    err.status = 400;
+    throw err;
+  }
+  if (body.durationMinutes != null) {
+    const duration = Number(body.durationMinutes);
+    if (!Number.isFinite(duration) || duration < 15) {
+      const err = new Error("Duration must be at least 15 minutes.");
+      err.status = 400;
+      throw err;
+    }
+  }
+  return { date, startTime };
 }
 
 function readSupplierInvoices() {
@@ -587,13 +654,16 @@ function customerFieldsForJob(source = {}) {
           : String(row.registration || "")
               .split(",")
               .map((p) => p.trim());
-        return plates.some((p) => plateKey(p) === plate);
+        const vehiclePlates = (row.vehicles || []).map((v) => v.registration);
+        return [...plates, ...vehiclePlates].some((p) => plateKey(p) === plate);
       }) || null;
   }
-  if (!match && email) {
+  if (!match && email && name) {
     match =
       directory.find(
-        (row) => String(row.customerEmail || "").trim().toLowerCase() === email
+        (row) =>
+          String(row.customerEmail || "").trim().toLowerCase() === email &&
+          String(row.customerName || "").trim().toLowerCase() === name
       ) || null;
   }
   if (!match && name) {
@@ -661,7 +731,16 @@ function ensureJobFromAcceptedQuote(docs, quote, invoice) {
     const index = jobs.findIndex((j) => j.id === existingId);
     if (index >= 0) {
       const existing = jobs[index];
-      let changed = applyCustomerFieldsToJob(existing, fields, true);
+      // Keep appointment/job party details — do not overwrite with a mismatched invoice party.
+      const existingName = String(existing.customerName || "").trim().toLowerCase();
+      const nextName = String(fields.customerName || "").trim().toLowerCase();
+      const existingPlate = plateKey(existing.registration);
+      const nextPlate = plateKey(fields.registration);
+      const sameParty =
+        (!existingName && !existingPlate) ||
+        (existingName && nextName && existingName === nextName) ||
+        (existingPlate && nextPlate && existingPlate === nextPlate);
+      let changed = applyCustomerFieldsToJob(existing, fields, sameParty);
       if (jobsLib.stripPackageParts(existing)) changed = true;
       const cleanedWork = jobsLib.stripPackageWorkRequested(existing.workRequested);
       if (cleanedWork !== String(existing.workRequested || "").trim()) {
@@ -770,6 +849,7 @@ function emptyJob(now) {
     collectedAt: "",
     createdAt: now,
     updatedAt: now,
+    customerId: "",
     customerName: "",
     customerEmail: "",
     customerPhone: "",
@@ -1852,6 +1932,9 @@ function normalizeVehicles(body = {}, current = {}) {
       vehicle: capitalizePersonName(String(row?.vehicle || prev?.vehicle || "").trim()),
       wofExpiry: String(row?.wofExpiry || prev?.wofExpiry || "").trim(),
       wofReminderSentAt: String(row?.wofReminderSentAt || prev?.wofReminderSentAt || "").trim(),
+      wofSmsReminderSentAt: String(
+        row?.wofSmsReminderSentAt || prev?.wofSmsReminderSentAt || ""
+      ).trim(),
     });
   }
   return vehicles;
@@ -2005,6 +2088,170 @@ function findCustomerWithSamePlate(rows, vehicles, exceptId = "") {
   );
 }
 
+/**
+ * Auto-save calendar / job walk-ins into Customers.
+ * - New plate + name → create customer
+ * - Same plate + same name → link existing
+ * - Same plate + different name → do NOT auto-link (husband/wife share a car)
+ */
+function upsertCustomerFromParty(party = {}) {
+  const names = namesFromCustomer({ customerName: party.customerName });
+  let firstName = names.firstName;
+  let lastName = names.lastName;
+  let customerName = names.customerName;
+  if (!customerName) {
+    return { customerId: String(party.customerId || "").trim(), created: false, linked: false };
+  }
+  // Customers list requires first + last; single-word walk-ins use "-".
+  if (firstName && !lastName) lastName = "-";
+  if (!firstName && lastName) {
+    firstName = lastName;
+    lastName = "-";
+  }
+  customerName = composeCustomerName(firstName, lastName, customerName);
+
+  const phone = String(party.customerPhone || "").trim();
+  const email = String(party.customerEmail || "").trim();
+  const registration = String(party.registration || "").trim().toUpperCase();
+  const vehicleDesc = capitalizePersonName(String(party.vehicle || "").trim());
+  if (!registration) {
+    // Need a plate to create a durable customer record.
+    return { customerId: String(party.customerId || "").trim(), created: false, linked: false };
+  }
+
+  const rows = readSavedCustomers();
+  const givenId = String(party.customerId || "").trim();
+  const partyNameKey = customerNameKey(customerName);
+
+  const plateOwner = findCustomerWithSamePlate(rows, [{ registration }]);
+  if (plateOwner) {
+    const ownerNameKey = customerNameKey(namesFromCustomer(plateOwner).customerName);
+    // Shared household car: different person, same plate — keep this booking separate.
+    if (ownerNameKey && partyNameKey && ownerNameKey !== partyNameKey) {
+      return { customerId: "", created: false, linked: false, skippedSharedPlate: true };
+    }
+    const index = rows.findIndex((c) => c.id === plateOwner.id);
+    if (index < 0) {
+      return { customerId: "", created: false, linked: false };
+    }
+    const current = rows[index];
+    const vehicles = normalizeVehicles(current, current);
+    const pk = plateKey(registration);
+    const vIndex = vehicles.findIndex((v) => plateKey(v.registration) === pk);
+    let changed = false;
+    if (vIndex >= 0) {
+      if (vehicleDesc && !String(vehicles[vIndex].vehicle || "").trim()) {
+        vehicles[vIndex] = { ...vehicles[vIndex], vehicle: vehicleDesc };
+        changed = true;
+      }
+    } else {
+      vehicles.push({
+        id: randomUUID(),
+        registration,
+        vehicle: vehicleDesc,
+        wofExpiry: "",
+        wofReminderSentAt: "",
+        wofSmsReminderSentAt: "",
+      });
+      changed = true;
+    }
+    if (phone && !String(current.customerPhone || "").trim()) {
+      current.customerPhone = phone;
+      changed = true;
+    }
+    if (email && !String(current.customerEmail || "").trim()) {
+      current.customerEmail = email;
+      changed = true;
+    }
+    if (changed) {
+      current.vehicles = vehicles;
+      current.registration = vehicles[0]?.registration || current.registration || "";
+      current.updatedAt = nowIso();
+      rows[index] = current;
+      writeSavedCustomers(rows);
+    }
+    return { customerId: current.id, created: false, linked: true };
+  }
+
+  if (givenId) {
+    const index = rows.findIndex((c) => c.id === givenId);
+    if (index >= 0) {
+      const current = rows[index];
+      const ownerNameKey = customerNameKey(namesFromCustomer(current).customerName);
+      if (ownerNameKey && partyNameKey && ownerNameKey !== partyNameKey) {
+        // Stale id from a previous search — do not keep linking the wrong person.
+        return { customerId: "", created: false, linked: false };
+      }
+      const vehicles = normalizeVehicles(current, current);
+      const pk = plateKey(registration);
+      if (!vehicles.some((v) => plateKey(v.registration) === pk)) {
+        // Plate is free (no other owner) — add it onto this customer.
+        vehicles.push({
+          id: randomUUID(),
+          registration,
+          vehicle: vehicleDesc,
+          wofExpiry: "",
+          wofReminderSentAt: "",
+          wofSmsReminderSentAt: "",
+        });
+        current.vehicles = vehicles;
+        current.registration = vehicles[0]?.registration || registration;
+        current.updatedAt = nowIso();
+        rows[index] = current;
+        writeSavedCustomers(rows);
+      }
+      return { customerId: current.id, created: false, linked: true };
+    }
+  }
+
+  const now = nowIso();
+  const seq = nextCustomerSeq(rows);
+  const row = {
+    id: randomUUID(),
+    firstName,
+    lastName,
+    customerName,
+    customerAddress: "",
+    customerPhone: phone,
+    customerEmail: email,
+    vehicles: [
+      {
+        id: randomUUID(),
+        registration,
+        vehicle: vehicleDesc,
+        wofExpiry: "",
+        wofReminderSentAt: "",
+        wofSmsReminderSentAt: "",
+      },
+    ],
+    registration,
+    dailySeq: seq,
+    customerSeq: seq,
+    dailySeqDate: "",
+    createdAt: now,
+    updatedAt: now,
+  };
+  rows.push(row);
+  writeSavedCustomers(rows);
+  return { customerId: row.id, created: true, linked: false };
+}
+
+function attachPartyCustomerId(row = {}) {
+  try {
+    const result = upsertCustomerFromParty(row);
+    if (result.skippedSharedPlate) {
+      // Same plate, different person — keep this visit's typed name, no shared customerId.
+      row.customerId = "";
+    } else if (result.customerId) {
+      row.customerId = result.customerId;
+    }
+    return result;
+  } catch (err) {
+    console.error("Could not auto-save customer from party:", err);
+    return { customerId: String(row.customerId || "").trim(), created: false, linked: false };
+  }
+}
+
 function customerRecordKey(item) {
   if (item.customerId) return `id:${item.customerId}`;
   const plate = plateKey(item.registration);
@@ -2033,6 +2280,13 @@ function nextWofReminderVehicle(vehicles) {
   return (vehicles || [])
     .map((v) => ({ v, meta: wofMeta(v.wofExpiry) }))
     .filter((row) => row.meta.wofStatus === "due_soon" && !row.v.wofReminderSentAt)
+    .sort((a, b) => String(a.v.wofExpiry).localeCompare(String(b.v.wofExpiry)))[0]?.v || null;
+}
+
+function nextWofSmsReminderVehicle(vehicles) {
+  return (vehicles || [])
+    .map((v) => ({ v, meta: wofMeta(v.wofExpiry) }))
+    .filter((row) => row.meta.wofStatus === "due_soon" && !row.v.wofSmsReminderSentAt)
     .sort((a, b) => String(a.v.wofExpiry).localeCompare(String(b.v.wofExpiry)))[0]?.v || null;
 }
 
@@ -2080,6 +2334,8 @@ function mergeCustomer(map, incoming) {
           vehicle: v.vehicle || vehicles[idx].vehicle || "",
           wofExpiry: v.wofExpiry || vehicles[idx].wofExpiry || "",
           wofReminderSentAt: v.wofReminderSentAt || vehicles[idx].wofReminderSentAt || "",
+          wofSmsReminderSentAt:
+            v.wofSmsReminderSentAt || vehicles[idx].wofSmsReminderSentAt || "",
         };
       } else {
         vehicles.push({
@@ -2088,6 +2344,7 @@ function mergeCustomer(map, incoming) {
           vehicle: String(v.vehicle || "").trim(),
           wofExpiry: v.wofExpiry || "",
           wofReminderSentAt: v.wofReminderSentAt || "",
+          wofSmsReminderSentAt: v.wofSmsReminderSentAt || "",
         });
       }
     }
@@ -2109,6 +2366,7 @@ function mergeCustomer(map, incoming) {
             ? vehicles[idx].wofExpiry || ""
             : "",
       wofReminderSentAt: idx >= 0 ? vehicles[idx].wofReminderSentAt || "" : "",
+      wofSmsReminderSentAt: idx >= 0 ? vehicles[idx].wofSmsReminderSentAt || "" : "",
     };
     if (idx >= 0) vehicles[idx] = { ...vehicles[idx], ...nextVehicle };
     else vehicles.push(nextVehicle);
@@ -2242,12 +2500,19 @@ function listCustomers() {
         registration: row.registration,
       });
       const reminderVehicle = nextWofReminderVehicle(row.vehicles || []);
+      const smsReminderVehicle = nextWofSmsReminderVehicle(row.vehicles || []);
       const latestVehicleReminder = (row.vehicles || [])
         .map((v) => v.wofReminderSentAt)
         .filter(Boolean)
         .sort()
         .at(-1) || "";
+      const latestSmsReminder = (row.vehicles || [])
+        .map((v) => v.wofSmsReminderSentAt)
+        .filter(Boolean)
+        .sort()
+        .at(-1) || "";
       const seq = row.customerId ? Number(seqById.get(row.customerId)) || 0 : 0;
+      const phoneOk = Boolean(websms.normalizeNzMobile(row.customerPhone));
       return {
         ...row,
         ...wofMeta(row.wofExpiry),
@@ -2256,6 +2521,11 @@ function listCustomers() {
           : latestVehicleReminder || row.wofReminderSentAt || "",
         wofReminderVehicleId: reminderVehicle?.id || "",
         canWofReminder: Boolean(reminderVehicle && row.customerEmail),
+        wofSmsReminderSentAt: smsReminderVehicle
+          ? ""
+          : latestSmsReminder || row.wofSmsReminderSentAt || "",
+        wofSmsReminderVehicleId: smsReminderVehicle?.id || "",
+        canWofSmsReminder: Boolean(smsReminderVehicle && phoneOk && websms.websmsConfigured()),
         customerSeq: seq,
         dailySeq: seq,
         hasReport,
@@ -2513,6 +2783,7 @@ function applyInvoiceWofToCustomer(doc) {
   if (!hit) return;
   if (hit.wofExpiry !== expiry) {
     hit.wofReminderSentAt = "";
+    hit.wofSmsReminderSentAt = "";
     customer.wofReminderSentAt = "";
   }
   hit.wofExpiry = expiry;
@@ -3370,6 +3641,57 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+/**
+ * WebSMS Connexus webhook — public (no admin login).
+ * Set in WebSMS Members Area → API Keys → Webhook URL to:
+ *   https://deane-auto-repairs.onrender.com/api/websms/webhook
+ * Optional: ?secret=... with WEBSMS_WEBHOOK_SECRET on Render.
+ */
+app.post("/api/websms/webhook", (req, res) => {
+  const expected = String(process.env.WEBSMS_WEBHOOK_SECRET || "").trim();
+  if (expected) {
+    const got = String(req.query.secret || req.headers["x-websms-secret"] || "").trim();
+    if (got !== expected) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+  }
+
+  res.status(200).json({ ok: true });
+
+  const payload = req.body && typeof req.body === "object" ? req.body : {};
+  const type = String(payload.type || "").trim();
+  try {
+    if (type === "SMS" || type === "mo" || type === "MO") {
+      const rows = readJsonArray(SMS_INBOUND_FILE, "sms inbound");
+      rows.push({
+        id: randomUUID(),
+        receivedAt: nowIso(),
+        type: "SMS",
+        from: String(payload.from || "").trim(),
+        to: String(payload.to || "").trim(),
+        body: String(payload.body || "").trim(),
+        messageId: String(payload.messageId || payload.connexusMessageId || "").trim(),
+        replyTo: String(payload.replyTo || payload.replyToConnexusId || "").trim(),
+        replyToCustomerMessageId: String(payload.replyToCustomerMessageId || "").trim(),
+        raw: payload,
+        handled: false,
+      });
+      writeJsonArray(SMS_INBOUND_FILE, rows.length > 500 ? rows.slice(-500) : rows);
+      console.log(
+        `WebSMS inbound from ${payload.from || "?"}: ${String(payload.body || "").slice(0, 80)}`
+      );
+    } else if (type === "dlr" || type === "DLR") {
+      console.log(
+        `WebSMS DLR ${payload.status || "?"} messageId=${payload.messageId || payload.connexusMessageId || ""}`
+      );
+    } else {
+      console.log(`WebSMS webhook type=${type || "unknown"}`);
+    }
+  } catch (err) {
+    console.error("WebSMS webhook processing failed:", err);
+  }
+});
+
 app.post("/api/booking", async (req, res) => {
   if (!smtpConfigured()) {
     return res.status(503).json({
@@ -3717,6 +4039,7 @@ app.get("/api/admin/email-status", requireAdmin, (_req, res) => {
     publicBaseUrl: PUBLIC_BASE_URL || null,
     dataDir: DATA_DIR,
     customersSaved,
+    websms: websms.publicStatus(),
   });
 });
 
@@ -4202,15 +4525,265 @@ app.post("/api/customers/wof-reminder", requireAdmin, async (req, res) => {
   }
 
   const customerId = String(req.body?.customerId || "").trim();
+  try {
+    const result = await sendWofReminderEmail({
+      customerId,
+      vehicleId: String(req.body?.vehicleId || "").trim(),
+    });
+    res.json(result);
+  } catch (err) {
+    const status = err.status || 502;
+    if (status >= 500) console.error("WOF reminder email failed:", err);
+    res.status(status).json({
+      error: err.response || err.message || "Failed to send email. Check SMTP settings.",
+    });
+  }
+});
+
+app.post("/api/customers/wof-reminder-bulk", requireAdmin, async (req, res) => {
+  if (!smtpConfigured()) {
+    return res.status(503).json({
+      error:
+        "Email not configured. On Render go to Settings → Environment and add SMTP_HOST, SMTP_USER, SMTP_PASS, then save.",
+    });
+  }
+
+  const customers = readSavedCustomers();
+  const targets = [];
+  for (const customer of customers) {
+    const email = String(customer.customerEmail || "").trim();
+    if (!email) continue;
+    const vehicle = nextWofReminderVehicle(normalizeVehicles(customer, customer));
+    if (!vehicle) continue;
+    targets.push({
+      customerId: customer.id,
+      vehicleId: vehicle.id || "",
+      customerName: namesFromCustomer(customer).customerName || "",
+      registration: String(vehicle.registration || "").trim().toUpperCase(),
+      to: email,
+    });
+  }
+
+  const summary = {
+    ok: true,
+    total: targets.length,
+    sent: 0,
+    alreadySent: 0,
+    failed: [],
+  };
+
+  for (const target of targets) {
+    try {
+      const result = await sendWofReminderEmail({
+        customerId: target.customerId,
+        vehicleId: target.vehicleId,
+      });
+      if (result.alreadySent) summary.alreadySent += 1;
+      else summary.sent += 1;
+    } catch (err) {
+      console.error("WOF bulk reminder failed:", target.customerId, err.message || err);
+      summary.failed.push({
+        customerId: target.customerId,
+        customerName: target.customerName,
+        registration: target.registration,
+        to: target.to,
+        error: err.message || "Failed to send",
+      });
+    }
+  }
+
+  res.json(summary);
+});
+
+app.post("/api/customers/wof-sms-reminder", requireAdmin, async (req, res) => {
+  if (!websms.websmsConfigured()) {
+    return res.status(503).json({
+      error:
+        "WebSMS not configured. Add WEBSMS_CLIENT_ID and WEBSMS_CLIENT_SECRET to .env / Render, then restart.",
+    });
+  }
+  try {
+    const result = await sendWofReminderSms({
+      customerId: String(req.body?.customerId || "").trim(),
+      vehicleId: String(req.body?.vehicleId || "").trim(),
+    });
+    res.json(result);
+  } catch (err) {
+    const status = err.status || 502;
+    if (status >= 500) console.error("WOF SMS reminder failed:", err);
+    res.status(status).json({
+      error: err.message || "Failed to send SMS. Check WebSMS settings.",
+    });
+  }
+});
+
+app.post("/api/customers/wof-sms-reminder-bulk", requireAdmin, async (req, res) => {
+  if (!websms.websmsConfigured()) {
+    return res.status(503).json({
+      error:
+        "WebSMS not configured. Add WEBSMS_CLIENT_ID and WEBSMS_CLIENT_SECRET to .env / Render, then restart.",
+    });
+  }
+
+  const customers = readSavedCustomers();
+  const targets = [];
+  for (const customer of customers) {
+    const phone = websms.normalizeNzMobile(customer.customerPhone);
+    if (!phone) continue;
+    const vehicle = nextWofSmsReminderVehicle(normalizeVehicles(customer, customer));
+    if (!vehicle) continue;
+    targets.push({
+      customerId: customer.id,
+      vehicleId: vehicle.id || "",
+      customerName: namesFromCustomer(customer).customerName || "",
+      registration: String(vehicle.registration || "").trim().toUpperCase(),
+      to: phone,
+    });
+  }
+
+  const summary = {
+    ok: true,
+    total: targets.length,
+    sent: 0,
+    alreadySent: 0,
+    failed: [],
+  };
+
+  for (const target of targets) {
+    try {
+      const result = await sendWofReminderSms({
+        customerId: target.customerId,
+        vehicleId: target.vehicleId,
+      });
+      if (result.alreadySent) summary.alreadySent += 1;
+      else summary.sent += 1;
+    } catch (err) {
+      console.error("WOF bulk SMS failed:", target.customerId, err.message || err);
+      summary.failed.push({
+        customerId: target.customerId,
+        customerName: target.customerName,
+        registration: target.registration,
+        to: target.to,
+        error: err.message || "Failed to send",
+      });
+    }
+  }
+
+  res.json(summary);
+});
+
+async function sendWofReminderSms({ customerId, vehicleId = "" }) {
   const rows = readSavedCustomers();
   const customer = customerId ? rows.find((c) => c.id === customerId) : null;
   if (!customer) {
-    return res.status(400).json({ error: "Open a saved customer first." });
+    const err = new Error("Open a saved customer first.");
+    err.status = 400;
+    throw err;
   }
 
   const names = namesFromCustomer(customer);
   const vehicles = normalizeVehicles(customer, customer);
-  const requestedId = String(req.body?.vehicleId || "").trim();
+  const requestedId = String(vehicleId || "").trim();
+  const target =
+    (requestedId && vehicles.find((v) => v.id === requestedId)) ||
+    nextWofSmsReminderVehicle(vehicles);
+  if (!target) {
+    const latestSent = vehicles
+      .map((v) => v.wofSmsReminderSentAt)
+      .filter(Boolean)
+      .sort()
+      .at(-1) || "";
+    if (latestSent) {
+      return {
+        ok: true,
+        alreadySent: true,
+        channel: "sms",
+        to: websms.normalizeNzMobile(customer.customerPhone) || customer.customerPhone,
+        sentAt: latestSent,
+      };
+    }
+    const err = new Error(
+      "SMS reminder is only for a vehicle whose WOF expires in the next 30 days."
+    );
+    err.status = 400;
+    throw err;
+  }
+  const expiry = String(target.wofExpiry || "").trim();
+  const meta = wofMeta(expiry);
+  if (meta.wofStatus !== "due_soon") {
+    const err = new Error(
+      "SMS reminder is only for a vehicle whose WOF expires in the next 30 days."
+    );
+    err.status = 400;
+    throw err;
+  }
+  if (target.wofSmsReminderSentAt) {
+    return {
+      ok: true,
+      alreadySent: true,
+      channel: "sms",
+      to: websms.normalizeNzMobile(customer.customerPhone) || customer.customerPhone,
+      sentAt: target.wofSmsReminderSentAt,
+    };
+  }
+
+  const to = websms.normalizeNzMobile(customer.customerPhone);
+  if (!to) {
+    const err = new Error("Customer needs a valid NZ mobile number for SMS.");
+    err.status = 400;
+    throw err;
+  }
+
+  const registration = String(target.registration || "").trim().toUpperCase();
+  const expiryLabel = formatDateShort(expiry) || expiry;
+  const body =
+    `${business.name}: WOF for ${registration || "your vehicle"} expires ${expiryLabel}. ` +
+    `Book ${business.phoneDisplay}`;
+
+  const sent = await websms.sendSms({
+    to,
+    body,
+    messageClass: "transactional",
+  });
+
+  const sentAt = nowIso();
+  const latestRows = readSavedCustomers();
+  const latest = latestRows.find((c) => c.id === customer.id);
+  if (latest) {
+    const latestVehicles = normalizeVehicles(latest, latest);
+    const hit =
+      latestVehicles.find((v) => v.id === target.id) ||
+      latestVehicles.find((v) => plateKey(v.registration) === plateKey(registration));
+    if (hit) hit.wofSmsReminderSentAt = sentAt;
+    latest.vehicles = latestVehicles;
+    latest.updatedAt = sentAt;
+    writeSavedCustomers(latestRows);
+  }
+
+  return {
+    ok: true,
+    channel: "sms",
+    to: sent.to,
+    sentAt,
+    vehicleId: target.id || "",
+    messageId: sent.messageId || "",
+    sandbox: Boolean(sent.sandbox),
+    customerName: names.customerName || "",
+  };
+}
+
+async function sendWofReminderEmail({ customerId, vehicleId = "" }) {
+  const rows = readSavedCustomers();
+  const customer = customerId ? rows.find((c) => c.id === customerId) : null;
+  if (!customer) {
+    const err = new Error("Open a saved customer first.");
+    err.status = 400;
+    throw err;
+  }
+
+  const names = namesFromCustomer(customer);
+  const vehicles = normalizeVehicles(customer, customer);
+  const requestedId = String(vehicleId || "").trim();
   const target =
     (requestedId && vehicles.find((v) => v.id === requestedId)) ||
     nextWofReminderVehicle(vehicles);
@@ -4221,39 +4794,45 @@ app.post("/api/customers/wof-reminder", requireAdmin, async (req, res) => {
       .sort()
       .at(-1) || "";
     if (latestSent) {
-      return res.json({
+      return {
         ok: true,
         alreadySent: true,
         to: customer.customerEmail,
         sentAt: latestSent,
-      });
+      };
     }
-    return res.status(400).json({
-      error: "Email reminder is only for a vehicle whose WOF expires in the next 30 days.",
-    });
+    const err = new Error(
+      "Email reminder is only for a vehicle whose WOF expires in the next 30 days."
+    );
+    err.status = 400;
+    throw err;
   }
   const expiry = String(target.wofExpiry || "").trim();
   const meta = wofMeta(expiry);
   if (meta.wofStatus !== "due_soon") {
-    return res.status(400).json({
-      error: "Email reminder is only for a vehicle whose WOF expires in the next 30 days.",
-    });
+    const err = new Error(
+      "Email reminder is only for a vehicle whose WOF expires in the next 30 days."
+    );
+    err.status = 400;
+    throw err;
   }
   if (target.wofReminderSentAt) {
-    return res.json({
+    return {
       ok: true,
       alreadySent: true,
       to: customer.customerEmail,
       sentAt: target.wofReminderSentAt,
-    });
+    };
   }
 
-  const to = String(customer.customerEmail || req.body?.to || "").trim();
+  const to = String(customer.customerEmail || "").trim();
   const name = names.customerName || "there";
   const registration = String(target.registration || "").trim().toUpperCase();
   const vehicle = String(target.vehicle || "").trim();
   if (!to) {
-    return res.status(400).json({ error: "Customer email is missing." });
+    const err = new Error("Customer email is missing.");
+    err.status = 400;
+    throw err;
   }
 
   const vehicleBit = `${vehicle || "your vehicle"}${registration ? ` (${registration})` : ""}`;
@@ -4288,7 +4867,7 @@ app.post("/api/customers/wof-reminder", requireAdmin, async (req, res) => {
 
   try {
     const mailer = createMailer();
-    const info = await mailer.sendMail({
+    await mailer.sendMail({
       from: MAIL_FROM,
       to,
       replyTo: process.env.SMTP_USER || MAIL_FROM,
@@ -4296,27 +4875,26 @@ app.post("/api/customers/wof-reminder", requireAdmin, async (req, res) => {
       text,
       html,
     });
-    const sentAt = nowIso();
-    const latestRows = readSavedCustomers();
-    const latest = latestRows.find((c) => c.id === customer.id);
-    if (latest) {
-      const latestVehicles = normalizeVehicles(latest, latest);
-      const hit =
-        latestVehicles.find((v) => v.id === target.id) ||
-        latestVehicles.find((v) => plateKey(v.registration) === plateKey(registration));
-      if (hit) hit.wofReminderSentAt = sentAt;
-      latest.vehicles = latestVehicles;
-      latest.updatedAt = sentAt;
-      writeSavedCustomers(latestRows);
-    }
-    res.json({ ok: true, to, sentAt, vehicleId: target.id || "" });
   } catch (err) {
-    console.error("WOF reminder email failed:", err);
-    res.status(502).json({
-      error: err.response || err.message || "Failed to send email. Check SMTP settings.",
-    });
+    err.status = 502;
+    throw err;
   }
-});
+
+  const sentAt = nowIso();
+  const latestRows = readSavedCustomers();
+  const latest = latestRows.find((c) => c.id === customer.id);
+  if (latest) {
+    const latestVehicles = normalizeVehicles(latest, latest);
+    const hit =
+      latestVehicles.find((v) => v.id === target.id) ||
+      latestVehicles.find((v) => plateKey(v.registration) === plateKey(registration));
+    if (hit) hit.wofReminderSentAt = sentAt;
+    latest.vehicles = latestVehicles;
+    latest.updatedAt = sentAt;
+    writeSavedCustomers(latestRows);
+  }
+  return { ok: true, to, sentAt, vehicleId: target.id || "" };
+}
 
 app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
   if (!smtpConfigured()) {
@@ -4565,6 +5143,20 @@ app.post("/api/billing", requireAdmin, (req, res) => {
   const docs = readBilling();
   const now = nowIso();
   const today = todayIso();
+  const linkJobId = String(req.body?.jobId || "").trim();
+  let linkJob = null;
+  if (linkJobId) {
+    linkJob = readJobs().find((j) => j.id === linkJobId) || null;
+    if (!linkJob) {
+      return res.status(400).json({ error: "Linked job not found." });
+    }
+    if (preset.kind === "quote" && linkJob.quoteId) {
+      return res.status(400).json({ error: "This job already has a quote. Open it from the job card." });
+    }
+    if (preset.kind === "invoice" && linkJob.invoiceId) {
+      return res.status(400).json({ error: "This job already has an invoice. Open it from the job card." });
+    }
+  }
   const bodyLines = Array.isArray(req.body?.lines) ? req.body.lines : null;
   const lines = (bodyLines && bodyLines.length
     ? bodyLines
@@ -4606,7 +5198,7 @@ app.post("/api/billing", requireAdmin, (req, res) => {
     viewToken: newViewToken(),
     quoteId: "",
     invoiceId: "",
-    jobId: "",
+    jobId: linkJob ? linkJob.id : "",
     lastEmailedAt: "",
     lastEmailedTo: "",
     history: [],
@@ -4619,7 +5211,20 @@ app.post("/api/billing", requireAdmin, (req, res) => {
   });
 
   docs.push(doc);
-  if (doc.kind === "invoice" && (doc.customerName || doc.registration)) {
+  if (linkJob) {
+    const jobs = readJobs();
+    const jobIndex = jobs.findIndex((j) => j.id === linkJob.id);
+    if (jobIndex >= 0) {
+      linkJobToBilling(
+        docs,
+        jobs[jobIndex],
+        doc.kind === "quote" ? doc : null,
+        doc.kind === "invoice" ? doc : null
+      );
+      jobs[jobIndex].updatedAt = now;
+      writeJobs(jobs);
+    }
+  } else if (doc.kind === "invoice" && (doc.customerName || doc.registration)) {
     try {
       syncJobFromInvoiceExtras(docs, doc);
     } catch (err) {
@@ -5534,6 +6139,173 @@ app.delete("/api/billing/:id", requireAdmin, (req, res) => {
   }
   writeBilling(docs.filter((d) => d.id !== req.params.id));
   res.json({ ok: true });
+});
+
+app.get("/api/appointments/meta", requireAdmin, (_req, res) => {
+  res.json({
+    statuses: appointmentsLib.APPOINTMENT_STATUSES,
+    sources: appointmentsLib.APPOINTMENT_SOURCES,
+    durationPresets: [
+      { minutes: 60, label: "1 hour" },
+      { minutes: 120, label: "2 hours" },
+      { minutes: 180, label: "3 hours" },
+      { minutes: 240, label: "Half day (4h)" },
+    ],
+  });
+});
+
+app.get("/api/appointments", requireAdmin, (req, res) => {
+  const from = appointmentsLib.normalizeDate(req.query.from);
+  const to = appointmentsLib.normalizeDate(req.query.to);
+  const jobId = String(req.query.jobId || "").trim();
+  let rows = readAppointments().map((row) => syncAppointmentJobMeta({ ...row }));
+  if (from) rows = rows.filter((row) => row.date >= from);
+  if (to) rows = rows.filter((row) => row.date <= to);
+  if (jobId) rows = rows.filter((row) => row.jobId === jobId);
+  rows.sort((a, b) => {
+    const byDate = String(a.date).localeCompare(String(b.date));
+    if (byDate) return byDate;
+    return String(a.startTime).localeCompare(String(b.startTime));
+  });
+  res.json(rows);
+});
+
+app.get("/api/appointments/:id", requireAdmin, (req, res) => {
+  const row = readAppointments().find((item) => item.id === req.params.id);
+  if (!row) return res.status(404).json({ error: "Appointment not found" });
+  const next = syncAppointmentJobMeta({ ...row });
+  res.json(next);
+});
+
+app.post("/api/appointments", requireAdmin, (req, res) => {
+  try {
+    validateAppointmentInput(req.body || {});
+    const now = nowIso();
+    const row = appointmentsLib.normalizeAppointment(
+      {
+        ...req.body,
+        id: randomUUID(),
+        status: req.body?.status || "booked",
+        source: req.body?.source || "manual",
+        createdAt: now,
+        updatedAt: now,
+      },
+      randomUUID()
+    );
+    if (row.jobId) {
+      const job = readJobs().find((j) => j.id === row.jobId);
+      if (!job) {
+        return res.status(400).json({ error: "Linked job not found." });
+      }
+      syncAppointmentJobMeta(row);
+      if (row.status === "booked" || row.status === "confirmed" || row.status === "arrived") {
+        row.status = "job_created";
+      }
+    }
+    attachPartyCustomerId(row);
+    const rows = readAppointments();
+    rows.push(row);
+    writeAppointments(rows);
+    res.status(201).json(row);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.put("/api/appointments/:id", requireAdmin, (req, res) => {
+  try {
+    const rows = readAppointments();
+    const index = rows.findIndex((row) => row.id === req.params.id);
+    if (index < 0) return res.status(404).json({ error: "Appointment not found" });
+    validateAppointmentInput(req.body || {}, { partial: true });
+    const merged = appointmentsLib.normalizeAppointment(
+      {
+        ...rows[index],
+        ...req.body,
+        id: rows[index].id,
+        createdAt: rows[index].createdAt,
+        updatedAt: nowIso(),
+      },
+      rows[index].id
+    );
+    if (merged.jobId) {
+      const job = readJobs().find((j) => j.id === merged.jobId);
+      if (!job) return res.status(400).json({ error: "Linked job not found." });
+      syncAppointmentJobMeta(merged);
+      if (merged.status === "booked" || merged.status === "confirmed" || merged.status === "arrived") {
+        merged.status = "job_created";
+      }
+    } else {
+      merged.jobNumber = "";
+    }
+    attachPartyCustomerId(merged);
+    rows[index] = merged;
+    writeAppointments(rows);
+    res.json(merged);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.delete("/api/appointments/:id", requireAdmin, (req, res) => {
+  const rows = readAppointments();
+  const next = rows.filter((row) => row.id !== req.params.id);
+  if (next.length === rows.length) {
+    return res.status(404).json({ error: "Appointment not found" });
+  }
+  writeAppointments(next);
+  res.json({ ok: true });
+});
+
+app.post("/api/appointments/:id/create-job", requireAdmin, (req, res) => {
+  try {
+    const rows = readAppointments();
+    const index = rows.findIndex((row) => row.id === req.params.id);
+    if (index < 0) return res.status(404).json({ error: "Appointment not found" });
+    const appt = rows[index];
+    if (appt.jobId) {
+      const existing = readJobs().find((j) => j.id === appt.jobId);
+      if (existing) {
+        return res.json({ appointment: appt, job: existing, created: false });
+      }
+    }
+
+    const now = nowIso();
+    attachPartyCustomerId(appt);
+    const jobs = readJobs();
+    const job = {
+      ...emptyJob(now),
+      number: nextJobCardNumber(jobs),
+      customerId: appt.customerId || "",
+      customerName: appt.customerName,
+      customerEmail: appt.customerEmail,
+      customerPhone: appt.customerPhone,
+      registration: appt.registration,
+      vehicle: appt.vehicle,
+      workRequested: appt.workSummary,
+      notes: appt.notes,
+      status: "in_progress",
+    };
+    jobs.push(job);
+    writeJobs(jobs);
+
+    const nextAppt = appointmentsLib.normalizeAppointment(
+      {
+        ...appt,
+        customerId: appt.customerId || "",
+        jobId: job.id,
+        jobNumber: job.number,
+        status: "job_created",
+        updatedAt: now,
+      },
+      appt.id
+    );
+    rows[index] = nextAppt;
+    writeAppointments(rows);
+    res.status(201).json({ appointment: nextAppt, job, created: true });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
 });
 
 app.get("/api/jobs/meta", requireAdmin, (_req, res) => {
@@ -6559,6 +7331,11 @@ app.listen(PORT, "0.0.0.0", () => {
     smtpConfigured()
       ? `Email: SMTP ready (from ${MAIL_FROM})`
       : "Email: not configured — copy .env.example to .env and add Gmail App Password"
+  );
+  console.log(
+    websms.websmsConfigured()
+      ? `WebSMS: ready${String(process.env.WEBSMS_SANDBOX || "").toLowerCase() === "true" ? " (sandbox)" : ""}`
+      : "WebSMS: not configured — add WEBSMS_CLIENT_ID / WEBSMS_CLIENT_SECRET for SMS reminders"
   );
   driveBackup.startBackupScheduler({ dataDir: DATA_DIR, uploadsDir: UPLOADS_DIR });
 });

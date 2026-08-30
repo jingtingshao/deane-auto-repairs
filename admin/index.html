@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260829tool-si" />
+    <link rel="stylesheet" href="admin.css?v=20260830monthview" />
     <link rel="stylesheet" href="admin-refresh.css?v=20260826greencomplete" />
   </head>
   <body>
@@ -36,6 +36,7 @@
         </button>
         <nav>
           <button type="button" id="nav-dashboard" class="active"><b>▦</b> Today</button>
+          <button type="button" id="nav-calendar"><b>▣</b> Calendar</button>
           <button type="button" id="nav-jobs"><b>▤</b> Job board <i id="nav-jobs-count" hidden>0</i></button>
           <button type="button" id="nav-supplier-invoices"><b>◫</b> Parts invoices</button>
           <button type="button" id="nav-quotes"><b>$</b> Quotes <i id="nav-quotes-count" hidden>0</i></button>
@@ -190,6 +191,107 @@
         </section>
         </section>
 
+        <section id="calendar-section" hidden>
+          <section id="calendar-list-view">
+            <p class="muted small">Default is the next two working weeks (Mon–Sat). Each Sunday the finished week drops off. Switch to 1 month for four weeks. Use + Book to add an appointment.</p>
+            <div class="calendar-toolbar">
+              <div class="calendar-nav">
+                <button type="button" id="btn-cal-prev" class="ghost">←</button>
+                <button type="button" id="btn-cal-today" class="ghost">Today</button>
+                <button type="button" id="btn-cal-next" class="ghost">→</button>
+                <strong id="calendar-range-label"></strong>
+              </div>
+              <div class="calendar-view-toggle filter-row">
+                <button type="button" class="ghost is-active" data-cal-view="fortnight">2 weeks</button>
+                <button type="button" class="ghost" data-cal-view="month">1 month</button>
+              </div>
+              <button type="button" id="btn-cal-new" class="primary">+ New appointment</button>
+            </div>
+            <div id="calendar-board" class="calendar-board"></div>
+          </section>
+
+          <section id="calendar-edit-view" hidden>
+            <div class="edit-toolbar">
+              <button type="button" id="btn-cal-back" class="ghost">← Calendar</button>
+              <div class="edit-actions">
+                <button type="button" id="btn-cal-save" class="primary">Save appointment</button>
+                <button type="button" id="btn-cal-create-job" class="ghost" hidden>Create job card</button>
+                <button type="button" id="btn-cal-open-job" class="ghost" hidden>Open job</button>
+                <button type="button" id="btn-cal-delete" class="danger">Delete</button>
+              </div>
+            </div>
+            <p id="calendar-save-status" class="status-line" hidden></p>
+
+            <form id="calendar-form" class="report-form">
+              <fieldset>
+                <legend>Schedule</legend>
+                <div class="grid-3">
+                  <label>Date<input name="date" type="date" required /></label>
+                  <label>
+                    Start time
+                    <select name="startTime" id="cal-start-time" required></select>
+                  </label>
+                  <label>
+                    Duration
+                    <select name="durationMinutes" id="cal-duration">
+                      <option value="60">1 hour</option>
+                      <option value="120" selected>2 hours</option>
+                      <option value="180">3 hours</option>
+                      <option value="240">Half day (4h)</option>
+                    </select>
+                  </label>
+                  <label>
+                    Status
+                    <select name="status" id="cal-status"></select>
+                  </label>
+                  <label class="cal-end-preview">
+                    End time
+                    <input id="cal-end-preview" readonly placeholder="HH:MM" />
+                  </label>
+                </div>
+                <p class="muted small">Times are 24-hour (e.g. 09:00, 14:30). Bookings from today onward only. Sunday closed.</p>
+              </fieldset>
+
+              <fieldset>
+                <legend>Customer &amp; vehicle</legend>
+                <label class="plate-find suggest-wrap">
+                  Find by plate or name
+                  <input
+                    id="cal-party-find"
+                    type="search"
+                    placeholder="e.g. ABC123 or Smith"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                  <div id="cal-party-suggest" class="suggest-list" hidden></div>
+                </label>
+                <p id="cal-party-find-status" class="muted small" hidden></p>
+                <div class="grid-3">
+                  <label>Customer name<input name="customerName" required /></label>
+                  <label>Phone<input name="customerPhone" type="tel" /></label>
+                  <label>Email<input name="customerEmail" type="email" /></label>
+                  <label>Registration<input name="registration" autocapitalize="characters" spellcheck="false" /></label>
+                  <label>Vehicle<input name="vehicle" /></label>
+                </div>
+                <input type="hidden" name="customerId" id="cal-customer-id" />
+                <label>Work summary<textarea name="workSummary" rows="3" placeholder="e.g. Brake noise"></textarea></label>
+                <label>Internal notes<textarea name="notes" rows="2"></textarea></label>
+              </fieldset>
+
+              <fieldset>
+                <legend>Linked job</legend>
+                <p id="cal-job-link" class="muted small">No job linked yet. Create one when the vehicle arrives, or link an existing job later.</p>
+                <label>
+                  Link existing job
+                  <select name="jobId" id="cal-job-select">
+                    <option value="">Not linked</option>
+                  </select>
+                </label>
+              </fieldset>
+            </form>
+          </section>
+        </section>
+
         <section id="jobs-section" hidden>
           <section id="jobs-list-view">
             <p class="muted small">Active jobs stay visible until the customer collects the vehicle. Mark work Ready to collect, then use Mark collected to move it into searchable history.</p>
@@ -218,6 +320,8 @@
               <div class="edit-actions">
                 <button type="button" id="btn-jobs-save" class="ghost">Save</button>
                 <button type="button" id="btn-jobs-collected" class="primary" hidden>Mark collected</button>
+                <button type="button" id="btn-jobs-create-quote" class="ghost" hidden>Create quote</button>
+                <button type="button" id="btn-jobs-create-invoice" class="primary" hidden>Create invoice</button>
                 <button type="button" id="btn-jobs-open-quote" class="ghost" hidden>Open quote</button>
                 <button type="button" id="btn-jobs-attach-invoice" class="ghost" hidden>Add parts to invoice</button>
                 <button type="button" id="btn-jobs-delete" class="danger">Delete</button>
@@ -287,6 +391,15 @@
               <fieldset>
                 <legend>Workshop notes</legend>
                 <label>Internal notes<textarea name="notes" rows="2" placeholder="Not shown to the customer"></textarea></label>
+              </fieldset>
+
+              <fieldset>
+                <legend>Appointments</legend>
+                <p class="muted small">Visits linked to this job (drop-off, return for parts, recheck). One job can have many appointments.</p>
+                <div id="job-appointments" class="job-appointments"></div>
+                <div class="line-actions">
+                  <button type="button" id="btn-job-add-appointment" class="ghost">+ Book another visit</button>
+                </div>
               </fieldset>
 
               <fieldset>
@@ -415,6 +528,8 @@
               <button type="button" class="ghost" data-filter="overdue">Overdue</button>
               <button type="button" class="ghost" data-filter="due_soon">Due in 30 days</button>
               <button type="button" class="ghost" data-filter="missing">No WOF date</button>
+              <button type="button" id="btn-wof-remind-all" class="primary" hidden>Remind all due soon</button>
+              <button type="button" id="btn-wof-sms-remind-all" class="ghost" hidden>SMS all due soon</button>
             </div>
           </div>
           <p class="muted small">Do not scroll the whole list. Search or tap a last-name letter. New customer is top right. <span id="customer-storage-hint"></span></p>
@@ -640,11 +755,12 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260828autosave30"></script>
+    <script src="admin.js?v=20260830partyfix"></script>
     <script src="dashboard.js?v=20260828draftinvoiced"></script>
-    <script src="jobs.js?v=20260828partname"></script>
+    <script src="calendar.js?v=20260830partyfix"></script>
+    <script src="jobs.js?v=20260830noparts"></script>
     <script src="supplier-invoices.js?v=20260829nopreview"></script>
-    <script src="billing.js?v=20260828consumable"></script>
-    <script src="customers.js?v=20260826datefmt"></script>
+    <script src="billing.js?v=20260830partyfix"></script>
+    <script src="customers.js?v=20260830websms"></script>
   </body>
 </html>
