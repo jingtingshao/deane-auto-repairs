@@ -431,7 +431,7 @@ p {
   background: #0d171eb3;
 }
 
-.service-card > *:not(.photo-overlay) {
+.service-card > *:not(.photo-overlay):not(.tag) {
   position: relative;
   z-index: 1;
 }
@@ -507,13 +507,14 @@ p {
   text-decoration: none;
 }
 
-.tag {
+/* Must beat `.service-card > *:not(.photo-overlay)` so the ribbon stays absolute */
+.service-card .tag {
   position: absolute;
-  top: 16px;
-  right: -38px;
+  top: 18px;
+  right: -42px;
   z-index: 2;
-  width: 132px;
-  padding: 6px 0;
+  width: 150px;
+  padding: 7px 0;
   background: var(--lime);
   color: var(--ink);
   font: 8px / 1.2 var(--mono);
@@ -522,6 +523,7 @@ p {
   white-space: nowrap;
   transform: rotate(45deg);
   transform-origin: center;
+  pointer-events: none;
 }
 
 .services-aside {
