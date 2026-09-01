@@ -23,6 +23,8 @@ const business = require("./data/business");
 const catalog = require("./data/catalog");
 const jobsLib = require("./data/jobs");
 const appointmentsLib = require("./data/appointments");
+const bookingConfig = require("./data/booking-config");
+const bookingSlots = require("./data/booking-slots");
 const { buildBillingPdf, safeFilename } = require("./data/billing-pdf");
 const { readJsonArray, writeJsonArray } = require("./data/json-store");
 const { blockedStaticPath, safeUploadPath, UPLOAD_EXTS } = require("./data/static-guard");
@@ -4043,6 +4045,196 @@ app.get("/api/sms-inbox", requireAdmin, (_req, res) => {
     console.error("SMS inbox failed:", err);
     res.status(500).json({ error: "Could not load SMS inbox." });
   }
+});
+
+const bookingConfirmHits = new Map();
+const BOOKING_CONFIRM_WINDOW_MS = 60_000;
+const BOOKING_CONFIRM_MAX_PER_WINDOW = 8;
+
+function bookingConfirmAllowed(ip) {
+  const key = String(ip || "unknown");
+  const now = Date.now();
+  const prev = bookingConfirmHits.get(key) || [];
+  const recent = prev.filter((t) => now - t < BOOKING_CONFIRM_WINDOW_MS);
+  if (recent.length >= BOOKING_CONFIRM_MAX_PER_WINDOW) return false;
+  recent.push(now);
+  bookingConfirmHits.set(key, recent);
+  return true;
+}
+
+function formatBookingWhen(date, startTime) {
+  const d = appointmentsLib.normalizeDate(date);
+  const t = appointmentsLib.normalizeTime(startTime);
+  if (!d || !t) return "";
+  const [y, m, day] = d.split("-").map(Number);
+  const weekday = new Date(Date.UTC(y, m - 1, day)).toLocaleDateString("en-NZ", {
+    weekday: "short",
+    timeZone: "UTC",
+  });
+  return `${weekday} ${day}/${m}/${y} · ${bookingSlots.formatClock(t)} drop-off`;
+}
+
+app.get("/api/booking/meta", (_req, res) => {
+  res.json({
+    ...bookingConfig.meta(),
+    today: todayIso(),
+    maxDate: bookingSlots.maxBookableDate(),
+  });
+});
+
+app.get("/api/booking/availability", (req, res) => {
+  try {
+    const today = todayIso();
+    const month = String(req.query.month || "").trim();
+    if (month) {
+      const rows = readAppointments();
+      return res.json(bookingSlots.monthAvailability(rows, month, today));
+    }
+    const date = String(req.query.date || "").trim();
+    if (!date) {
+      return res.status(400).json({ error: "Provide date=YYYY-MM-DD or month=YYYY-MM." });
+    }
+    const service = bookingConfig.serviceById(req.query.service);
+    if (req.query.service && !service) {
+      return res.status(400).json({ error: "Choose a valid service type." });
+    }
+    const rows = readAppointments();
+    res.json({
+      service: service?.id || null,
+      ...bookingSlots.slotsForDate(rows, date, today),
+    });
+  } catch (err) {
+    console.error("Booking availability failed:", err);
+    res.status(500).json({ error: "Could not load availability." });
+  }
+});
+
+app.post("/api/booking/confirm", async (req, res) => {
+  if (String(req.body?._gotcha || req.body?._hp || "").trim()) {
+    return res.json({ ok: true });
+  }
+  if (!bookingConfirmAllowed(clientIp(req))) {
+    return res.status(429).json({ error: "Too many booking attempts. Please wait a minute and try again." });
+  }
+
+  const service = bookingConfig.serviceById(req.body?.service || req.body?.help_with || req.body?.help);
+  const date = appointmentsLib.normalizeDate(req.body?.date);
+  const startTime = appointmentsLib.normalizeTime(req.body?.startTime || req.body?.time);
+  const name = String(req.body?.name || "").trim();
+  const email = String(req.body?.email || "").trim();
+  const phone = String(req.body?.phone || "").trim();
+  const vehicle = String(req.body?.vehicle || "").trim();
+  const registration = String(req.body?.registration || req.body?.rego || "")
+    .trim()
+    .toUpperCase();
+  const notes = String(req.body?.notes || "").trim();
+
+  if (!service) {
+    return res.status(400).json({ error: "Choose a service type." });
+  }
+  if (!name || !email || !phone) {
+    return res.status(400).json({ error: "Name, email and phone are required." });
+  }
+  if (!date || !startTime) {
+    return res.status(400).json({ error: "Choose a date and drop-off time." });
+  }
+
+  try {
+    appointmentsLib.assertBookableDate(date, todayIso());
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
+  }
+
+  const rows = readAppointments();
+  if (!bookingSlots.isSlotBookable(rows, date, startTime, todayIso())) {
+    return res.status(409).json({
+      error: "That drop-off time is no longer available. Please choose another slot.",
+    });
+  }
+
+  const now = nowIso();
+  const whenLabel = formatBookingWhen(date, startTime);
+  const row = appointmentsLib.normalizeAppointment(
+    {
+      id: randomUUID(),
+      date,
+      startTime,
+      durationMinutes: bookingConfig.dropOffDurationMinutes,
+      status: "booked",
+      source: "website",
+      customerName: name,
+      customerPhone: phone,
+      customerEmail: email,
+      registration,
+      vehicle,
+      workSummary: service.label,
+      notes,
+      createdAt: now,
+      updatedAt: now,
+    },
+    randomUUID()
+  );
+  attachPartyCustomerId(row);
+  rows.push(row);
+  writeAppointments(rows);
+
+  let emailSent = false;
+  if (smtpConfigured()) {
+    try {
+      const mailer = createMailer();
+      const workshopText =
+        `New website booking\n\n` +
+        `When: ${whenLabel}\n` +
+        `Service: ${service.label}\n\n` +
+        `Name: ${name}\n` +
+        `Phone: ${phone}\n` +
+        `Email: ${email}\n` +
+        `Vehicle: ${vehicle || "—"}\n` +
+        `Registration: ${registration || "—"}\n` +
+        `Notes: ${notes || "—"}\n\n` +
+        `Appointment ID: ${row.id}\n`;
+      const customerText =
+        `Hi ${name},\n\n` +
+        `Your drop-off booking at ${business.name} is confirmed:\n\n` +
+        `${whenLabel}\n` +
+        `${service.label}\n\n` +
+        `${business.street}, ${business.suburb}\n` +
+        `${business.phoneDisplay}\n\n` +
+        `Please arrive around your chosen time. If you need to change this booking, ` +
+        `call ${business.phoneDisplay} or reply to this email.\n\n` +
+        `— ${business.name}\n${business.hoursShort}. ${business.hoursSunday}.\n`;
+      await mailer.sendMail({
+        from: MAIL_FROM,
+        to: business.email,
+        replyTo: email,
+        subject: `Website booking: ${service.label} — ${name} — ${whenLabel}`,
+        text: workshopText,
+      });
+      await mailer.sendMail({
+        from: MAIL_FROM,
+        to: email,
+        replyTo: business.email,
+        subject: `Booking confirmed — ${business.name} — ${whenLabel}`,
+        text: customerText,
+      });
+      emailSent = true;
+    } catch (err) {
+      console.error("Booking confirmation email failed:", err);
+    }
+  }
+
+  res.status(201).json({
+    ok: true,
+    appointmentId: row.id,
+    emailSent,
+    summary: {
+      date,
+      startTime,
+      label12h: bookingSlots.formatClock(startTime, false),
+      service: service.label,
+      whenLabel,
+    },
+  });
 });
 
 app.post("/api/booking", async (req, res) => {

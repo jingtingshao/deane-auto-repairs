@@ -1,41 +1,10 @@
 (() => {
-  const FORM_ENDPOINT = "/api/booking";
-
   const header = document.querySelector("[data-header]");
   const nav = document.querySelector("[data-nav]");
   const toggle = document.querySelector("[data-nav-toggle]");
   const year = document.querySelector("[data-year]");
-  const form = document.querySelector("[data-booking-form]");
-  const status = document.querySelector("[data-form-status]");
-  const submitBtn = document.querySelector("[data-submit-btn]");
-  const preferredDate = document.querySelector("#date");
-  const helpSelect = document.querySelector("#help");
 
   if (year) year.textContent = String(new Date().getFullYear());
-
-  if (preferredDate) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const localTomorrow = [
-      tomorrow.getFullYear(),
-      String(tomorrow.getMonth() + 1).padStart(2, "0"),
-      String(tomorrow.getDate()).padStart(2, "0"),
-    ].join("-");
-    preferredDate.min = localTomorrow;
-
-    preferredDate.addEventListener("input", () => {
-      const selected = new Date(`${preferredDate.value}T00:00:00`);
-      preferredDate.setCustomValidity(
-        selected.getDay() === 0 ? "Please choose Monday to Saturday; we are closed on Sundays." : ""
-      );
-    });
-  }
-
-  document.querySelectorAll("[data-booking-type]").forEach((link) => {
-    link.addEventListener("click", () => {
-      if (helpSelect) helpSelect.value = link.dataset.bookingType;
-    });
-  });
 
   const onScroll = () => {
     if (!header) return;
@@ -97,81 +66,4 @@
   window.addEventListener("hashchange", () => {
     if (location.hash === "#full-checklist") openChecklist();
   });
-
-  const setStatus = (message, type, allowHtml = false) => {
-    if (!status) return;
-    status.hidden = false;
-    status.classList.remove("is-success", "is-error");
-    if (type) status.classList.add(type);
-    if (allowHtml) status.innerHTML = message;
-    else status.textContent = message;
-  };
-
-  const setLoading = (loading) => {
-    if (!submitBtn) return;
-    submitBtn.disabled = loading;
-    submitBtn.innerHTML = loading
-      ? "Sending… <span>→</span>"
-      : 'Request a booking <span>→</span>';
-  };
-
-  if (form && status) {
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-
-      if (!form.checkValidity()) {
-        form.reportValidity();
-        return;
-      }
-
-      const data = new FormData(form);
-      const payload = {
-        name: data.get("name") || "",
-        email: data.get("email") || "",
-        phone: data.get("phone") || "",
-        vehicle: data.get("vehicle") || "",
-        registration: data.get("rego") || "—",
-        preferred_date: data.get("date") || "—",
-        preferred_time: data.get("time") || "—",
-        help_with: data.get("help") || "",
-        notes: data.get("notes") || "—",
-        _subject: `Booking enquiry: ${data.get("help") || "Service"} — ${data.get("name") || ""}`,
-      };
-
-      setLoading(true);
-      setStatus("Sending your enquiry…", null);
-
-      try {
-        const response = await fetch(FORM_ENDPOINT, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
-
-        const result = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-          throw new Error(result.error || result.message || "Something went wrong sending the form.");
-        }
-
-        form.reset();
-        setStatus(
-          "Your email has been sent. We’ll get back to you soon to confirm a time.",
-          "is-success"
-        );
-      } catch (error) {
-        setStatus(
-          'Sorry — we couldn’t send that just now. Please call <a href="tel:08006259827">0800 625 9827</a> or email <a href="mailto:deaneautonz@gmail.com">deaneautonz@gmail.com</a>.',
-          "is-error",
-          true
-        );
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
-    });
-  }
 })();

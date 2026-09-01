@@ -15,6 +15,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css?v=20260831d" />
+    <link rel="stylesheet" href="booking.css?v=20260901a" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -306,99 +307,75 @@
 
       <section class="booking" id="book">
         <div class="shell booking-inner">
-          <div>
+          <div class="booking-copy">
             <h2>Let’s get your<br /><em>car sorted.</em></h2>
             <p class="booking-intro">
-              Tell us what your vehicle needs and we’ll get back to you to confirm
-              a time.
+              Choose a drop-off time online — Mon–Sat, 1 hour slot, last booking 4:00pm.
             </p>
             <a class="call-link" href="tel:08006259827"
               >Prefer to call? 0800 625 9827 <span>→</span></a
             >
           </div>
-          <form class="booking-form" data-booking-form novalidate>
-            <input
-              class="hp-field"
-              type="text"
-              name="_gotcha"
-              tabindex="-1"
-              autocomplete="off"
-              aria-hidden="true"
-            />
-            <div class="form-row">
-              <label
-                >Name<input id="name" name="name" required autocomplete="name" placeholder="Your name"
-              /></label>
-              <label
-                >Phone<input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  required
-                  autocomplete="tel"
-                  placeholder="021 000 0000"
-              /></label>
+          <div class="booking-widget" data-booking-widget hidden>
+            <div class="booking-panel">
+              <div class="booking-step booking-step-picker" data-booking-step="picker">
+                <div class="booking-picker">
+                  <aside class="booking-picker-info" data-booking-info></aside>
+                  <div class="booking-picker-calendar">
+                    <div class="booking-cal-head">
+                      <button type="button" class="booking-cal-nav" data-cal-prev aria-label="Previous month">‹</button>
+                      <strong data-cal-month-label></strong>
+                      <button type="button" class="booking-cal-nav" data-cal-next aria-label="Next month">›</button>
+                    </div>
+                    <div class="booking-cal-weekdays" aria-hidden="true">
+                      <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                    </div>
+                    <div class="booking-cal-grid" data-cal-grid role="grid" aria-label="Choose a date"></div>
+                  </div>
+                  <div class="booking-picker-times">
+                    <div class="booking-times-head">
+                      <strong data-times-day-label>Select a time</strong>
+                      <div class="booking-time-format" role="group" aria-label="Time format">
+                        <button type="button" class="is-active" data-time-format="12h">12h</button>
+                        <button type="button" data-time-format="24h">24h</button>
+                      </div>
+                    </div>
+                    <div class="booking-times-list" data-times-list></div>
+                    <p class="booking-times-hint" data-times-hint>Pick a date to see drop-off times.</p>
+                  </div>
+                </div>
+              </div>
+              <form class="booking-step booking-step-details" data-booking-step="details" data-booking-form hidden novalidate>
+                <input class="hp-field" type="text" name="_gotcha" tabindex="-1" autocomplete="off" aria-hidden="true" />
+                <div class="booking-details-head">
+                  <button type="button" class="booking-back" data-booking-back>← Change time</button>
+                  <p data-booking-summary></p>
+                </div>
+                <div class="form-row">
+                  <label>Name<input name="name" required autocomplete="name" placeholder="Your name" /></label>
+                  <label>Phone<input name="phone" type="tel" required autocomplete="tel" placeholder="021 000 0000" /></label>
+                </div>
+                <div class="form-row">
+                  <label>Email<input name="email" type="email" required autocomplete="email" placeholder="you@email.com" /></label>
+                  <label>Registration<input name="rego" placeholder="ABC123" /></label>
+                </div>
+                <label>Vehicle<input name="vehicle" placeholder="Make, model, year" /></label>
+                <label
+                  >Anything else?
+                  <textarea name="notes" rows="3" placeholder="Noises, warning lights, or other concerns."></textarea>
+                </label>
+                <button class="button button-light" type="submit" data-submit-btn>
+                  Confirm booking <span>→</span>
+                </button>
+                <p class="form-note" data-form-status role="status" aria-live="polite" hidden></p>
+              </form>
+              <div class="booking-step booking-step-done" data-booking-step="done" hidden>
+                <h3>Booking confirmed</h3>
+                <p data-booking-done-msg></p>
+                <button type="button" class="button button-light" data-booking-reset>Book another</button>
+              </div>
             </div>
-            <div class="form-row">
-              <label
-                >Email<input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  autocomplete="email"
-                  placeholder="you@email.com"
-              /></label>
-              <label
-                >Registration<input id="rego" name="rego" placeholder="ABC123"
-              /></label>
-            </div>
-            <label
-              >Vehicle
-              <input
-                id="vehicle"
-                name="vehicle"
-                required
-                placeholder="Make, model, year"
-            /></label>
-            <div class="form-row">
-              <label
-                >Preferred date<input id="date" name="date" type="date"
-              /></label>
-              <label
-                >Preferred time
-                <select id="time" name="time">
-                  <option value="">No preference</option>
-                  <option>Morning drop-off</option>
-                  <option>Afternoon drop-off</option>
-                </select>
-              </label>
-            </div>
-            <label
-              >What can we help with?
-              <select id="help" name="help" required>
-                <option value="">Choose a service</option>
-                <option value="WOF">WOF inspection</option>
-                <option value="Service">Standard / Premium service</option>
-                <option value="Service + WOF">Service + WOF</option>
-                <option value="Pre-Purchase Inspection">Pre-Purchase Inspection</option>
-                <option value="Repairs / other">Repairs / diagnostics / other</option>
-              </select>
-            </label>
-            <label
-              >Anything else?
-              <textarea
-                id="notes"
-                name="notes"
-                rows="3"
-                placeholder="Tell us about any noises, warning lights or concerns."
-              ></textarea>
-            </label>
-            <button class="button button-light" type="submit" data-submit-btn>
-              Request a booking <span>→</span>
-            </button>
-            <p class="form-note" data-form-status role="status" aria-live="polite" hidden></p>
-          </form>
+          </div>
         </div>
       </section>
     </main>
@@ -415,6 +392,7 @@
       </div>
     </footer>
 
-    <script src="script.js?v=20260831a"></script>
+    <script src="script.js?v=20260901a"></script>
+    <script src="booking.js?v=20260901a"></script>
   </body>
 </html>
