@@ -183,9 +183,7 @@
     if (!selectedServiceId && meta.services?.length) {
       selectedServiceId = meta.services[0].id;
     }
-    if (!viewMonth) {
-      viewMonth = new Date().toISOString().slice(0, 7);
-    }
+    viewMonth = (meta.today || todayIsoLocalFallback()).slice(0, 7);
   }
 
   async function loadMonthAvailability() {
