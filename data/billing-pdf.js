@@ -6,6 +6,7 @@ const PDFDocument = require("pdfkit");
 const catalog = require("./catalog");
 const business = require("./business");
 const { logoPath } = require("./customer-email");
+const { todayIso } = require("./nz-time");
 
 function money(n) {
   return `$${(Number(n) || 0).toFixed(2)}`;
@@ -113,6 +114,13 @@ function buildBillingPdf(doc) {
         .text(`${title} ${doc.number || ""}`, { width: pageWidth });
 
       pdf.font("Helvetica").fontSize(10).fillColor("#5b6777");
+      if (isInvoice) {
+        const issued =
+          formatDateShort(doc.issuedAt || doc.sentAt || doc.createdAt) ||
+          formatDateShort(todayIso());
+        pdf.text(`Issue date ${issued}`);
+        pdf.text("Due date Immediately");
+      }
       if (!isInvoice && doc.validUntil) {
         pdf.text(`Valid until ${formatDateShort(doc.validUntil)}`);
       }

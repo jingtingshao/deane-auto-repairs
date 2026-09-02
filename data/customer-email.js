@@ -26,8 +26,8 @@ function logoAttachment() {
   };
 }
 
-function withCustomerEmailHtml(innerHtml, { logoWidth = 200 } = {}) {
-  const width = Math.max(120, Number(logoWidth) || 200);
+function withCustomerEmailHtml(innerHtml, { logoWidth = 168 } = {}) {
+  const width = Math.max(120, Number(logoWidth) || 168);
   return `<div style="font-family:Arial,Helvetica,sans-serif;color:#1a2332;line-height:1.45;max-width:580px;">
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#0b1c3f;">
     <tr>

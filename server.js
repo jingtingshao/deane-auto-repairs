@@ -2925,6 +2925,17 @@ function ensureViewToken(doc) {
   return doc.viewToken;
 }
 
+function stampInvoiceIssueDate(doc) {
+  if (!doc || doc.kind !== "invoice" || doc.status === "void") return;
+  if (doc.status === "draft") {
+    doc.issuedAt = todayIso();
+    return;
+  }
+  if (!isoDateOnly(doc.issuedAt)) {
+    doc.issuedAt = isoDateOnly(doc.sentAt) || isoDateOnly(doc.createdAt) || todayIso();
+  }
+}
+
 function publicViewTokenOk(doc, raw) {
   const token = String(raw || "");
   if (!doc?.viewToken) return true;
@@ -3305,9 +3316,14 @@ function issueBillingDoc(doc, req, body) {
     doc.acceptToken = newAcceptToken();
   }
   ensureViewToken(doc);
+  if (doc.kind === "invoice") {
+    if (doc.status === "draft") doc.issuedAt = todayIso();
+    else stampInvoiceIssueDate(doc);
+  }
   if (doc.status === "draft") {
     doc.status = "sent";
     doc.sentAt = nowIso();
+    if (doc.kind === "invoice") doc.issuedAt = todayIso();
   }
   doc.updatedAt = nowIso();
   return billingPublicUrl(req, body, doc);
@@ -5582,6 +5598,7 @@ app.post("/api/billing", requireAdmin, (req, res) => {
     updatedAt: now,
     sentAt: "",
     acceptedAt: "",
+    issuedAt: preset.kind === "invoice" ? today : "",
     validUntil:
       preset.kind === "quote"
         ? String(req.body?.validUntil || "").trim() ||
@@ -5651,19 +5668,23 @@ app.get("/api/billing/:id", (req, res) => {
 
   if (!isAdmin) {
     if (doc.status === "void") return res.status(404).json({ error: "Not found" });
-    if (doc.status === "draft" && !acceptOk) {
-      return res.status(404).json({ error: "Not found" });
-    }
-    if (doc.status !== "draft" && !viewOk) {
+    if (doc.status === "draft") {
+      if (!acceptOk && !(doc.viewToken && viewOk)) {
+        return res.status(404).json({ error: "Not found" });
+      }
+    } else if (!viewOk) {
       return res.status(404).json({ error: "Not found" });
     }
   }
+
+  const skipCustomerView =
+    isAdmin || String(req.query.preview || "") === "1";
 
   if (isAdmin) {
     const before = Array.isArray(doc.history) ? doc.history.length : 0;
     backfillEmailAndViewHistory(doc);
     if ((doc.history || []).length > before) writeBilling(docs);
-  } else if (recordCustomerDocumentView(doc)) {
+  } else if (!skipCustomerView && recordCustomerDocumentView(doc)) {
     docs[index] = doc;
     try {
       writeBilling(docs);
@@ -5789,6 +5810,8 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
     });
   }
 
+  ensureViewToken(next);
+  stampInvoiceIssueDate(next);
   docs[index] = next;
 
   if (next.kind === "invoice") {
@@ -5952,7 +5975,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       replyTo: process.env.SMTP_USER || MAIL_FROM,
       subject,
       text,
-      html: withCustomerEmailHtml(html, { logoWidth: 288 }),
+      html: withCustomerEmailHtml(html, { logoWidth: 168 }),
       attachments: withLogoAttachments([pdfAttachment]),
     });
 
@@ -6051,6 +6074,7 @@ function convertQuoteToInvoice(docs, quote) {
     updatedAt: now,
     sentAt: quote.sentAt || now,
     acceptedAt: quote.acceptedAt || now,
+    issuedAt: todayIso(),
     validUntil: "",
     customerId: quote.customerId || "",
     vehicleId: quote.vehicleId || "",

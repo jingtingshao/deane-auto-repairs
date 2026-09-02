@@ -211,6 +211,36 @@ async function integrationTests(base, dataDir) {
   }
 
   try {
+    const created = await api(base, cookie, "POST", "/api/billing", {
+      preset: "standard",
+      customerId: customerA.id,
+      customerName: "Smoke Alpha",
+      customerEmail: "shared.smoke@example.com",
+      customerPhone: "0211111001",
+      registration: "SMK001",
+      vehicle: "Toyota",
+    });
+    assert.equal(created.res.status, 201, created.data?.error || created.text);
+    const inv = created.data;
+    assert.ok(inv.viewToken, "missing viewToken");
+    assert.equal(inv.status, "draft");
+    const denied = await api(base, "", "GET", `/api/billing/${inv.id}`);
+    assert.equal(denied.res.status, 404);
+    const preview = await api(
+      base,
+      "",
+      "GET",
+      `/api/billing/${inv.id}?v=${encodeURIComponent(inv.viewToken)}&preview=1`
+    );
+    assert.equal(preview.res.status, 200, preview.data?.error || preview.text);
+    assert.equal(preview.data.number, inv.number);
+    assert.equal(preview.data.kind, "invoice");
+    pass("draft invoice preview URL with view token");
+  } catch (err) {
+    fail("draft invoice preview URL with view token", err);
+  }
+
+  try {
     const list = await api(base, cookie, "GET", "/api/customers");
     assert.equal(list.res.status, 200);
     const rows = list.data || [];

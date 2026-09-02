@@ -1370,6 +1370,10 @@ function updateActionButtons() {
   }
   if (reviseBtn) reviseBtn.hidden = !quoteLocked;
   const unsaved = Boolean(doc.unsaved || !doc.id);
+  const previewBtn = document.getElementById("btn-billing-preview");
+  if (previewBtn) {
+    previewBtn.hidden = doc.status === "void";
+  }
   const jobBtn = document.getElementById("btn-billing-job");
   const canJob =
     !unsaved &&
@@ -1502,6 +1506,32 @@ document.getElementById("btn-billing-revise")?.addEventListener("click", async (
     Admin.showBillingStatus(`${doc.number} created — edit and Save changes`);
   } catch (err) {
     alert(err.message);
+  }
+});
+
+document.getElementById("btn-billing-preview")?.addEventListener("click", async () => {
+  const btn = document.getElementById("btn-billing-preview");
+  try {
+    if (btn) btn.disabled = true;
+    await saveBill();
+    const doc = currentBill;
+    if (!doc?.id || doc.status === "void") {
+      throw new Error("Save this invoice or quote first.");
+    }
+    const params = new URLSearchParams();
+    if (doc.viewToken) params.set("v", doc.viewToken);
+    if (doc.kind === "quote" && doc.acceptToken) params.set("t", doc.acceptToken);
+    params.set("preview", "1");
+    const url = `${location.origin}/b/${doc.id}?${params.toString()}`;
+    const opened = window.open(url, "_blank", "noopener,noreferrer");
+    if (!opened) {
+      throw new Error("Allow pop-ups to open the customer preview.");
+    }
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    if (btn) btn.disabled = false;
+    updateActionButtons();
   }
 });
 

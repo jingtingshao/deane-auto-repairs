@@ -49,6 +49,22 @@ function formatDateShort(value) {
   }).format(d);
 }
 
+function todayIsoNz() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Pacific/Auckland",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function invoiceIssueIso(doc) {
+  if (doc.status === "draft") return todayIsoNz();
+  const raw = String(doc.issuedAt || doc.sentAt || doc.createdAt || "").slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  return todayIsoNz();
+}
+
 function statusLabel(doc) {
   if (doc.kind === "invoice") {
     return doc.status === "sent" ? "Tax invoice" : "Tax invoice";
@@ -74,8 +90,10 @@ async function load() {
     const params = new URLSearchParams();
     const view = viewToken();
     const token = acceptToken();
+    const preview = new URLSearchParams(location.search).get("preview") || "";
     if (view) params.set("v", view);
     if (token) params.set("t", token);
+    if (preview === "1") params.set("preview", "1");
     const query = params.toString();
     const res = await fetch(`/api/billing/${id}${query ? `?${query}` : ""}`);
     const data = await res.json();
@@ -165,7 +183,12 @@ function render(doc) {
     ${banner}
     <section class="panel document-summary">
       <h1>${escapeHtml(isInvoice ? "Tax Invoice" : "Quote")} ${escapeHtml(doc.number)}</h1>
-      <p class="meta">${escapeHtml(statusLabel(doc))}</p>
+      ${
+        isInvoice
+          ? `<p class="meta">Issue date ${escapeHtml(formatDateShort(invoiceIssueIso(doc)))}</p>
+      <p class="meta">Due date Immediately</p>`
+          : `<p class="meta">${escapeHtml(statusLabel(doc))}</p>`
+      }
       ${doc.validUntil && !isInvoice ? `<p class="meta">Valid until ${escapeHtml(formatDateShort(doc.validUntil))}</p>` : ""}
       ${gstLine}
       <div class="grid-2" style="margin-top:1rem">
