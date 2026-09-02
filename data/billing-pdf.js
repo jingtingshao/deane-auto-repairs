@@ -189,19 +189,19 @@ function buildBillingPdf(doc) {
       };
       const contentRight = left + pageWidth;
 
+      function drawRight(str, rightX, y) {
+        const text = String(str);
+        const w = pdf.widthOfString(text);
+        pdf.text(text, Math.max(left, rightX - w), y, { lineBreak: false });
+      }
+
       function drawHeader() {
         const y = pdf.y;
-        pdf
-          .fillColor("#0d47a1")
-          .font("Helvetica-Bold")
-          .fontSize(9)
-          .text("Description", cols.desc, y, { width: widths.desc })
-          .text("Qty", cols.qty, y, { width: widths.qty, align: "right" })
-          .text("Excl. GST", cols.price, y, {
-            width: widths.price,
-            align: "right",
-          })
-          .text("Total", cols.total, y, { width: widths.total, align: "right" });
+        pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(9);
+        pdf.text("Description", cols.desc, y, { width: widths.desc, lineBreak: false });
+        drawRight("Qty", cols.price, y);
+        drawRight("Excl. GST", cols.total, y);
+        drawRight("Total", contentRight, y);
         pdf
           .moveTo(left, y + 14)
           .lineTo(left + pageWidth, y + 14)
@@ -327,17 +327,11 @@ function buildBillingPdf(doc) {
         const y = pdf.y;
         pdf.fillColor("#1a2332").text(desc, cols.desc, y, { width: widths.desc });
         const afterDesc = pdf.y;
-        pdf.text(String(qty), cols.qty, y, { width: widths.qty, align: "right" });
-        pdf.text(money(unit), cols.price, y, {
-          width: widths.price,
-          align: "right",
-          lineBreak: false,
-        });
-        pdf.text(money(lineTot), cols.total, y, {
-          width: widths.total,
-          align: "right",
-          lineBreak: false,
-        });
+        pdf.font("Helvetica").fontSize(10).fillColor("#1a2332");
+        drawRight(String(qty), cols.price, y);
+        drawRight(money(unit), cols.total, y);
+        drawRight(money(lineTot), contentRight, y);
+        pdf.x = left;
         pdf.y = Math.max(afterDesc, y + 12) + 4;
       }
 
@@ -358,20 +352,17 @@ function buildBillingPdf(doc) {
         .stroke();
       pdf.moveDown(0.4);
 
-      const totalsLabelW = cols.total - totalsLabelX - 6;
       const row = (label, value, bold = false) => {
         const y = pdf.y;
         pdf.fillColor("#1a2332").font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(10);
-        pdf.text(label, totalsLabelX, y, {
-          width: totalsLabelW,
+        const labelRight = cols.total - 8;
+        const labelW = pdf.widthOfString(label);
+        pdf.text(label, Math.max(totalsLabelX, labelRight - labelW), y, {
           lineBreak: false,
         });
-        pdf.text(value, cols.total, y, {
-          width: widths.total,
-          align: "right",
-          lineBreak: false,
-        });
-        pdf.moveDown(0.25);
+        drawRight(value, contentRight, y);
+        pdf.x = left;
+        pdf.y = y + 14;
       };
       row("Subtotal excl. GST", money(totals.net));
       row("GST (15%)", money(totals.gst));

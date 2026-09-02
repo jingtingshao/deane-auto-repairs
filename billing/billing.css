@@ -247,34 +247,19 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
-.totals {
-  margin: 0.9rem 0 0;
-  display: grid;
-  grid-template-columns: 54% 10% 18% 18%;
-  gap: 0.25rem 0;
-  width: 100%;
-}
-
-.totals p {
-  grid-column: 3 / 5;
-  margin: 0;
-  min-width: 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 0.5rem;
-}
-
-.totals p span:last-child {
-  flex: 0 0 50%;
+.lines tfoot td {
+  border-bottom: none;
+  padding-top: 0.45rem;
   text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
-.totals .grand {
-  font-size: 1.15rem;
+.lines tfoot td.num {
+  text-align: right;
+}
+
+.lines tfoot .grand td {
   font-weight: 800;
-  padding-top: 0.4rem;
+  padding-top: 0.55rem;
   border-top: 1px solid var(--line);
 }
 
@@ -523,15 +508,7 @@ button.primary {
     padding: 0.33rem 0.25rem;
   }
 
-  .totals {
-    margin-top: 0.65rem;
-  }
-
-  .totals p {
-    min-width: 0;
-  }
-
-  .totals .grand {
+  .lines tfoot .grand td {
     color: var(--blue-deep);
     font-size: 12pt;
   }

@@ -218,12 +218,21 @@ function render(doc) {
           </tr>
         </thead>
         <tbody>${lineRows}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3">Subtotal excl. GST</td>
+            <td class="num">${money(totals.net)}</td>
+          </tr>
+          <tr>
+            <td colspan="3">GST (15%)</td>
+            <td class="num">${money(totals.gst)}</td>
+          </tr>
+          <tr class="grand">
+            <td colspan="3">Total incl. GST</td>
+            <td class="num">${money(totals.totalIncl)}</td>
+          </tr>
+        </tfoot>
       </table>
-      <div class="totals">
-        <p><span>Subtotal excl. GST</span><span>${money(totals.net)}</span></p>
-        <p><span>GST (15%)</span><span>${money(totals.gst)}</span></p>
-        <p class="grand"><span>Total incl. GST</span><span>${money(totals.totalIncl)}</span></p>
-      </div>
       ${doc.notes ? `<p class="note" style="margin-top:1rem">${escapeHtml(doc.notes)}</p>` : ""}
     </section>
     <div class="pay-pin">
