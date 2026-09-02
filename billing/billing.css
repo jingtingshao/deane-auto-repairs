@@ -342,6 +342,76 @@ button.primary {
   margin: 0.35rem 0;
 }
 
+.google-review {
+  margin-top: 1.25rem;
+}
+
+.google-review-inner {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.google-review-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.google-review-copy h2 {
+  margin: 0 0 0.4rem;
+  color: var(--blue-deep);
+  font-size: 1.05rem;
+}
+
+.google-review-copy p {
+  margin: 0;
+  color: var(--ink);
+}
+
+.review-btn {
+  display: inline-block;
+  margin-top: 0.85rem;
+  padding: 0.55rem 0.95rem;
+  border-radius: 8px;
+  background: var(--blue);
+  color: #fff !important;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.google-review-qr {
+  margin: 0;
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.google-review-qr img {
+  display: block;
+  width: 132px;
+  height: 132px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.google-review-qr figcaption {
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+@media (max-width: 560px) {
+  .google-review-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .google-review-qr {
+    align-self: center;
+  }
+}
+
 .footer {
   padding: 0 0 2.5rem;
   color: var(--muted);
@@ -538,5 +608,25 @@ button.primary {
 
   .pay-terms li {
     margin: 0.12rem 0;
+  }
+
+  .google-review {
+    margin-top: 0.75rem;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .google-review-inner {
+    gap: 0.75rem;
+  }
+
+  .google-review-copy h2 {
+    color: var(--blue-deep);
+    font-size: 11pt;
+  }
+
+  .google-review-qr img {
+    width: 28mm;
+    height: 28mm;
   }
 }

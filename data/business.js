@@ -18,6 +18,11 @@ module.exports = {
     "https://www.google.com/maps/place/63+Hayr+Road,+Three+Kings,+Auckland/@-36.9140797,174.7542951,18z",
   mapsLat: -36.9140797,
   mapsLng: 174.7542951,
+  // Google review link for invoice QR / email button.
+  // Override on Render with GOOGLE_REVIEW_URL or GOOGLE_PLACE_ID if the GBP share link changes.
+  // Listing is at the Hayr / Carr corner next to BP (phone 09 625 9827 / 0800 625 9827).
+  googlePlaceId: "ChIJ4azubaRmDW0RFejjjVWPxYY",
+  googleReviewUrl: "https://g.page/r/Cb_8HFmv-bW4EAE/review",
   bankAccountName: "Dreamworld Investments Limited",
   bankAccount: "02-0216-0104554-002",
   paymentTerms: [

@@ -29,6 +29,12 @@ const {
   withLogoAttachments,
   emailContactHtml,
 } = require("./data/customer-email");
+const {
+  googleReviewUrl,
+  reviewPayloadForInvoice,
+  reviewQrPngBuffer,
+  reviewConfigured,
+} = require("./data/google-review");
 const { readJsonArray, writeJsonArray } = require("./data/json-store");
 const { blockedStaticPath, safeUploadPath, UPLOAD_EXTS } = require("./data/static-guard");
 const { todayIso, plusDays, nowIso, monthKey, monthShortLabel, monthLongLabel } = require("./data/nz-time");
@@ -3245,6 +3251,23 @@ function withBillingTotals(doc, isAdmin) {
         : [],
     },
   };
+  if (doc.kind === "invoice") {
+    const review = reviewPayloadForInvoice(doc);
+    if (review) {
+      payload.googleReview = {
+        ...review,
+        qrUrl: "/api/google-review-qr.png",
+        sentAt: String(doc.reviewRequestSentAt || "").trim(),
+        sentKind: String(doc.reviewRequestKind || "").trim(),
+      };
+    } else if (isAdmin) {
+      payload.googleReview = {
+        configured: reviewConfigured(),
+        sentAt: String(doc.reviewRequestSentAt || "").trim(),
+        sentKind: String(doc.reviewRequestKind || "").trim(),
+      };
+    }
+  }
   if (payment) {
     payload.payments = payment.payments;
     payload.paymentStatus = payment.paymentStatus;
@@ -3739,7 +3762,24 @@ app.get("/api/health", (_req, res) => {
     dataDir: DATA_DIR,
     restoreWorkshop: true,
     siteLocked: Boolean(SITE_PIN),
+    googleReviewConfigured: reviewConfigured(),
   });
+});
+
+app.get("/api/google-review-qr.png", async (_req, res) => {
+  const url = googleReviewUrl();
+  if (!url) {
+    return res.status(404).json({ error: "Google review link is not configured." });
+  }
+  try {
+    const png = await reviewQrPngBuffer(url, 180);
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.send(png);
+  } catch (err) {
+    console.error("Google review QR failed:", err);
+    res.status(500).json({ error: "Could not create review QR code." });
+  }
 });
 
 function findCustomerByMobile(mobile) {
@@ -5544,6 +5584,9 @@ app.get("/api/billing", requireAdmin, (_req, res) => {
         amountPaid: payment?.amountPaid ?? null,
         balanceDue: payment?.balanceDue ?? null,
         paymentDates: payment?.payments.map((row) => row.paidAt).filter(Boolean) || [],
+        lastEmailedAt: d.lastEmailedAt || "",
+        reviewRequestSentAt: d.reviewRequestSentAt || "",
+        reviewRequestKind: d.reviewRequestKind || "",
       };
     })
     .sort((a, b) => {
@@ -5925,12 +5968,16 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       ${emailContactHtml()}
     `;
   } else {
+    const review = reviewPayloadForInvoice(doc);
     subject = `Tax Invoice ${doc.number} for ${rego || vehicle} — ${business.name}`;
     text =
       `Hi ${name},\n\n` +
       `Here is your tax invoice for ${vehicleBit}: ${doc.number}.\n` +
       `Total incl. GST: $${money}\n\n` +
       `View / print your invoice:\n${url}\n\n` +
+      (review
+        ? `${review.message}\nLeave a Google review:\n${review.url}\n\n`
+        : "") +
       `A PDF copy is attached for your records.\n\n` +
       `${business.paymentText()}\n\n` +
       `${business.name}\n${business.street}, ${business.suburb}, ${business.city}\n${business.phoneDisplay}\n${business.email}\n`;
@@ -5939,6 +5986,12 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       <p>Here is your tax invoice for <strong>${escapeHtml(vehicleBit)}</strong> — ${escapeHtml(doc.number)}.</p>
       <p>Total incl. GST: <strong>$${escapeHtml(money)}</strong></p>
       <p><a href="${escapeAttr(url)}">View / print your invoice</a></p>
+      ${
+        review
+          ? `<p style="margin:1.1rem 0 0.55rem;">${escapeHtml(review.message)}</p>
+      <p><a href="${escapeAttr(review.url)}" style="display:inline-block;background:#1565c0;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:700;">Leave a Google review</a></p>`
+          : ""
+      }
       <p>A PDF copy is attached for your records.</p>
       <p><strong>How to pay</strong><br/>
       Bank account name: <strong>${escapeHtml(business.bankAccountName)}</strong><br/>
@@ -5988,6 +6041,8 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       : doc.kind === "invoice"
         ? "Invoice emailed to customer"
         : "Quote emailed to customer";
+    const invoiceReview =
+      doc.kind === "invoice" ? reviewPayloadForInvoice(doc) : null;
     const updated = patchById(readBilling, writeBilling, doc.id, (latest) => {
       const next = { ...latest };
       next.lastEmailedAt = emailedAt;
@@ -6000,6 +6055,24 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
         detail: to,
         amount: totals.totalIncl,
       });
+      if (invoiceReview) {
+        const firstReviewRequest = !next.reviewRequestSentAt;
+        next.reviewRequestSentAt = next.reviewRequestSentAt || emailedAt;
+        next.reviewRequestKind = invoiceReview.kind;
+        if (firstReviewRequest) {
+          appendHistory(next, {
+            type: "review_request",
+            summary: "Google review request emailed",
+            detail: `${invoiceReview.kind} · ${to}`,
+          });
+        } else {
+          appendHistory(next, {
+            type: "review_request",
+            summary: "Google review request emailed again",
+            detail: `${invoiceReview.kind} · ${to}`,
+          });
+        }
+      }
       return next;
     });
 

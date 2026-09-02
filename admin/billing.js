@@ -851,9 +851,21 @@ function fillForm(doc) {
         "This quote is locked after accept. Use Revise quote to make a new editable copy.";
     } else if (doc.kind === "invoice" && doc.viewedAt) {
       hint.hidden = false;
+      const reviewBit = doc.reviewRequestSentAt
+        ? ` Google review request sent${
+            doc.reviewRequestSentAt
+              ? ` (${formatHistoryWhen(doc.reviewRequestSentAt)})`
+              : ""
+          }.`
+        : "";
       hint.textContent = `Customer has opened this invoice${
         doc.lastViewedAt ? ` (${formatHistoryWhen(doc.lastViewedAt)})` : ""
-      }.`;
+      }.${reviewBit}`;
+    } else if (doc.kind === "invoice" && doc.reviewRequestSentAt) {
+      hint.hidden = false;
+      hint.textContent = `Google review request sent (${formatHistoryWhen(
+        doc.reviewRequestSentAt
+      )}).`;
     } else {
       hint.hidden = true;
       hint.textContent = "";
@@ -881,8 +893,33 @@ function formatHistoryWhen(iso) {
 function renderHistory(doc) {
   const list = document.getElementById("billing-history");
   const fs = document.getElementById("billing-history-fieldset");
+  const reviewStatus = document.getElementById("billing-review-status");
   if (!list) return;
   if (fs) fs.hidden = doc.status === "void" && !(doc.history || []).length;
+  if (reviewStatus) {
+    if (doc.kind === "invoice") {
+      reviewStatus.hidden = false;
+      if (doc.reviewRequestSentAt) {
+        const kindLabel =
+          doc.reviewRequestKind === "wof"
+            ? "WoF"
+            : doc.reviewRequestKind === "service"
+              ? "Service"
+              : doc.reviewRequestKind === "repair"
+                ? "Repair"
+                : "";
+        reviewStatus.textContent = `Review request: sent ${formatHistoryWhen(
+          doc.reviewRequestSentAt
+        )}${kindLabel ? ` · ${kindLabel} message` : ""}`;
+      } else {
+        reviewStatus.textContent =
+          "Review request: not sent yet (included when you email this invoice).";
+      }
+    } else {
+      reviewStatus.hidden = true;
+      reviewStatus.textContent = "";
+    }
+  }
   const rows = Array.isArray(doc.history) ? doc.history : [];
   if (!rows.length) {
     list.innerHTML = '<li class="muted">No history yet.</li>';
@@ -901,6 +938,7 @@ function renderHistory(doc) {
         sent: doc.kind === "invoice" ? "Invoice emailed to customer" : "Quote emailed to customer",
         viewed: doc.kind === "invoice" ? "Customer opened invoice" : "Customer opened quote",
         created: doc.kind === "invoice" ? "Invoice created" : "Quote created",
+        review_request: "Google review request emailed",
       };
       const summaryText = ev.summary || labels[ev.type] || ev.type || "Update";
       return `<li class="history-item history-${Admin.escapeAttr(ev.type || "note")}">
