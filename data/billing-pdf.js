@@ -68,15 +68,10 @@ function buildBillingPdf(doc) {
         const textLeft = left + logoWidth + 16;
         const textWidth = pageWidth - logoWidth - 16;
         pdf
-          .fillColor("#1a2332")
-          .font("Helvetica-Bold")
-          .fontSize(11)
-          .text(title, textLeft, logoTop + 10, { width: textWidth, align: "right" });
-        pdf
           .fillColor("#5b6777")
           .font("Helvetica")
           .fontSize(9)
-          .text(`${business.street}, ${business.suburb}, ${business.city}`, {
+          .text(`${business.street}, ${business.suburb}, ${business.city}`, textLeft, logoTop + 8, {
             width: textWidth,
             align: "right",
           })
@@ -84,6 +79,36 @@ function buildBillingPdf(doc) {
             width: textWidth,
             align: "right",
           });
+        pdf.moveDown(0.25);
+        pdf
+          .fillColor("#1a2332")
+          .font("Helvetica-Bold")
+          .fontSize(13)
+          .text(`${title} ${doc.number || ""}`, {
+            width: textWidth,
+            align: "right",
+          });
+        pdf.font("Helvetica").fontSize(9).fillColor("#5b6777");
+        if (isInvoice) {
+          const issued =
+            formatDateShort(doc.issuedAt || doc.sentAt || doc.createdAt) ||
+            formatDateShort(todayIso());
+          pdf.text(`Issue date ${issued}`, { width: textWidth, align: "right" });
+          pdf.text("Due date Immediately", { width: textWidth, align: "right" });
+        } else {
+          if (doc.validUntil) {
+            pdf.text(`Valid until ${formatDateShort(doc.validUntil)}`, {
+              width: textWidth,
+              align: "right",
+            });
+          }
+        }
+        if (business.gstNumber) {
+          pdf.text(`GST number ${business.gstNumber}`, {
+            width: textWidth,
+            align: "right",
+          });
+        }
         headerBottom = Math.max(pdf.y, logoTop + 127) + 14;
       } else {
         pdf
@@ -107,28 +132,7 @@ function buildBillingPdf(doc) {
       }
 
       pdf.y = headerBottom;
-      pdf
-        .fillColor("#1a2332")
-        .font("Helvetica-Bold")
-        .fontSize(16)
-        .text(`${title} ${doc.number || ""}`, { width: pageWidth });
-
-      pdf.font("Helvetica").fontSize(10).fillColor("#5b6777");
-      if (isInvoice) {
-        const issued =
-          formatDateShort(doc.issuedAt || doc.sentAt || doc.createdAt) ||
-          formatDateShort(todayIso());
-        pdf.text(`Issue date ${issued}`);
-        pdf.text("Due date Immediately");
-      }
-      if (!isInvoice && doc.validUntil) {
-        pdf.text(`Valid until ${formatDateShort(doc.validUntil)}`);
-      }
-      if (business.gstNumber) {
-        pdf.text(`GST number ${business.gstNumber}`);
-      }
-
-      pdf.moveDown(0.8);
+      pdf.moveDown(0.2);
       const colGap = 24;
       const colWidth = (pageWidth - colGap) / 2;
       const blockTop = pdf.y;
@@ -269,31 +273,32 @@ function buildBillingPdf(doc) {
       row("Subtotal excl. GST", money(totals.net));
       row("GST (15%)", money(totals.gst));
       row("Total incl. GST", money(totals.totalIncl), true);
+      pdf.x = left;
 
       if (doc.notes) {
         pdf.moveDown(0.8);
         ensureSpace(40);
-        pdf.fillColor("#5b6777").font("Helvetica-Bold").fontSize(9).text("NOTES");
+        pdf.fillColor("#5b6777").font("Helvetica-Bold").fontSize(9).text("NOTES", left, pdf.y, { width: pageWidth });
         pdf
           .fillColor("#1a2332")
           .font("Helvetica")
           .fontSize(10)
-          .text(String(doc.notes).trim(), { width: pageWidth });
+          .text(String(doc.notes).trim(), left, pdf.y, { width: pageWidth });
       }
 
       pdf.moveDown(1);
       ensureSpace(110);
-      pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(11).text("How to pay");
+      pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(11).text("How to pay", left, pdf.y, { width: pageWidth });
       pdf
         .fillColor("#1a2332")
         .font("Helvetica")
         .fontSize(10)
-        .text(`Bank account number: ${business.bankAccount}`);
+        .text(`Bank account number: ${business.bankAccount}`, left, pdf.y, { width: pageWidth });
       pdf.moveDown(0.4);
-      pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(10).text("Payment terms");
+      pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(10).text("Payment terms", left, pdf.y, { width: pageWidth });
       pdf.fillColor("#1a2332").font("Helvetica").fontSize(10);
       for (const line of business.paymentTerms || []) {
-        pdf.text(`• ${line}`, { width: pageWidth });
+        pdf.text(`• ${line}`, left, pdf.y, { width: pageWidth });
       }
 
       if (!isInvoice) {
@@ -304,6 +309,8 @@ function buildBillingPdf(doc) {
           .fontSize(9)
           .text(
             "Please open the link in your email to review and accept this quote online before we start work.",
+            left,
+            pdf.y,
             { width: pageWidth }
           );
       }

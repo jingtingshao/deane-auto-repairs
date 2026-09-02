@@ -41,6 +41,33 @@ function withCustomerEmailHtml(innerHtml, { logoWidth = 168 } = {}) {
 </div>`;
 }
 
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function escapeAttr(str) {
+  return escapeHtml(str).replaceAll("'", "&#39;");
+}
+
+/** Shop name in black; address, phone and email in grey with no underline (Gmail-safe). */
+function emailContactHtml() {
+  const grey = "color:#5b6777;text-decoration:none;";
+  const maps = business.mapsUrl;
+  const link = (href, label) =>
+    `<a href="${escapeAttr(href)}" style="${grey}"><span style="${grey}">${escapeHtml(label)}</span></a>`;
+  return `<p style="margin:1rem 0 0;font-size:14px;line-height:1.45;color:#5b6777;">
+    <span style="color:#1a2332;font-weight:700;">${escapeHtml(business.name)}</span><br/>
+    ${link(maps, business.street)}<br/>
+    ${link(maps, `${business.suburb}, ${business.city}`)}<br/>
+    ${link(`tel:${business.phoneTel}`, business.phoneDisplay)}<br/>
+    ${link(`mailto:${business.email}`, business.email)}
+  </p>`;
+}
+
 function withLogoAttachments(extra = []) {
   const logo = logoAttachment();
   return logo ? [logo, ...extra] : extra;
@@ -53,4 +80,5 @@ module.exports = {
   logoAttachment,
   withCustomerEmailHtml,
   withLogoAttachments,
+  emailContactHtml,
 };

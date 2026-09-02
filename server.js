@@ -27,6 +27,7 @@ const { buildBillingPdf, safeFilename } = require("./data/billing-pdf");
 const {
   withCustomerEmailHtml,
   withLogoAttachments,
+  emailContactHtml,
 } = require("./data/customer-email");
 const { readJsonArray, writeJsonArray } = require("./data/json-store");
 const { blockedStaticPath, safeUploadPath, UPLOAD_EXTS } = require("./data/static-guard");
@@ -935,12 +936,15 @@ function applyJobFields(job, body = {}) {
     vehicle: body.vehicle != null ? String(body.vehicle).trim() : job.vehicle,
     odometer: body.odometer != null ? String(body.odometer).trim() : job.odometer,
     workRequested:
-      body.workRequested != null ? String(body.workRequested) : job.workRequested,
+      body.workRequested != null
+        ? catalog.capitalizeLineDescription(body.workRequested)
+        : job.workRequested,
     technicianName:
       body.technicianName != null
         ? String(body.technicianName).trim()
         : job.technicianName,
-    notes: body.notes != null ? String(body.notes) : job.notes,
+    notes:
+      body.notes != null ? catalog.capitalizeLineDescription(body.notes) : job.notes,
     parts,
     updatedAt: changedAt,
   };
@@ -4353,6 +4357,18 @@ app.put("/api/reports/:id", requireAdmin, (req, res) => {
     createdAt: current.createdAt,
     servicePackage: nextPackage,
     checks,
+    customerConcern: catalog.capitalizeLineDescription(
+      body.customerConcern != null ? body.customerConcern : current.customerConcern
+    ),
+    actionsOther: catalog.capitalizeLineDescription(
+      body.actionsOther != null ? body.actionsOther : current.actionsOther
+    ),
+    summary: catalog.capitalizeLineDescription(
+      body.summary != null ? body.summary : current.summary
+    ),
+    technicianComments: catalog.capitalizeLineDescription(
+      body.technicianComments != null ? body.technicianComments : current.technicianComments
+    ),
     updatedAt: nowIso(),
   };
 
@@ -5361,14 +5377,7 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
       rego ? ` (${escapeHtml(rego)})` : ""
     }</strong> is ready.</p>
     <p><a href="${escapeAttr(url)}">View your service report</a></p>
-    <p style="color:#5b6777;font-size:14px;">
-      ${escapeHtml(business.name)}<br/>
-      ${escapeHtml(business.addressLine2)}<br/>
-      ${escapeHtml(business.street)}<br/>
-      ${escapeHtml(business.suburb)}, ${escapeHtml(business.city)}<br/>
-      ${escapeHtml(business.phoneDisplay)}<br/>
-      ${escapeHtml(business.email)}
-    </p>
+    ${emailContactHtml()}
   `;
 
   try {
@@ -5736,7 +5745,8 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
     ...current,
     ...snapshot,
     odometer: body.odometer != null ? String(body.odometer).trim() : current.odometer,
-    notes: body.notes != null ? String(body.notes) : current.notes,
+    notes:
+      body.notes != null ? catalog.capitalizeLineDescription(body.notes) : current.notes,
     validUntil:
       current.kind === "quote" && body.validUntil != null
         ? String(body.validUntil)
@@ -5910,13 +5920,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
           .map((line) => `<li>${escapeHtml(line)}</li>`)
           .join("")}
       </ul>
-      <p style="color:#5b6777;font-size:14px;">
-        ${escapeHtml(business.name)}<br/>
-        ${escapeHtml(business.street)}<br/>
-        ${escapeHtml(business.suburb)}, ${escapeHtml(business.city)}<br/>
-        ${escapeHtml(business.phoneDisplay)}<br/>
-        ${escapeHtml(business.email)}
-      </p>
+      ${emailContactHtml()}
     `;
   } else {
     subject = `Tax Invoice ${doc.number} for ${rego || vehicle} — ${business.name}`;
@@ -5942,13 +5946,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
           .map((line) => `<li>${escapeHtml(line)}</li>`)
           .join("")}
       </ul>
-      <p style="color:#5b6777;font-size:14px;">
-        ${escapeHtml(business.name)}<br/>
-        ${escapeHtml(business.street)}<br/>
-        ${escapeHtml(business.suburb)}, ${escapeHtml(business.city)}<br/>
-        ${escapeHtml(business.phoneDisplay)}<br/>
-        ${escapeHtml(business.email)}
-      </p>
+      ${emailContactHtml()}
     `;
   }
 

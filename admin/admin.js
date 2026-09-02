@@ -14,6 +14,13 @@ const viewTitle = document.getElementById("view-title");
 const vehiclePhotosEl = document.getElementById("vehicle-photos");
 const photoInput = document.getElementById("photo-input");
 
+function sentenceCase(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const lower = text.toLocaleLowerCase("en-NZ");
+  return lower.charAt(0).toLocaleUpperCase("en-NZ") + lower.slice(1);
+}
+
 let current = null;
 let checklistMeta = null;
 let reportDocs = [];
@@ -909,15 +916,15 @@ function collectPayload() {
     vehicle: f.vehicle.value.trim(),
     odometer: f.odometer.value.trim(),
     vin: f.vin.value.trim(),
-    customerConcern: f.customerConcern.value.trim(),
+    customerConcern: sentenceCase(f.customerConcern.value),
     checks,
     actionsDone,
-    actionsOther: f.actionsOther.value.trim(),
+    actionsOther: sentenceCase(f.actionsOther.value),
     oilSpec: f.oilSpec.value.trim(),
     oilFilter: f.oilFilter.value.trim(),
-    summary: f.summary.value.trim(),
+    summary: sentenceCase(f.summary.value),
     nextServiceDue: f.nextServiceDue.value.trim(),
-    technicianComments: f.technicianComments.value.trim(),
+    technicianComments: sentenceCase(f.technicianComments.value),
     wof: current?.wof || {
       performed: false,
       result: "not_completed",

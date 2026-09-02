@@ -53,7 +53,8 @@ function round2(n) {
 function capitalizeLineDescription(value) {
   const text = String(value || "").trim();
   if (!text) return "";
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  const lower = text.toLocaleLowerCase("en-NZ");
+  return lower.charAt(0).toLocaleUpperCase("en-NZ") + lower.slice(1);
 }
 
 function newLine(partial = {}) {
@@ -1158,7 +1159,7 @@ function collectBill() {
     customerPhone: value("customerPhone"),
     registration: value("registration"),
     vehicle: value("vehicle"),
-    notes: String(billingInput("notes")?.value || "").trim(),
+    notes: capitalizeLineDescription(billingInput("notes")?.value || ""),
     validUntil: billingInput("validUntil")?.value || "",
     lines: lineRows.map((line) => ({
       ...line,

@@ -266,7 +266,8 @@ function repairExclForConsumable(lines) {
 function capitalizeLineDescription(value) {
   const text = String(value || "").trim();
   if (!text) return "";
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  const lower = text.toLocaleLowerCase("en-NZ");
+  return lower.charAt(0).toLocaleUpperCase("en-NZ") + lower.slice(1);
 }
 
 module.exports = {

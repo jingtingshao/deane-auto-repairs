@@ -35,6 +35,13 @@ const jobWorkPhotosEl = document.getElementById("job-work-photos");
 const jobSupplierPhotosInput = document.getElementById("job-supplier-photos-input");
 const jobSupplierPhotosEl = document.getElementById("job-supplier-photos");
 
+function sentenceCase(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const lower = text.toLocaleLowerCase("en-NZ");
+  return lower.charAt(0).toLocaleUpperCase("en-NZ") + lower.slice(1);
+}
+
 let currentJob = null;
 let jobRows = [];
 let partRows = [];
@@ -559,9 +566,16 @@ function collectJob() {
     registration: value("registration").toUpperCase(),
     vehicle: value("vehicle"),
     odometer: value("odometer"),
-    workRequested: String(jobInput("workRequested")?.value || ""),
-    notes: String(jobInput("notes")?.value || ""),
-    parts: partRows.map((part) => ({ ...part })),
+    workRequested: sentenceCase(jobInput("workRequested")?.value || ""),
+    notes: sentenceCase(jobInput("notes")?.value || ""),
+    parts: partRows.map((part) => ({
+      ...part,
+      description:
+        String(part.source || "").toLowerCase() === "ocr"
+          ? part.description
+          : sentenceCase(part.description),
+      note: sentenceCase(part.note),
+    })),
   };
 }
 

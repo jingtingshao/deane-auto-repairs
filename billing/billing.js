@@ -2,6 +2,7 @@ const loading = document.getElementById("loading");
 const errorEl = document.getElementById("error");
 const docEl = document.getElementById("doc");
 const kindEl = document.getElementById("doc-kind");
+const factsEl = document.getElementById("doc-facts");
 
 function docId() {
   const parts = location.pathname.split("/").filter(Boolean);
@@ -113,18 +114,27 @@ function render(doc) {
   loading.hidden = true;
   docEl.hidden = false;
   const isInvoice = doc.kind === "invoice";
-  kindEl.textContent = isInvoice ? "Tax invoice" : "Quote";
+  kindEl.textContent = `${isInvoice ? "Tax Invoice" : "Quote"} ${doc.number || ""}`;
   document.title = `${doc.number} · Deane Auto Repairs`;
 
   const shop = doc.shop || {};
+  const factLines = [];
+  if (isInvoice) {
+    factLines.push(`Issue date ${formatDateShort(invoiceIssueIso(doc))}`);
+    factLines.push("Due date Immediately");
+  } else {
+    factLines.push(statusLabel(doc));
+    if (doc.validUntil) factLines.push(`Valid until ${formatDateShort(doc.validUntil)}`);
+  }
+  if (shop.gstNumber) factLines.push(`GST number ${shop.gstNumber}`);
+  if (factsEl) {
+    factsEl.innerHTML = factLines.map((line) => escapeHtml(line)).join("<br />");
+  }
+
   const totals = doc.totals || {};
   const canAccept = doc.kind === "quote" && doc.status === "sent";
   const accepted =
     doc.kind === "quote" && (doc.status === "accepted" || doc.status === "invoiced");
-
-  const gstLine = shop.gstNumber
-    ? `<p class="meta">GST number ${escapeHtml(shop.gstNumber)}</p>`
-    : "";
 
   const banner = accepted
     ? `<p class="banner ok">Thanks — this quote has been accepted. We’ll start the work. Your invoice is ready at the workshop.</p>`
@@ -182,16 +192,7 @@ function render(doc) {
     ${letterhead}
     ${banner}
     <section class="panel document-summary">
-      <h1>${escapeHtml(isInvoice ? "Tax Invoice" : "Quote")} ${escapeHtml(doc.number)}</h1>
-      ${
-        isInvoice
-          ? `<p class="meta">Issue date ${escapeHtml(formatDateShort(invoiceIssueIso(doc)))}</p>
-      <p class="meta">Due date Immediately</p>`
-          : `<p class="meta">${escapeHtml(statusLabel(doc))}</p>`
-      }
-      ${doc.validUntil && !isInvoice ? `<p class="meta">Valid until ${escapeHtml(formatDateShort(doc.validUntil))}</p>` : ""}
-      ${gstLine}
-      <div class="grid-2" style="margin-top:1rem">
+      <div class="grid-2">
         <div class="detail-card">
           <p class="detail-label">Customer</p>
           <p class="detail-value"><strong>${escapeHtml(doc.customerName || "—")}</strong></p>

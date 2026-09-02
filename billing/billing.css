@@ -43,13 +43,31 @@ a {
 .top-bar {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.85rem;
 }
 
 .top-meta {
   text-align: right;
   min-width: 0;
+}
+
+.top-meta .doc-title {
+  margin: 0.4rem 0 0;
+  font-family: "Barlow Condensed", sans-serif;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 1.28rem;
+  line-height: 1.15;
+  opacity: 1;
+}
+
+.top-meta .doc-facts {
+  margin: 0.18rem 0 0;
+  font-size: 0.86rem;
+  line-height: 1.4;
+  opacity: 0.9;
 }
 
 .top-meta .sub {
@@ -331,6 +349,12 @@ button.primary {
   font-size: 0.92rem;
 }
 
+.footer a {
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+}
+
 .letterhead {
   display: none;
 }
@@ -418,6 +442,7 @@ button.primary {
 
   .top-bar {
     justify-content: space-between;
+    align-items: flex-start;
   }
 
   .brand-logo {
@@ -428,7 +453,9 @@ button.primary {
 
   .top .shop-line,
   .top .shop-line a,
-  .top .sub {
+  .top .sub,
+  .top .doc-title,
+  .top .doc-facts {
     color: #fff;
     text-decoration: none;
   }
