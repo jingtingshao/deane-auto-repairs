@@ -12,6 +12,8 @@ module.exports = {
   hoursSunday: "Sunday closed",
   gstNumber: "96-650-434",
   website: "https://www.deaneauto.co.nz",
+  /** Short URL for poster / flyer QR codes (opens the booking form). */
+  bookingUrl: "https://www.deaneauto.co.nz/book",
   logoPath: "/images/deane-auto-logo.jpg",
   // Street pin only — do not search "Deane Auto Repairs" (Google matches competitor Dean Auto Repairs).
   mapsUrl:
