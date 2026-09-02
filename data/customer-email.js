@@ -1,4 +1,4 @@
-/** Customer-facing email chrome: inline logo (CID) so Gmail still shows it. */
+/** Customer-facing email: inline logo at the end as a signature (CID so Gmail still shows it). */
 
 const fs = require("fs");
 const path = require("path");
@@ -29,14 +29,15 @@ function logoAttachment() {
 function withCustomerEmailHtml(innerHtml, { logoWidth = 168 } = {}) {
   const width = Math.max(120, Number(logoWidth) || 168);
   return `<div style="font-family:Arial,Helvetica,sans-serif;color:#1a2332;line-height:1.45;max-width:580px;">
-  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#0b1c3f;">
+  <div style="padding:8px;">${innerHtml}</div>
+  <table role="presentation" cellpadding="0" cellspacing="0" align="left" width="${width}" style="margin-top:16px;border-collapse:collapse;border-top:1px solid #d7e0ea;">
     <tr>
-      <td style="padding:12px 16px;">
-        <img src="cid:${LOGO_CID}" alt="${business.name}" width="${width}" style="display:block;border:0;width:${width}px;max-width:100%;height:auto;" />
+      <td style="padding:16px 0 8px;">
+        <img src="cid:${LOGO_CID}" alt="${business.name}" width="${width}" style="display:block;border:0;width:${width}px;max-width:${width}px;height:auto;" />
       </td>
     </tr>
   </table>
-  <div style="padding:18px 8px 8px;">${innerHtml}</div>
+  <div style="clear:both;"></div>
 </div>`;
 }
 
