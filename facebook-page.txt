@@ -37,6 +37,11 @@ Website
 -------
 https://www.deaneauto.co.nz
 
+Book online (poster QR)
+-----------------------
+https://www.deaneauto.co.nz/book
+Print assets: exports/ads/qr-book-plate.png (see docs/poster-qr-booking.md)
+
 Cover / hero text (overlay)
 ---------------------------
 Deane Auto Repairs
@@ -88,4 +93,4 @@ Story / reel ideas
 CTA button
 ----------
 Call Now → 0800 625 9827
-(or Book Now linking to the website #book section)
+(or Book Now → https://www.deaneauto.co.nz/book)

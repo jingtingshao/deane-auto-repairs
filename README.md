@@ -48,6 +48,8 @@ On Render, set `ADMIN_PIN` in Environment (not in Git). If it is missing or too 
 | `data/checklist.js` | Standard / Full checklist |
 | `docs/service-checklist-and-wof-notes.md` | Spec |
 | `facebook-page.txt` | Facebook copy kit |
+| `docs/poster-qr-booking.md` | Poster QR → online booking |
+| `exports/ads/qr-book-*.png` | Print QR / SCAN TO BOOK plate |
 | `pre-purchase/ppi-form.html` | Pre-purchase report form with photo upload slots |
 
 Reports are stored in `data/reports.json` on this computer (simple local MVP).

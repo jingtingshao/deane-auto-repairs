@@ -98,6 +98,20 @@
     if (location.hash === "#full-checklist") openChecklist();
   });
 
+  /** Poster QR / short link: /book → scroll to booking form */
+  const goToBooking =
+    /^\/book\/?$/.test(location.pathname) || location.hash === "#book";
+  if (goToBooking) {
+    const book = document.querySelector("#book");
+    if (book) {
+      requestAnimationFrame(() => {
+        book.scrollIntoView({ behavior: "smooth", block: "start" });
+        const first = book.querySelector("input:not(.hp-field), select, textarea");
+        if (first) first.focus({ preventScroll: true });
+      });
+    }
+  }
+
   const setStatus = (message, type, allowHtml = false) => {
     if (!status) return;
     status.hidden = false;

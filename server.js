@@ -3730,6 +3730,13 @@ app.use(
 );
 app.use("/report", express.static(path.join(ROOT, "report"), { dotfiles: "deny" }));
 app.use("/billing", express.static(path.join(ROOT, "billing"), { dotfiles: "deny" }));
+
+/** Short booking URL for poster QR codes → opens the public booking form. */
+app.get(["/book", "/book/"], (req, res) => {
+  if (req.path === "/book/") return res.redirect(302, "/book");
+  res.sendFile(path.join(ROOT, "index.html"));
+});
+
 app.use(express.static(ROOT, { index: "index.html", dotfiles: "deny" }));
 
 app.get("/api/health", (_req, res) => {
