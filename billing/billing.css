@@ -526,6 +526,8 @@ button.primary {
     margin-top: 0.8rem;
     padding: 0.65rem 0.75rem;
     border-color: var(--line-strong);
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .pay h2,

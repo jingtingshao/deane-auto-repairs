@@ -210,8 +210,85 @@ function buildBillingPdf(doc) {
         pdf.y = y + 20;
       }
 
+      function pageBottom() {
+        return pdf.page.height - pdf.page.margins.bottom;
+      }
+
+      function payFooterHeight() {
+        const terms = business.paymentTerms || [];
+        let h = 8;
+        pdf.font("Helvetica-Bold").fontSize(11);
+        h += pdf.currentLineHeight() + 4;
+        pdf.font("Helvetica").fontSize(10);
+        h +=
+          pdf.heightOfString(`Bank account number: ${business.bankAccount}`, {
+            width: pageWidth,
+          }) + 8;
+        pdf.font("Helvetica-Bold").fontSize(10);
+        h += pdf.currentLineHeight() + 4;
+        pdf.font("Helvetica").fontSize(10);
+        for (const line of terms) {
+          h += pdf.heightOfString(`• ${line}`, { width: pageWidth }) + 2;
+        }
+        if (!isInvoice) {
+          pdf.font("Helvetica").fontSize(9);
+          h +=
+            10 +
+            pdf.heightOfString(
+              "Please open the link in your email to review and accept this quote online before we start work.",
+              { width: pageWidth }
+            );
+        }
+        return h;
+      }
+
+      const footerHeight = payFooterHeight();
+
+      function drawPayFooter() {
+        let y = pageBottom() - footerHeight;
+        if (y < pdf.y + 8) y = pdf.y + 8;
+        pdf.x = left;
+        pdf
+          .moveTo(left, y)
+          .lineTo(left + pageWidth, y)
+          .strokeColor("#d7e0ea")
+          .lineWidth(1)
+          .stroke();
+        y += 8;
+        pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(11);
+        pdf.text("How to pay", left, y, { width: pageWidth });
+        pdf.fillColor("#1a2332").font("Helvetica").fontSize(10);
+        pdf.text(`Bank account number: ${business.bankAccount}`, left, pdf.y, {
+          width: pageWidth,
+        });
+        pdf.moveDown(0.35);
+        pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(10);
+        pdf.text("Payment terms", left, pdf.y, { width: pageWidth });
+        pdf.fillColor("#1a2332").font("Helvetica").fontSize(10);
+        for (const line of business.paymentTerms || []) {
+          pdf.text(`• ${line}`, left, pdf.y, { width: pageWidth });
+        }
+        if (!isInvoice) {
+          pdf.moveDown(0.45);
+          pdf.fillColor("#5b6777").font("Helvetica").fontSize(9);
+          pdf.text(
+            "Please open the link in your email to review and accept this quote online before we start work.",
+            left,
+            pdf.y,
+            { width: pageWidth }
+          );
+        }
+      }
+
       function ensureSpace(needed) {
-        if (pdf.y + needed > pdf.page.height - pdf.page.margins.bottom) {
+        if (pdf.y + needed > pageBottom()) {
+          pdf.addPage();
+          drawHeader();
+        }
+      }
+
+      function ensureSpaceAboveFooter(needed) {
+        if (pdf.y + needed > pageBottom() - footerHeight) {
           pdf.addPage();
           drawHeader();
         }
@@ -247,7 +324,14 @@ function buildBillingPdf(doc) {
       }
 
       pdf.moveDown(0.6);
-      ensureSpace(90);
+      let notesHeight = 0;
+      if (doc.notes) {
+        pdf.font("Helvetica").fontSize(10);
+        notesHeight =
+          28 +
+          pdf.heightOfString(String(doc.notes).trim(), { width: pageWidth });
+      }
+      ensureSpaceAboveFooter(90 + notesHeight);
       pdf
         .moveTo(left + pageWidth * 0.55, pdf.y)
         .lineTo(left + pageWidth, pdf.y)
@@ -277,7 +361,6 @@ function buildBillingPdf(doc) {
 
       if (doc.notes) {
         pdf.moveDown(0.8);
-        ensureSpace(40);
         pdf.fillColor("#5b6777").font("Helvetica-Bold").fontSize(9).text("NOTES", left, pdf.y, { width: pageWidth });
         pdf
           .fillColor("#1a2332")
@@ -286,34 +369,7 @@ function buildBillingPdf(doc) {
           .text(String(doc.notes).trim(), left, pdf.y, { width: pageWidth });
       }
 
-      pdf.moveDown(1);
-      ensureSpace(110);
-      pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(11).text("How to pay", left, pdf.y, { width: pageWidth });
-      pdf
-        .fillColor("#1a2332")
-        .font("Helvetica")
-        .fontSize(10)
-        .text(`Bank account number: ${business.bankAccount}`, left, pdf.y, { width: pageWidth });
-      pdf.moveDown(0.4);
-      pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(10).text("Payment terms", left, pdf.y, { width: pageWidth });
-      pdf.fillColor("#1a2332").font("Helvetica").fontSize(10);
-      for (const line of business.paymentTerms || []) {
-        pdf.text(`• ${line}`, left, pdf.y, { width: pageWidth });
-      }
-
-      if (!isInvoice) {
-        pdf.moveDown(0.8);
-        pdf
-          .fillColor("#5b6777")
-          .font("Helvetica")
-          .fontSize(9)
-          .text(
-            "Please open the link in your email to review and accept this quote online before we start work.",
-            left,
-            pdf.y,
-            { width: pageWidth }
-          );
-      }
+      drawPayFooter();
 
       pdf.end();
     } catch (err) {
