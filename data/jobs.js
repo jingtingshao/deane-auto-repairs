@@ -62,10 +62,21 @@ function isLabourLine(description) {
   );
 }
 
+function isConsumableLine(description) {
+  return /\bconsumables?\b/i.test(String(description || "").trim());
+}
+
 function isServiceOrLabourLine(description) {
   const d = String(description || "").trim();
   if (!d) return true;
   return isPackageServiceLine(d) || isLabourLine(d);
+}
+
+/** Invoice lines that must not become job card parts. */
+function isNonPartInvoiceLine(description) {
+  const d = String(description || "").trim();
+  if (!d) return true;
+  return isServiceOrLabourLine(d) || isConsumableLine(d);
 }
 
 function normalizePart(part = {}, idFallback = "") {
@@ -155,7 +166,7 @@ function lineDescription(line) {
 
 function partsFromQuoteLines(lines, newId) {
   return (lines || [])
-    .filter((line) => lineDescription(line) && !isServiceOrLabourLine(lineDescription(line)))
+    .filter((line) => lineDescription(line) && !isNonPartInvoiceLine(lineDescription(line)))
     .map((line) =>
       normalizePart(
         {
@@ -175,7 +186,7 @@ function mergeNewParts(job, incoming) {
   if (!job) return false;
   const extra = (incoming || []).filter((p) => {
     const desc = String(p.description || "").trim();
-    return desc && !isServiceOrLabourLine(desc);
+    return desc && !isNonPartInvoiceLine(desc);
   });
   if (!extra.length) return false;
   const parts = Array.isArray(job.parts) ? [...job.parts] : [];
@@ -235,7 +246,7 @@ function stripPackageWorkRequested(text) {
 function stripPackageParts(job) {
   if (!job || !Array.isArray(job.parts)) return false;
   const next = job.parts.filter(
-    (part) => String(part.description || "").trim() && !isServiceOrLabourLine(part.description)
+    (part) => String(part.description || "").trim() && !isNonPartInvoiceLine(part.description)
   );
   if (next.length === job.parts.length) return false;
   job.parts = next;
@@ -283,8 +294,10 @@ module.exports = {
   normalizeJobStatus,
   isPackageServiceLine,
   isLabourLine,
+  isConsumableLine,
   isServiceOrLabourLine,
   isServiceOrLabourLine: isServiceOrLabourLine,
+  isNonPartInvoiceLine,
   normalizePart,
   normalizeParts,
   normalizeParts: normalizeParts,

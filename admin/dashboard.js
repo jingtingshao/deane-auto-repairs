@@ -440,16 +440,6 @@
       }
       const selectedJob = boardJobs.find((job) => job.id === selectedBoardId) || boardJobs[0];
       root.innerHTML = `
-        <div class="dash-backup-bar">
-          <div class="dash-backup-copy">
-            <strong>Backup</strong>
-            <span id="dash-backup-status">Checking…</span>
-          </div>
-          <div class="dash-backup-actions">
-            <button type="button" class="button ghost" id="btn-backup-download">Download zip</button>
-            <button type="button" class="button dark" id="btn-backup-now">Backup to Drive</button>
-          </div>
-        </div>
         <section class="kpis" aria-label="Today's workshop status">
           <article class="kpi quote" data-billing="quotes">
             <span class="kpi-icon">↗</span>
@@ -546,6 +536,16 @@
           </div>
           <div id="financial-chart-root"></div>
         </section>
+        <div class="dash-backup-bar">
+          <div class="dash-backup-copy">
+            <strong>Backup</strong>
+            <span id="dash-backup-status">Checking…</span>
+          </div>
+          <div class="dash-backup-actions">
+            <button type="button" class="button ghost" id="btn-backup-download">Download zip</button>
+            <button type="button" class="button dark" id="btn-backup-now">Backup to Drive</button>
+          </div>
+        </div>
       `;
       root.querySelectorAll("[data-jobs]").forEach((el) => {
         el.addEventListener("click", (event) => {

@@ -1892,7 +1892,7 @@ label.check input {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem 1rem;
-  margin-bottom: 1rem;
+  margin: 1.25rem 0 0;
   padding: 0.55rem 0.85rem;
   border: 1px solid var(--line, #d7e0ea);
   border-radius: 10px;
