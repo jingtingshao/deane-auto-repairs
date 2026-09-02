@@ -59,12 +59,12 @@ function buildBillingPdf(doc) {
       const isInvoice = doc.kind === "invoice";
       const title = isInvoice ? "Tax Invoice" : "Quote";
       const file = logoPath();
-      const logoWidth = 228;
+      const logoWidth = 182;
       let headerBottom = 48;
 
       if (fs.existsSync(file)) {
         const logoTop = 40;
-        pdf.image(file, left, logoTop, { fit: [logoWidth, 127] });
+        pdf.image(file, left, logoTop, { fit: [logoWidth, 102] });
         const textLeft = left + logoWidth + 16;
         const textWidth = pageWidth - logoWidth - 16;
         pdf
@@ -109,7 +109,7 @@ function buildBillingPdf(doc) {
             align: "right",
           });
         }
-        headerBottom = Math.max(pdf.y, logoTop + 127) + 14;
+        headerBottom = Math.max(pdf.y, logoTop + 102) + 14;
       } else {
         pdf
           .fillColor("#0d47a1")

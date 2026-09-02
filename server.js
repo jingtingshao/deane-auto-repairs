@@ -5973,7 +5973,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       replyTo: process.env.SMTP_USER || MAIL_FROM,
       subject,
       text,
-      html: withCustomerEmailHtml(html, { logoWidth: 168 }),
+      html: withCustomerEmailHtml(html, { logoWidth: 134 }),
       attachments: withLogoAttachments([pdfAttachment]),
     });
 

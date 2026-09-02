@@ -80,9 +80,9 @@ a {
 
 .brand-logo {
   display: block;
-  height: 80px;
+  height: 64px;
   width: auto;
-  max-width: min(317px, 86vw);
+  max-width: min(254px, 80vw);
   border-radius: 4px;
 }
 
@@ -372,7 +372,7 @@ button.primary {
 
 .letterhead-logo {
   display: block;
-  height: 74px;
+  height: 59px;
   width: auto;
 }
 
@@ -446,7 +446,7 @@ button.primary {
   }
 
   .brand-logo {
-    height: 22mm;
+    height: 18mm;
     width: auto;
     max-width: none;
   }
