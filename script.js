@@ -37,6 +37,21 @@
     });
   });
 
+  if (helpSelect) {
+    try {
+      const saved = sessionStorage.getItem("deaneBookingType");
+      if (saved) {
+        helpSelect.value = saved;
+        sessionStorage.removeItem("deaneBookingType");
+      }
+    } catch (_) {
+      /* ignore */
+    }
+    const params = new URLSearchParams(location.search);
+    const helpParam = params.get("help");
+    if (helpParam) helpSelect.value = helpParam;
+  }
+
   const onScroll = () => {
     if (!header) return;
     header.classList.toggle("is-scrolled", window.scrollY > 12);

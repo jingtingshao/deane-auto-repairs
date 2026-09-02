@@ -507,6 +507,48 @@ p {
   font-size: 0.95rem;
 }
 
+.services-aside a {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.winz-strip {
+  padding: 28px 0;
+  background: var(--navy);
+  color: #fff;
+}
+
+.winz-strip-inner {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: center;
+}
+
+.winz-strip-kicker {
+  margin: 0 0 8px;
+  font: 11px var(--mono);
+  letter-spacing: 0.12em;
+  color: var(--lime);
+}
+
+.winz-strip h2 {
+  margin: 0 0 8px;
+  font: 800 clamp(28px, 4vw, 40px) / 0.95 var(--display);
+  text-transform: uppercase;
+}
+
+.winz-strip p {
+  margin: 0;
+  max-width: 40rem;
+  color: #c4ccd2;
+  font-size: 1.02rem;
+}
+
+.winz-strip .button {
+  white-space: nowrap;
+}
+
 .about {
   background: var(--ink);
   color: #fff;
@@ -877,9 +919,15 @@ footer {
   .report-grid,
   .booking-inner,
   .about-grid,
-  .location-grid {
+  .location-grid,
+  .winz-strip-inner {
     grid-template-columns: 1fr;
     gap: 26px;
+  }
+
+  .winz-strip .button {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .trust-grid {

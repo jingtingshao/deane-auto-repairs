@@ -1,0 +1,202 @@
+/* WINZ quotes page — extends shared site styles */
+
+.winz-hero {
+  min-height: min(88vh, 640px);
+}
+
+.winz-hero-image {
+  background:
+    url("https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1800&q=80")
+      center 40% / cover no-repeat;
+}
+
+.winz-hero-shade {
+  background:
+    linear-gradient(105deg, #0b141cf2 0%, #0b141cd9 38%, #0b141c55 72%, #0b141c1a 100%),
+    linear-gradient(0deg, #0b141c88, transparent 42%);
+}
+
+.winz-hero h1 {
+  max-width: 12ch;
+}
+
+.winz-hero .hero-copy {
+  max-width: 28rem;
+}
+
+.winz-how {
+  background: var(--cream);
+}
+
+.winz-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.winz-steps li {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 1rem;
+  padding: 1.35rem 0;
+  border-bottom: 1px solid var(--line);
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.55s ease,
+    transform 0.55s ease;
+}
+
+.winz-steps li.is-visible,
+.winz-checklist.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.winz-steps span {
+  color: var(--red);
+  font: 11px var(--mono);
+  letter-spacing: 0.08em;
+  padding-top: 0.35rem;
+}
+
+.winz-steps h3 {
+  margin: 0 0 0.35rem;
+  font: 800 28px / 0.95 var(--display);
+  text-transform: uppercase;
+}
+
+.winz-steps p {
+  margin: 0;
+  max-width: 40rem;
+  color: #3a4550;
+  font-size: 1.05rem;
+}
+
+.winz-what {
+  background: #ebe7dc;
+  padding-top: 90px;
+  padding-bottom: 90px;
+}
+
+.winz-what-grid {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 48px;
+  align-items: start;
+}
+
+.winz-what h2 {
+  margin: 0;
+  font: 800 clamp(47px, 5vw, 70px) / 0.87 var(--display);
+  text-transform: uppercase;
+}
+
+.winz-what-lead {
+  max-width: 28rem;
+  margin: 1.25rem 0 0;
+  font-size: 1.12rem;
+}
+
+.winz-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: #fff;
+  border-top: 4px solid var(--red);
+  box-shadow: 12px 12px 0 var(--ink);
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.55s ease,
+    transform 0.55s ease;
+}
+
+.winz-checklist li {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.winz-checklist li:last-child {
+  border-bottom: 0;
+}
+
+.winz-checklist li::before {
+  content: "✓";
+  color: var(--red);
+  font-weight: 800;
+}
+
+.winz-note-grid {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 48px;
+  align-items: start;
+}
+
+.winz-note a {
+  color: var(--lime);
+  font-weight: 700;
+}
+
+.winz-cta-panel {
+  padding: 1.5rem 1.4rem;
+  background: var(--ink);
+  box-shadow: 12px 12px 0 var(--lime);
+}
+
+.winz-cta-kicker {
+  margin: 0 0 0.75rem;
+  font: 11px var(--mono);
+  letter-spacing: 0.12em;
+  color: var(--lime);
+}
+
+.winz-cta-panel h3 {
+  margin: 0 0 0.75rem;
+  font: 800 36px / 0.9 var(--display);
+  text-transform: uppercase;
+}
+
+.winz-cta-panel p {
+  margin: 0 0 1.25rem;
+  max-width: 28rem;
+  color: #c4ccd2;
+  font-size: 1.05rem;
+}
+
+.winz-cta-panel .button {
+  width: 100%;
+  justify-content: space-between;
+}
+
+@media (max-width: 900px) {
+  .winz-what-grid,
+  .winz-note-grid {
+    grid-template-columns: 1fr;
+    gap: 26px;
+  }
+
+  .winz-what {
+    padding: 64px 0;
+  }
+
+  .winz-steps h3 {
+    font-size: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .winz-steps li,
+  .winz-checklist {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
