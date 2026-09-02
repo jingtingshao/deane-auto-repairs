@@ -18,6 +18,7 @@ module.exports = {
     "https://www.google.com/maps/place/63+Hayr+Road,+Three+Kings,+Auckland/@-36.9140797,174.7542951,18z",
   mapsLat: -36.9140797,
   mapsLng: 174.7542951,
+  bankAccountName: "Dreamworld Investments Limited",
   bankAccount: "02-0216-0104554-002",
   paymentTerms: [
     "A 30% deposit may be required for repairs over $1,000.",
@@ -36,6 +37,11 @@ module.exports = {
     return (this.paymentTerms || []).map((line) => `• ${line}`).join("\n");
   },
   paymentText() {
-    return `How to pay\nBank account number: ${this.bankAccount}\n\nPayment terms\n${this.paymentTermsText()}`;
+    return (
+      `How to pay\n` +
+      `Bank account name: ${this.bankAccountName}\n` +
+      `Bank account number: ${this.bankAccount}\n\n` +
+      `Payment terms\n${this.paymentTermsText()}`
+    );
   },
 };

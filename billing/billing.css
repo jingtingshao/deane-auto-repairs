@@ -244,21 +244,31 @@ main {
 .lines .num {
   text-align: right;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .totals {
   margin: 0.9rem 0 0;
   display: grid;
-  gap: 0.25rem;
-  justify-items: end;
+  grid-template-columns: 54% 10% 18% 18%;
+  gap: 0.25rem 0;
+  width: 100%;
 }
 
 .totals p {
+  grid-column: 3 / 5;
   margin: 0;
-  min-width: 220px;
+  min-width: 0;
   display: flex;
   justify-content: space-between;
-  gap: 1.5rem;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.totals p span:last-child {
+  flex: 0 0 50%;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .totals .grand {
@@ -312,8 +322,12 @@ button.primary {
   white-space: pre-wrap;
 }
 
+.pay-pin {
+  margin-top: 2.75rem;
+}
+
 .pay {
-  margin-top: 1.25rem;
+  margin-top: 0;
   padding: 1rem;
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -514,7 +528,7 @@ button.primary {
   }
 
   .totals p {
-    min-width: 260px;
+    min-width: 0;
   }
 
   .totals .grand {
@@ -522,12 +536,18 @@ button.primary {
     font-size: 12pt;
   }
 
-  .pay {
-    margin-top: 0.8rem;
-    padding: 0.65rem 0.75rem;
-    border-color: var(--line-strong);
+  .pay-pin {
+    margin-top: 0;
+    padding-top: 18mm;
     break-inside: avoid;
     page-break-inside: avoid;
+    break-before: auto;
+  }
+
+  .pay {
+    margin-top: 0;
+    padding: 0.65rem 0.75rem;
+    border-color: var(--line-strong);
   }
 
   .pay h2,

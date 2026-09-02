@@ -175,18 +175,19 @@ function buildBillingPdf(doc) {
 
       pdf.y = Math.max(leftBottom, rightBottom) + 16;
 
-      const cols = {
-        desc: left,
-        qty: left + pageWidth * 0.52,
-        price: left + pageWidth * 0.64,
-        total: left + pageWidth * 0.8,
-      };
       const widths = {
-        desc: pageWidth * 0.5,
         qty: pageWidth * 0.1,
-        price: pageWidth * 0.14,
+        price: pageWidth * 0.16,
         total: pageWidth * 0.18,
       };
+      widths.desc = pageWidth - widths.qty - widths.price - widths.total;
+      const cols = {
+        desc: left,
+        qty: left + widths.desc,
+        price: left + widths.desc + widths.qty,
+        total: left + widths.desc + widths.qty + widths.price,
+      };
+      const contentRight = left + pageWidth;
 
       function drawHeader() {
         const y = pdf.y;
@@ -214,12 +215,21 @@ function buildBillingPdf(doc) {
         return pdf.page.height - pdf.page.margins.bottom;
       }
 
+      /** How to pay starts three-quarters down the last page only. */
+      function payAnchorY() {
+        return pdf.page.height * 0.75;
+      }
+
       function payFooterHeight() {
         const terms = business.paymentTerms || [];
         let h = 8;
         pdf.font("Helvetica-Bold").fontSize(11);
         h += pdf.currentLineHeight() + 4;
         pdf.font("Helvetica").fontSize(10);
+        h +=
+          pdf.heightOfString(`Bank account name: ${business.bankAccountName}`, {
+            width: pageWidth,
+          }) + 2;
         h +=
           pdf.heightOfString(`Bank account number: ${business.bankAccount}`, {
             width: pageWidth,
@@ -245,8 +255,12 @@ function buildBillingPdf(doc) {
       const footerHeight = payFooterHeight();
 
       function drawPayFooter() {
-        let y = pageBottom() - footerHeight;
-        if (y < pdf.y + 8) y = pdf.y + 8;
+        const minGap = 12;
+        let y = Math.min(payAnchorY(), pageBottom() - footerHeight);
+        if (pdf.y + minGap > y) {
+          pdf.addPage();
+          y = Math.min(payAnchorY(), pageBottom() - footerHeight);
+        }
         pdf.x = left;
         pdf
           .moveTo(left, y)
@@ -258,6 +272,9 @@ function buildBillingPdf(doc) {
         pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(11);
         pdf.text("How to pay", left, y, { width: pageWidth });
         pdf.fillColor("#1a2332").font("Helvetica").fontSize(10);
+        pdf.text(`Bank account name: ${business.bankAccountName}`, left, pdf.y, {
+          width: pageWidth,
+        });
         pdf.text(`Bank account number: ${business.bankAccount}`, left, pdf.y, {
           width: pageWidth,
         });
@@ -288,9 +305,8 @@ function buildBillingPdf(doc) {
       }
 
       function ensureSpaceAboveFooter(needed) {
-        if (pdf.y + needed > pageBottom() - footerHeight) {
+        if (pdf.y + needed > payAnchorY()) {
           pdf.addPage();
-          drawHeader();
         }
       }
 
@@ -315,10 +331,12 @@ function buildBillingPdf(doc) {
         pdf.text(money(unit), cols.price, y, {
           width: widths.price,
           align: "right",
+          lineBreak: false,
         });
         pdf.text(money(lineTot), cols.total, y, {
           width: widths.total,
           align: "right",
+          lineBreak: false,
         });
         pdf.y = Math.max(afterDesc, y + 12) + 4;
       }
@@ -332,26 +350,27 @@ function buildBillingPdf(doc) {
           pdf.heightOfString(String(doc.notes).trim(), { width: pageWidth });
       }
       ensureSpaceAboveFooter(90 + notesHeight);
+      const totalsLabelX = cols.price;
       pdf
-        .moveTo(left + pageWidth * 0.55, pdf.y)
-        .lineTo(left + pageWidth, pdf.y)
+        .moveTo(totalsLabelX, pdf.y)
+        .lineTo(contentRight, pdf.y)
         .strokeColor("#d7e0ea")
         .stroke();
       pdf.moveDown(0.4);
 
-      const totalsX = left + pageWidth * 0.55;
-      const totalsW = pageWidth * 0.45;
+      const totalsLabelW = cols.total - totalsLabelX - 6;
       const row = (label, value, bold = false) => {
         const y = pdf.y;
-        pdf
-          .fillColor("#1a2332")
-          .font(bold ? "Helvetica-Bold" : "Helvetica")
-          .fontSize(bold ? 11 : 10)
-          .text(label, totalsX, y, { width: totalsW * 0.55 })
-          .text(value, totalsX + totalsW * 0.55, y, {
-            width: totalsW * 0.45,
-            align: "right",
-          });
+        pdf.fillColor("#1a2332").font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(10);
+        pdf.text(label, totalsLabelX, y, {
+          width: totalsLabelW,
+          lineBreak: false,
+        });
+        pdf.text(value, cols.total, y, {
+          width: widths.total,
+          align: "right",
+          lineBreak: false,
+        });
         pdf.moveDown(0.25);
       };
       row("Subtotal excl. GST", money(totals.net));

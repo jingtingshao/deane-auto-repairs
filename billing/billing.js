@@ -225,8 +225,11 @@ function render(doc) {
         <p class="grand"><span>Total incl. GST</span><span>${money(totals.totalIncl)}</span></p>
       </div>
       ${doc.notes ? `<p class="note" style="margin-top:1rem">${escapeHtml(doc.notes)}</p>` : ""}
+    </section>
+    <div class="pay-pin">
       <div class="pay">
         <h2>How to pay</h2>
+        <p>Bank account name: <strong>${escapeHtml(shop.bankAccountName || "Dreamworld Investments Limited")}</strong></p>
         <p>Bank account number: <strong>${escapeHtml(shop.bankAccount || "02-0216-0104554-002")}</strong></p>
         <h3>Payment terms</h3>
         <ul class="pay-terms">
@@ -243,8 +246,8 @@ function render(doc) {
             .join("")}
         </ul>
       </div>
-      ${acceptBlock}
-    </section>
+    </div>
+    ${acceptBlock}
   `;
 
   const printBtn = document.getElementById("btn-print");

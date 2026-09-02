@@ -3238,6 +3238,7 @@ function withBillingTotals(doc, isAdmin) {
       email: business.email,
       gstNumber: business.gstNumber || "",
       hoursShort: business.hoursShort,
+      bankAccountName: business.bankAccountName || "",
       bankAccount: business.bankAccount || "",
       paymentTerms: Array.isArray(business.paymentTerms)
         ? [...business.paymentTerms]
@@ -5913,6 +5914,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       <p>A PDF copy is attached for your records.</p>
       ${doc.validUntil ? `<p>This quote is valid until ${escapeHtml(validUntilLabel)}.</p>` : ""}
       <p><strong>How to pay</strong><br/>
+      Bank account name: <strong>${escapeHtml(business.bankAccountName)}</strong><br/>
       Bank account number: <strong>${escapeHtml(business.bankAccount)}</strong></p>
       <p><strong>Payment terms</strong></p>
       <ul style="margin:0.25rem 0 1rem;padding-left:1.2rem;color:#1a2332;font-size:14px;">
@@ -5939,6 +5941,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       <p><a href="${escapeAttr(url)}">View / print your invoice</a></p>
       <p>A PDF copy is attached for your records.</p>
       <p><strong>How to pay</strong><br/>
+      Bank account name: <strong>${escapeHtml(business.bankAccountName)}</strong><br/>
       Bank account number: <strong>${escapeHtml(business.bankAccount)}</strong></p>
       <p><strong>Payment terms</strong></p>
       <ul style="margin:0.25rem 0 1rem;padding-left:1.2rem;color:#1a2332;font-size:14px;">
