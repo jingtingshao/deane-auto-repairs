@@ -37,15 +37,35 @@ a {
 .top {
   background: linear-gradient(120deg, var(--blue-deep), var(--blue));
   color: #fff;
-  padding: 1.4rem 0 1.2rem;
+  padding: 0.5rem 0 0.36rem;
 }
 
-.brand {
-  margin: 0;
+.top-bar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: baseline;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.top-meta {
+  text-align: right;
+  min-width: 0;
+}
+
+.top-meta .sub {
+  margin: 0.09rem 0 0;
+}
+
+.top-meta .sub:first-child {
+  margin-top: 0;
+}
+
+.brand-logo {
+  display: block;
+  height: 80px;
+  width: auto;
+  max-width: min(317px, 86vw);
+  border-radius: 4px;
 }
 
 .script {
@@ -67,8 +87,15 @@ a {
 }
 
 .sub {
-  margin: 0.25rem 0 0;
+  margin: 0.11rem 0 0;
   opacity: 0.9;
+}
+
+.brand {
+  margin: 0;
+  display: flex;
+  flex-shrink: 0;
+  line-height: 0;
 }
 
 .top .shop-line {
@@ -78,6 +105,11 @@ a {
 
 .top .shop-line a {
   color: #fff;
+  text-decoration: none;
+}
+
+a[href^="tel:"] {
+  text-decoration: none;
 }
 
 main {
@@ -312,26 +344,12 @@ button.primary {
 
 .letterhead-brand {
   margin: 0 0 0.35rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  align-items: baseline;
 }
 
-.letterhead-brand .script {
-  font-size: 2.25rem;
-  text-shadow:
-    -1px -1px 0 #fff,
-    1px -1px 0 #fff,
-    -1px 1px 0 #fff,
-    1px 1px 0 #fff,
-    0 2px 0 rgba(0, 0, 0, 0.12);
-  color: var(--red);
-}
-
-.letterhead-brand .sans {
-  color: var(--ink);
-  font-size: 1.45rem;
+.letterhead-logo {
+  display: block;
+  height: 74px;
+  width: auto;
 }
 
 .letterhead-contact {
@@ -384,28 +402,42 @@ button.primary {
     padding: 0;
   }
 
-  .top,
+  .top {
+    display: block !important;
+    background: #0b1c3f !important;
+    color: #fff;
+    padding: 3.15mm 0 2.25mm;
+    margin: 0 0 3.6mm;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .top .wrap {
+    width: 182mm;
+  }
+
+  .top-bar {
+    justify-content: space-between;
+  }
+
+  .brand-logo {
+    height: 22mm;
+    width: auto;
+    max-width: none;
+  }
+
+  .top .shop-line,
+  .top .shop-line a,
+  .top .sub {
+    color: #fff;
+    text-decoration: none;
+  }
+
   .footer,
   .no-print,
-  .banner {
-    display: none !important;
-  }
-
+  .banner,
   .letterhead {
-    display: block;
-    margin: 0 0 0.9rem;
-    padding: 0 0 0.65rem;
-    border-bottom: 3px solid var(--blue);
-  }
-
-  .letterhead-brand .script {
-    color: #e53935;
-  }
-
-  .letterhead-contact {
-    color: var(--muted);
-    text-align: right;
-    font-size: 9.5pt;
+    display: none !important;
   }
 
   .panel {

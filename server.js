@@ -24,6 +24,10 @@ const catalog = require("./data/catalog");
 const jobsLib = require("./data/jobs");
 const appointmentsLib = require("./data/appointments");
 const { buildBillingPdf, safeFilename } = require("./data/billing-pdf");
+const {
+  withCustomerEmailHtml,
+  withLogoAttachments,
+} = require("./data/customer-email");
 const { readJsonArray, writeJsonArray } = require("./data/json-store");
 const { blockedStaticPath, safeUploadPath, UPLOAD_EXTS } = require("./data/static-guard");
 const { todayIso, plusDays, nowIso, monthKey, monthShortLabel, monthLongLabel } = require("./data/nz-time");
@@ -4374,6 +4378,41 @@ app.get("/api/admin/backup-status", requireAdmin, (_req, res) => {
   res.json(driveBackup.publicStatus(DATA_DIR));
 });
 
+app.get("/api/admin/backup.zip", requireAdmin, async (_req, res) => {
+  let zipPath = "";
+  try {
+    const { includePhotos } = driveBackup.getConfig();
+    const zip = await driveBackup.zipWorkshopData({
+      dataDir: DATA_DIR,
+      uploadsDir: UPLOADS_DIR,
+      includePhotos,
+    });
+    zipPath = zip.zipPath;
+    res.download(zip.zipPath, zip.zipName, (err) => {
+      try {
+        if (zipPath) fs.unlinkSync(zipPath);
+      } catch {
+        /* ignore */
+      }
+      if (err && !res.headersSent) {
+        res.status(500).json({ error: err.message || "Download failed" });
+      }
+    });
+  } catch (err) {
+    if (zipPath) {
+      try {
+        fs.unlinkSync(zipPath);
+      } catch {
+        /* ignore */
+      }
+    }
+    console.error("Backup zip download failed:", err);
+    if (!res.headersSent) {
+      res.status(err.status || 500).json({ error: err.message || "Backup zip failed" });
+    }
+  }
+});
+
 app.post("/api/admin/backup", requireAdmin, async (_req, res) => {
   try {
     const result = await driveBackup.runBackup({
@@ -5235,7 +5274,8 @@ async function sendWofReminderEmail({ customerId, vehicleId = "" }) {
       replyTo: process.env.SMTP_USER || MAIL_FROM,
       subject,
       text,
-      html,
+      html: withCustomerEmailHtml(html),
+      attachments: withLogoAttachments(),
     });
   } catch (err) {
     err.status = 502;
@@ -5323,7 +5363,8 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
       replyTo: process.env.SMTP_USER || MAIL_FROM,
       subject,
       text,
-      html,
+      html: withCustomerEmailHtml(html),
+      attachments: withLogoAttachments(),
     });
 
     const emailedAt = nowIso();
@@ -5828,7 +5869,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       `A PDF copy is attached for your records.\n\n` +
       (doc.validUntil ? `This quote is valid until ${validUntilLabel}.\n\n` : "") +
       `${business.paymentText()}\n\n` +
-      `${business.fullAddress()}\n${business.phoneDisplay}\n${business.email}\n`;
+      `${business.name}\n${business.street}, ${business.suburb}, ${business.city}\n${business.phoneDisplay}\n${business.email}\n`;
     html = `
       <p>Hi ${escapeHtml(name)},</p>
       <p>Here is your quote for <strong>${escapeHtml(vehicleBit)}</strong> — ${escapeHtml(doc.number)}.</p>
@@ -5848,7 +5889,6 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       </ul>
       <p style="color:#5b6777;font-size:14px;">
         ${escapeHtml(business.name)}<br/>
-        ${escapeHtml(business.addressLine2)}<br/>
         ${escapeHtml(business.street)}<br/>
         ${escapeHtml(business.suburb)}, ${escapeHtml(business.city)}<br/>
         ${escapeHtml(business.phoneDisplay)}<br/>
@@ -5864,7 +5904,7 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       `View / print your invoice:\n${url}\n\n` +
       `A PDF copy is attached for your records.\n\n` +
       `${business.paymentText()}\n\n` +
-      `${business.fullAddress()}\n${business.phoneDisplay}\n${business.email}\n`;
+      `${business.name}\n${business.street}, ${business.suburb}, ${business.city}\n${business.phoneDisplay}\n${business.email}\n`;
     html = `
       <p>Hi ${escapeHtml(name)},</p>
       <p>Here is your tax invoice for <strong>${escapeHtml(vehicleBit)}</strong> — ${escapeHtml(doc.number)}.</p>
@@ -5881,7 +5921,6 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       </ul>
       <p style="color:#5b6777;font-size:14px;">
         ${escapeHtml(business.name)}<br/>
-        ${escapeHtml(business.addressLine2)}<br/>
         ${escapeHtml(business.street)}<br/>
         ${escapeHtml(business.suburb)}, ${escapeHtml(business.city)}<br/>
         ${escapeHtml(business.phoneDisplay)}<br/>
@@ -5913,8 +5952,8 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       replyTo: process.env.SMTP_USER || MAIL_FROM,
       subject,
       text,
-      html,
-      attachments: [pdfAttachment],
+      html: withCustomerEmailHtml(html, { logoWidth: 288 }),
+      attachments: withLogoAttachments([pdfAttachment]),
     });
 
     const emailedAt = nowIso();

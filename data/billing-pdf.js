@@ -1,8 +1,11 @@
 /** Build a simple A4 quote/invoice PDF for email attachment. */
 
+const fs = require("fs");
+const path = require("path");
 const PDFDocument = require("pdfkit");
 const catalog = require("./catalog");
 const business = require("./business");
+const { logoPath } = require("./customer-email");
 
 function money(n) {
   return `$${(Number(n) || 0).toFixed(2)}`;
@@ -54,26 +57,55 @@ function buildBillingPdf(doc) {
       const totals = catalog.computeTotals(doc.lines || []);
       const isInvoice = doc.kind === "invoice";
       const title = isInvoice ? "Tax Invoice" : "Quote";
+      const file = logoPath();
+      const logoWidth = 228;
+      let headerBottom = 48;
 
-      pdf
-        .fillColor("#0d47a1")
-        .font("Helvetica-Bold")
-        .fontSize(20)
-        .text(business.name, left, 48, { width: pageWidth });
+      if (fs.existsSync(file)) {
+        const logoTop = 40;
+        pdf.image(file, left, logoTop, { fit: [logoWidth, 127] });
+        const textLeft = left + logoWidth + 16;
+        const textWidth = pageWidth - logoWidth - 16;
+        pdf
+          .fillColor("#1a2332")
+          .font("Helvetica-Bold")
+          .fontSize(11)
+          .text(title, textLeft, logoTop + 10, { width: textWidth, align: "right" });
+        pdf
+          .fillColor("#5b6777")
+          .font("Helvetica")
+          .fontSize(9)
+          .text(`${business.street}, ${business.suburb}, ${business.city}`, {
+            width: textWidth,
+            align: "right",
+          })
+          .text(business.phoneDisplay, {
+            width: textWidth,
+            align: "right",
+          });
+        headerBottom = Math.max(pdf.y, logoTop + 127) + 14;
+      } else {
+        pdf
+          .fillColor("#0d47a1")
+          .font("Helvetica-Bold")
+          .fontSize(20)
+          .text(business.name, left, 48, { width: pageWidth, align: "right" });
+        pdf
+          .fillColor("#5b6777")
+          .font("Helvetica")
+          .fontSize(10)
+          .text(`${business.street}, ${business.suburb}, ${business.city}`, {
+            width: pageWidth,
+            align: "right",
+          })
+          .text(business.phoneDisplay, {
+            width: pageWidth,
+            align: "right",
+          });
+        headerBottom = pdf.y + 16;
+      }
 
-      pdf
-        .fillColor("#5b6777")
-        .font("Helvetica")
-        .fontSize(10)
-        .text(business.addressLine2, { width: pageWidth })
-        .text(`${business.street}, ${business.suburb}, ${business.city}`, {
-          width: pageWidth,
-        })
-        .text(`${business.phoneDisplay}  ·  ${business.email}`, {
-          width: pageWidth,
-        });
-
-      pdf.moveDown(1.2);
+      pdf.y = headerBottom;
       pdf
         .fillColor("#1a2332")
         .font("Helvetica-Bold")

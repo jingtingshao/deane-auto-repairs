@@ -440,6 +440,16 @@
       }
       const selectedJob = boardJobs.find((job) => job.id === selectedBoardId) || boardJobs[0];
       root.innerHTML = `
+        <div class="dash-backup-bar">
+          <div class="dash-backup-copy">
+            <strong>Backup</strong>
+            <span id="dash-backup-status">Checking…</span>
+          </div>
+          <div class="dash-backup-actions">
+            <button type="button" class="button ghost" id="btn-backup-download">Download zip</button>
+            <button type="button" class="button dark" id="btn-backup-now">Backup to Drive</button>
+          </div>
+        </div>
         <section class="kpis" aria-label="Today's workshop status">
           <article class="kpi quote" data-billing="quotes">
             <span class="kpi-icon">↗</span>
@@ -609,6 +619,7 @@
         load(selectedFinancialYear, selectedActivityMonth);
       });
       renderFinancialWindow(financial);
+      await wireBackupCard();
     } catch (err) {
       root.innerHTML = `<p class="error">${Admin.escapeHtml(err.message)}</p>`;
     }
@@ -618,34 +629,49 @@
     return Admin.formatDateTimeShort(iso);
   }
 
+  function filenameFromDisposition(header) {
+    const star = /filename\*=UTF-8''([^;]+)/i.exec(header || "");
+    if (star) {
+      try {
+        return decodeURIComponent(star[1]);
+      } catch {
+        return star[1];
+      }
+    }
+    const plain = /filename="?([^";]+)"?/i.exec(header || "");
+    return plain ? plain[1] : "deane-backup.zip";
+  }
+
   async function wireBackupCard() {
     const statusEl = document.getElementById("dash-backup-status");
     const btn = document.getElementById("btn-backup-now");
-    if (!statusEl || !btn) return;
+    const downloadBtn = document.getElementById("btn-backup-download");
+    if (!statusEl || !btn || !downloadBtn) return;
 
     const renderStatus = async () => {
       try {
         const data = await Admin.api("/api/admin/backup-status");
+        downloadBtn.disabled = false;
         if (!data.configured) {
-          statusEl.textContent =
-            "Not configured yet. Add OAuth client ID/secret to .env, then run: npm run backup:auth";
           btn.disabled = true;
+          statusEl.textContent =
+            "Google Drive not connected. Download zip and copy it onto a USB stick.";
           return;
         }
         btn.disabled = false;
         const last = data.last;
         if (!last) {
-          statusEl.textContent = `Ready. Auto backup daily from ${data.hourNz}:00 Auckland time. No backup yet.`;
+          statusEl.textContent = `Drive auto-backup daily from ${data.hourNz}:00 Auckland. Download zip for a USB copy.`;
           return;
         }
         if (last.ok) {
-          statusEl.textContent = `Last backup OK: ${last.fileName || "zip"} · ${formatBackupWhen(
+          statusEl.textContent = `Last Drive backup OK: ${last.fileName || "zip"} · ${formatBackupWhen(
             last.finishedAt || last.at
-          )}`;
+          )}. Download zip for USB.`;
         } else {
-          statusEl.textContent = `Last backup failed: ${last.error || "unknown error"} · ${formatBackupWhen(
+          statusEl.textContent = `Last Drive backup failed: ${last.error || "unknown error"} · ${formatBackupWhen(
             last.finishedAt || last.at
-          )}`;
+          )}. You can still download a zip.`;
         }
       } catch (err) {
         const msg = err.message || "Could not load backup status.";
@@ -673,8 +699,39 @@
         alert(err.message || "Backup failed.");
       } finally {
         btn.disabled = false;
-        btn.textContent = "Backup now";
+        btn.textContent = "Backup to Drive";
         await renderStatus();
+      }
+    });
+
+    downloadBtn.addEventListener("click", async () => {
+      downloadBtn.disabled = true;
+      downloadBtn.textContent = "Preparing zip…";
+      try {
+        const res = await fetch("/api/admin/backup.zip", { credentials: "include" });
+        if (res.status === 401) {
+          throw new Error("Please sign in again.");
+        }
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Download failed");
+        }
+        const blob = await res.blob();
+        const name = filenameFromDisposition(res.headers.get("content-disposition"));
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        Admin.showStatus?.("Zip downloaded — copy it onto a USB stick");
+      } catch (err) {
+        alert(err.message || "Download failed.");
+      } finally {
+        downloadBtn.disabled = false;
+        downloadBtn.textContent = "Download zip";
       }
     });
 

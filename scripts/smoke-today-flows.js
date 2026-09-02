@@ -16,6 +16,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { todayIso, plusDays } = require("../data/nz-time");
 const appointmentsLib = require("../data/appointments");
+const driveBackup = require("../data/drive-backup");
 const websms = require("../data/websms");
 
 const ROOT = path.join(__dirname, "..");
@@ -116,6 +117,21 @@ function unitTests() {
   } catch (err) {
     fail("unknown appointment status falls back to booked", err);
   }
+
+  try {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "deane-backup-"));
+    fs.writeFileSync(path.join(dir, "jobs.json"), "[]");
+    fs.writeFileSync(path.join(dir, "appointments.json"), "[]");
+    fs.writeFileSync(path.join(dir, "jobs.json.bak"), "[]");
+    fs.writeFileSync(path.join(dir, "google-service-account.json"), "{}");
+    fs.writeFileSync(path.join(dir, "notes.txt"), "no");
+    const names = driveBackup.listWorkshopDataFiles(dir);
+    assert.deepEqual(names, ["appointments.json", "jobs.json", "jobs.json.bak"]);
+    fs.rmSync(dir, { recursive: true, force: true });
+    pass("backup zip includes workshop json files");
+  } catch (err) {
+    fail("backup zip includes workshop json files", err);
+  }
 }
 
 async function integrationTests(base, dataDir) {
@@ -138,6 +154,20 @@ async function integrationTests(base, dataDir) {
   } catch (err) {
     fail("admin login", err);
     return;
+  }
+
+  try {
+    const denied = await fetch(`${base}/api/admin/backup.zip`);
+    assert.equal(denied.status, 401);
+    const zipRes = await fetch(`${base}/api/admin/backup.zip`, {
+      headers: { Cookie: cookie },
+    });
+    const buf = Buffer.from(await zipRes.arrayBuffer());
+    assert.equal(zipRes.status, 200, `status ${zipRes.status}`);
+    assert.equal(buf.slice(0, 2).toString(), "PK");
+    pass("admin backup zip download");
+  } catch (err) {
+    fail("admin backup zip download", err);
   }
 
   // --- Customers: same email OK, duplicate plate blocked ---

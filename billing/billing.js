@@ -136,7 +136,6 @@ function render(doc) {
       </div>`;
 
   const shopName = shop.name || "Deane Auto Repairs";
-  const shopLandmark = shop.addressLine2 || "(Next to BP Petrol Station)";
   const shopStreet = [shop.street || "63 Hayr Road", shop.suburb || "Three Kings", shop.city || "Auckland"]
     .filter(Boolean)
     .join(", ");
@@ -148,13 +147,15 @@ function render(doc) {
     <header class="letterhead">
       <div class="letterhead-inner">
         <div>
-          <p class="letterhead-brand"><span class="script">Deane</span> <span class="sans">AUTO REPAIRS</span></p>
-          <p class="letterhead-contact"><strong>${escapeHtml(shopName)}</strong><br />${escapeHtml(shopLandmark)}</p>
+          <p class="letterhead-brand">
+            <img class="letterhead-logo" src="/images/deane-auto-logo.jpg" alt="Deane Auto Repairs" />
+          </p>
+          <p class="letterhead-contact"><strong>${escapeHtml(shopName)}</strong></p>
         </div>
         <p class="letterhead-contact">
           ${escapeHtml(shopStreet)}<br />
-          <a href="tel:${escapeHtml(shopPhoneTel)}">${escapeHtml(shopPhone)}</a>
-          · <a href="mailto:${escapeHtml(shopEmail)}">${escapeHtml(shopEmail)}</a>
+          <a href="tel:${escapeHtml(shopPhoneTel)}">${escapeHtml(shopPhone)}</a><br />
+          <a href="mailto:${escapeHtml(shopEmail)}">${escapeHtml(shopEmail)}</a>
         </p>
       </div>
     </header>`;

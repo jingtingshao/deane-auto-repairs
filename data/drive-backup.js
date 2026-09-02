@@ -7,14 +7,19 @@ const { google } = require("googleapis");
 const archiver = require("archiver");
 const { todayIso, nowIso } = require("./nz-time");
 
-const DATA_FILES = [
-  "reports.json",
-  "billing.json",
-  "customers.json",
-  "jobs.json",
-];
+const SKIP_DATA_NAME = /credential|service-account|\.env/i;
 
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+
+function listWorkshopDataFiles(dataDir) {
+  if (!dataDir || !fs.existsSync(dataDir)) return [];
+  return fs
+    .readdirSync(dataDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .filter((name) => /\.json(\.bak)?$/i.test(name) && !SKIP_DATA_NAME.test(name))
+    .sort();
+}
 
 function envFlag(name, fallback = false) {
   const raw = String(process.env[name] || "").trim().toLowerCase();
@@ -106,16 +111,9 @@ function zipWorkshopData({ dataDir, uploadsDir, includePhotos }) {
     archive.pipe(output);
 
     let added = 0;
-    for (const name of DATA_FILES) {
-      const filePath = path.join(dataDir, name);
-      if (fs.existsSync(filePath)) {
-        archive.file(filePath, { name });
-        added += 1;
-      }
-      const bak = `${filePath}.bak`;
-      if (fs.existsSync(bak)) {
-        archive.file(bak, { name: `${name}.bak` });
-      }
+    for (const name of listWorkshopDataFiles(dataDir)) {
+      archive.file(path.join(dataDir, name), { name });
+      added += 1;
     }
 
     if (includePhotos && uploadsDir && fs.existsSync(uploadsDir)) {
@@ -303,6 +301,9 @@ function publicStatus(dataDir) {
 module.exports = {
   DRIVE_SCOPE,
   backupConfigured,
+  listWorkshopDataFiles,
+  zipWorkshopData,
+  getConfig,
   runBackup,
   startBackupScheduler,
   publicStatus,

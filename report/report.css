@@ -43,7 +43,15 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  align-items: baseline;
+  align-items: center;
+}
+
+.brand-logo {
+  display: block;
+  height: 56px;
+  width: auto;
+  max-width: min(220px, 70vw);
+  border-radius: 4px;
 }
 
 .script {
@@ -111,19 +119,14 @@ body.has-cover main.wrap {
 .cover-brand {
   margin: 0;
   display: flex;
-  flex-wrap: wrap;
   justify-content: center;
-  align-items: baseline;
-  gap: 0.55rem 0.85rem;
 }
 
-.cover-brand .script {
-  font-size: clamp(3rem, 8vw, 4.4rem);
-}
-
-.cover-brand .sans {
-  font-size: clamp(1.5rem, 4vw, 2.2rem);
-  color: #fff;
+.cover-logo {
+  display: block;
+  width: min(280px, 78vw);
+  height: auto;
+  border-radius: 6px;
 }
 
 .cover-tag {

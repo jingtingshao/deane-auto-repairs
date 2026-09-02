@@ -16,15 +16,14 @@ Remind them and offer to do this pass together:
 4. Add Open Graph / social share meta (title, description, image)
 5. Submit the live domain + sitemap in Google Search Console (and Bing if useful)
 6. **Google Business Profile (Google Maps)**
-   - Status as of **31 Aug 2026**: registered, **still waiting for verification** (user confirmed)
-   - When user says verified (or around **~7 Sep 2026** if still silent): help with post-verify steps below; do not nag daily while waiting
-   - If verified, help with:
+   - Status as of **1 Sep 2026**: registered and **verified** (user confirmed)
+   - Do not remind about verification again
+   - When doing domain/SEO go-live, offer these remaining GBP checks (once, if not done):
      - Website URL = live domain (e.g. `https://www.deaneauto.co.nz`)
      - Confirm phone `0800 625 9827`, hours Mon–Sat 8:30am–5:30pm / Sunday closed
      - Replace site “Open in Google Maps” with the official GBP Maps link
      - Suggest uploading workshop / storefront photos
-   - If still pending: ask which verification method they’re using and wait; do not nag daily
-7. Confirm Google Business Profile website URL matches the live domain once claimed
+7. Confirm Google Business Profile website URL matches the live domain
 
 ## Report / admin launch checklist (same pass)
 Also remind:
@@ -37,17 +36,13 @@ Also remind:
 Do not overbuild; confirm requirements first for larger features.
 Do not push private “password wall” as a substitute for proper go-live unless the user asks.
 
-## Render instance (current choice)
-On 18 Aug 2026 the shop chose **Render Free** to test deploy only.
+## Render instance
+As of **1 Sep 2026**: Render is **paid** (user confirmed). Do **not** remind to upgrade from Free to Starter.
 
-When they say the website is **正式上线**, going live, sending real customer quotes, or pointing `www.deaneauto.co.nz` for public use: **remind them to switch the Web Service from Free to Starter** and attach a persistent disk at `/data` (DATA_DIR=/data, UPLOADS_DIR=/data/uploads). Free sleeps and cannot keep quotes/reports/photos.
-
-Do not nag while they are still testing Free.
-
-## After Render is running (future architecture)
+## Later architecture (do not push)
 The shop chose **Render first** so customers can open quote links and Accept on their phones.
 
-When the user says Render is live, quotes/reports work on a phone, or asks about hosting cost / moving off Render / serverless: remind them (once, briefly) to consider later:
+When the user asks about hosting cost / moving off Render / serverless: remind them (once, briefly) to consider later:
 
 - **Cloudflare Pages** — public website
 - **Cloudflare Workers** (serverless) — quote Accept / report / admin APIs
@@ -55,10 +50,8 @@ When the user says Render is live, quotes/reports work on a phone, or asks about
 
 This is a rewrite, not a hosting switch. Do not start it unless they ask. Do not push it during the current Render setup.
 
-## Backup reminder (end of build / go-live)
-Google Drive auto-backup was started 22 Aug 2026 (folder on bpauckland@gmail.com). When the user says the workshop system is **做好了**, finished, ready for real use, **正式上线**, or wrapping the current MVP: **remind once** to also keep an occasional **USB stick copy** as an offline third copy.
-
-Keep it brief:
-- Primary automated backup: Google Drive (service account).
-- USB is optional offline copy, not the only backup.
-- Do not nag during normal feature work.
+## Backup
+As of **1 Sep 2026**:
+- Primary: Google Drive daily zip (OAuth, folder on bpauckland@gmail.com).
+- Offline copy: Admin dashboard **Download zip** → save onto a USB stick.
+Do not nag about USB backup.

@@ -130,8 +130,7 @@ function render(report, meta) {
     <section class="report-cover" aria-label="Report cover">
       <div class="cover-inner">
         <p class="cover-brand">
-          <span class="script">Deane</span>
-          <span class="sans">AUTO REPAIRS</span>
+          <img class="cover-logo" src="/images/deane-auto-logo.jpg" alt="Deane Auto Repairs" />
         </p>
         <p class="cover-tag">Digital service report</p>
         <h1 class="cover-title">${escapeHtml(jobLabel(report))}</h1>
@@ -153,7 +152,6 @@ function render(report, meta) {
         </dl>
         <div class="cover-shop">
           <strong>Deane Auto Repairs</strong><br />
-          (Next to BP Petrol Station)<br />
           63 Hayr Road, Three Kings, Auckland<br />
           <a href="tel:08006259827">0800 625 9827</a> ·
           <a href="mailto:deaneautonz@gmail.com">deaneautonz@gmail.com</a><br />
