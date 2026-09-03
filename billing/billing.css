@@ -484,23 +484,33 @@ button.primary {
   }
 
   .panel {
-    padding: 0.95rem 0.7rem;
+    padding: 0.95rem 0.65rem;
   }
 
-  /* Keep money columns readable: do not crush $1,450.00 into the next cell. */
+  /*
+   * Fit amount columns on a phone without crushing $1,450.00 into the next cell.
+   * Prefer fitting the viewport over horizontal scroll (scroll was clipping under
+   * rounded panel corners on some mobile browsers).
+   */
+  .lines-wrap {
+    overflow-x: visible;
+  }
+
   .lines {
-    min-width: 31rem;
-    font-size: 0.95rem;
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+    font-size: 0.9rem;
   }
 
   .lines th,
   .lines td {
-    padding: 0.48rem 0.4rem;
+    padding: 0.42rem 0.22rem;
   }
 
   .lines th {
-    font-size: 0.68rem;
-    letter-spacing: 0.02em;
+    font-size: 0.62rem;
+    letter-spacing: 0.015em;
   }
 
   .lines .th-full {
@@ -513,28 +523,41 @@ button.primary {
 
   .lines th:first-child,
   .lines td:first-child {
-    width: auto;
-    min-width: 8.5rem;
+    width: 34%;
+    padding-right: 0.35rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .lines th:nth-child(2),
   .lines td:nth-child(2) {
-    width: 3.2rem;
+    width: 10%;
   }
 
   .lines th:nth-child(3),
-  .lines td:nth-child(3),
+  .lines td:nth-child(3) {
+    width: 28%;
+  }
+
   .lines th:nth-child(4),
   .lines td:nth-child(4) {
-    width: 7.25rem;
+    width: 28%;
   }
 
   .lines .num {
-    padding-left: 0.55rem;
+    font-size: 0.84rem;
+    padding-left: 0.28rem;
+    overflow: visible;
+  }
+
+  .lines tfoot td {
+    font-size: 0.84rem;
   }
 
   .lines tfoot td:not(.num) {
-    padding-right: 0.55rem;
+    padding-right: 0.4rem;
+    white-space: normal;
+    text-align: right;
   }
 }
 
