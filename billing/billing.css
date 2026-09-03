@@ -203,6 +203,12 @@ main {
   gap: 0.75rem 1.25rem;
 }
 
+.lines-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .lines {
   width: 100%;
   border-collapse: collapse;
@@ -222,6 +228,10 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--blue-deep);
+}
+
+.lines .th-short {
+  display: none;
 }
 
 .lines th:first-child,
@@ -465,8 +475,66 @@ button.primary {
 }
 
 @media (max-width: 640px) {
+  .wrap {
+    width: min(760px, calc(100% - 1.25rem));
+  }
+
   .grid-2 {
     grid-template-columns: 1fr;
+  }
+
+  .panel {
+    padding: 0.95rem 0.7rem;
+  }
+
+  /* Keep money columns readable: do not crush $1,450.00 into the next cell. */
+  .lines {
+    min-width: 31rem;
+    font-size: 0.95rem;
+  }
+
+  .lines th,
+  .lines td {
+    padding: 0.48rem 0.4rem;
+  }
+
+  .lines th {
+    font-size: 0.68rem;
+    letter-spacing: 0.02em;
+  }
+
+  .lines .th-full {
+    display: none;
+  }
+
+  .lines .th-short {
+    display: inline;
+  }
+
+  .lines th:first-child,
+  .lines td:first-child {
+    width: auto;
+    min-width: 8.5rem;
+  }
+
+  .lines th:nth-child(2),
+  .lines td:nth-child(2) {
+    width: 3.2rem;
+  }
+
+  .lines th:nth-child(3),
+  .lines td:nth-child(3),
+  .lines th:nth-child(4),
+  .lines td:nth-child(4) {
+    width: 7.25rem;
+  }
+
+  .lines .num {
+    padding-left: 0.55rem;
+  }
+
+  .lines tfoot td:not(.num) {
+    padding-right: 0.55rem;
   }
 }
 
