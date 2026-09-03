@@ -256,6 +256,25 @@ function render(doc) {
         </ul>
       </div>
     </div>
+    ${
+      isInvoice && doc.googleReview?.url
+        ? `<section class="panel google-review">
+        <div class="google-review-inner">
+          <div class="google-review-copy">
+            <h2>Google review</h2>
+            <p>${escapeHtml(doc.googleReview.message)}</p>
+            <p class="no-print">
+              <a class="review-btn" href="${escapeHtml(doc.googleReview.url)}" target="_blank" rel="noopener noreferrer">Leave a Google review</a>
+            </p>
+          </div>
+          <figure class="google-review-qr">
+            <img src="${escapeHtml(doc.googleReview.qrUrl || "/api/google-review-qr.png")}" width="92" height="92" alt="QR code for Google review" />
+            <figcaption>Scan to review</figcaption>
+          </figure>
+        </div>
+      </section>`
+        : ""
+    }
     ${acceptBlock}
   `;
 

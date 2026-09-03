@@ -7,6 +7,10 @@ const catalog = require("./catalog");
 const business = require("./business");
 const { logoPath } = require("./customer-email");
 const { todayIso } = require("./nz-time");
+const {
+  reviewPayloadForInvoice,
+  reviewQrPngBuffer,
+} = require("./google-review");
 
 function money(n) {
   return `$${(Number(n) || 0).toFixed(2)}`;
@@ -38,7 +42,7 @@ function safeFilename(number, kind) {
 }
 
 function buildBillingPdf(doc) {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     try {
       const pdf = new PDFDocument({
         size: "A4",
@@ -58,8 +62,18 @@ function buildBillingPdf(doc) {
       const totals = catalog.computeTotals(doc.lines || []);
       const isInvoice = doc.kind === "invoice";
       const title = isInvoice ? "Tax Invoice" : "Quote";
+      const title = isInvoice ? "Tax Invoice" : "Quote";
       const SIGN_NAVY = "#021534";
       const SIGN_YELLOW = "#e9a305";
+      const review = isInvoice ? reviewPayloadForInvoice(doc) : null;
+      let reviewQr = null;
+      if (review?.url) {
+        try {
+          reviewQr = await reviewQrPngBuffer(review.url, 78);
+        } catch (err) {
+          console.error("Invoice review QR failed:", err.message || err);
+        }
+      }
       const file = logoPath();
       const barH = 92;
       const stripeH = 5;
@@ -191,6 +205,18 @@ function buildBillingPdf(doc) {
         return pdf.page.height * 0.75;
       }
 
+      function reviewBlockHeight() {
+        if (!review || !reviewQr) return 0;
+        const qrSize = 62;
+        const textWidth = pageWidth - qrSize - 11;
+        pdf.font("Helvetica-Bold").fontSize(7);
+        let h = pdf.currentLineHeight() + 3;
+        pdf.font("Helvetica").fontSize(7);
+        h += pdf.heightOfString(review.message, { width: textWidth });
+        h += 4;
+        return Math.max(qrSize + 6, h) + 8;
+      }
+
       function payFooterHeight() {
         const terms = business.paymentTerms || [];
         let h = 8;
@@ -220,10 +246,40 @@ function buildBillingPdf(doc) {
               { width: pageWidth }
             );
         }
+        h += reviewBlockHeight();
         return h;
       }
 
       const footerHeight = payFooterHeight();
+
+      function drawReviewBlock(startY) {
+        if (!review || !reviewQr) return startY;
+        const qrSize = 62;
+        const gap = 11;
+        const textWidth = pageWidth - qrSize - gap;
+        let y = startY + 7;
+        pdf
+          .moveTo(left, y)
+          .lineTo(left + pageWidth, y)
+          .strokeColor("#d7e0ea")
+          .lineWidth(1)
+          .stroke();
+        y += 7;
+        pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(7);
+        pdf.text("Google review", left, y, { width: textWidth });
+        const titleBottom = pdf.y + 1;
+        pdf.fillColor("#1a2332").font("Helvetica").fontSize(7);
+        pdf.text(review.message, left, titleBottom, { width: textWidth });
+        const textBottom = pdf.y;
+        pdf.image(reviewQr, left + textWidth + gap, y, {
+          width: qrSize,
+          height: qrSize,
+        });
+        pdf.link(left + textWidth + gap, y, qrSize, qrSize, review.url);
+        pdf.y = Math.max(textBottom, y + qrSize) + 3;
+        pdf.x = left;
+        return pdf.y;
+      }
 
       function drawPayFooter() {
         const minGap = 12;
@@ -266,6 +322,7 @@ function buildBillingPdf(doc) {
             { width: pageWidth }
           );
         }
+        drawReviewBlock(pdf.y);
       }
 
       function ensureSpace(needed) {
