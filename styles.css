@@ -1,10 +1,12 @@
 :root {
-  --ink: #111820;
-  --navy: #182a3b;
-  --red: #ef4d45;
+  --ink: #021534;
+  --navy: #021534;
+  --sign-navy: #021534;
+  --sign-yellow: #e9a305;
+  --red: #e9a305;
   --cream: #f5f2ea;
-  --lime: #d9ed4a;
-  --line: #c8c9c7;
+  --lime: #e9a305;
+  --line: #d4c7a4;
   --shell: min(1180px, calc(100% - 48px));
   --display: "Barlow Condensed", sans-serif;
   --body: "Source Sans 3", sans-serif;
@@ -82,7 +84,7 @@ a[href^="tel:"] {
 }
 
 .top-strip {
-  background: var(--ink);
+  background: var(--sign-navy);
   color: #fff;
   font: 11px var(--mono);
 }
@@ -112,9 +114,8 @@ a[href^="tel:"] {
   top: 0;
   z-index: 10;
   height: 82px;
-  background: #f5f2eaf5;
-  border-bottom: 1px solid var(--line);
-  backdrop-filter: blur(12px);
+  background: var(--sign-navy);
+  border-bottom: 0;
 }
 
 .header-inner {
@@ -129,12 +130,12 @@ a[href^="tel:"] {
   display: flex;
   align-items: center;
   gap: 11px;
-  color: var(--ink);
+  color: #fff;
   text-decoration: none;
 }
 
 .brand-deane {
-  color: var(--red);
+  color: #fff;
   font: 29px "Kaushan Script", cursive;
 }
 
@@ -142,6 +143,7 @@ a[href^="tel:"] {
   display: block;
   font: 800 22px/18px var(--display);
   letter-spacing: 0.055em;
+  color: var(--sign-yellow);
 }
 
 .brand small {
@@ -149,6 +151,7 @@ a[href^="tel:"] {
   margin-top: 3px;
   font: 8px var(--mono);
   letter-spacing: 0.075em;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .site-nav {
@@ -158,7 +161,7 @@ a[href^="tel:"] {
 }
 
 .site-nav > a {
-  color: var(--ink);
+  color: #fff;
   font-size: 14px;
   font-weight: 700;
   text-decoration: none;
@@ -166,29 +169,29 @@ a[href^="tel:"] {
 
 .site-header .nav-cta {
   padding: 13px 16px;
-  background: var(--ink);
-  color: #fff;
+  background: var(--sign-yellow);
+  color: var(--sign-navy);
 }
 
 .site-header .nav-cta-winz {
-  background: var(--red);
-  color: #fff;
+  background: #fff;
+  color: var(--sign-navy);
 }
 
 .site-header .nav-cta-winz b {
-  color: #fff;
+  color: var(--sign-navy);
 }
 
 .nav-cta b {
-  color: var(--lime);
+  color: var(--sign-navy);
 }
 
 .nav-toggle {
   display: none;
   width: 44px;
   height: 44px;
-  border: 1px solid var(--line);
-  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: transparent;
   padding: 0;
   cursor: pointer;
 }
@@ -198,7 +201,7 @@ a[href^="tel:"] {
   width: 18px;
   height: 2px;
   margin: 4px auto;
-  background: var(--ink);
+  background: #fff;
 }
 
 .hero {
@@ -225,8 +228,8 @@ a[href^="tel:"] {
 
 .hero-shade {
   background:
-    linear-gradient(90deg, #0b141ce8, #0b141cb3 40%, #0b141c24 78%),
-    linear-gradient(0deg, #0b141c70, transparent 30%);
+    linear-gradient(90deg, #021534f0, #021534b8 42%, #0215341f 78%),
+    linear-gradient(0deg, #02153480, transparent 32%);
 }
 
 .hero-content {
@@ -296,13 +299,13 @@ p {
 }
 
 .button-red {
-  background: var(--red);
-  color: #fff;
+  background: var(--sign-yellow);
+  color: var(--sign-navy);
 }
 
 .button-lime {
-  background: var(--lime);
-  color: var(--ink);
+  background: #fff;
+  color: var(--sign-navy);
 }
 
 .text-link {
@@ -403,8 +406,8 @@ p {
 }
 
 .service-card-red {
-  background: var(--red);
-  color: #fff;
+  background: var(--sign-yellow);
+  color: var(--sign-navy);
 }
 
 .service-card-photo {
@@ -415,7 +418,7 @@ p {
 .photo-overlay {
   position: absolute;
   inset: 0;
-  background: #0d171eb3;
+  background: #021534b8;
 }
 
 .service-card > *:not(.photo-overlay):not(.tag):not(.icon) {
@@ -464,10 +467,15 @@ p {
   font-weight: 800;
 }
 
+.service-card-red .icon,
+.service-card-red .service-includes li::before {
+  color: var(--sign-navy);
+}
+
 .service-card:not(.service-card-dark):not(.service-card-red):not(.service-card-photo)
   .service-includes
   li::before {
-  color: var(--red);
+  color: var(--sign-yellow);
 }
 
 .card-bottom {
@@ -504,8 +512,8 @@ p {
   z-index: 2;
   width: 150px;
   padding: 7px 0;
-  background: var(--lime);
-  color: var(--ink);
+  background: var(--sign-navy);
+  color: var(--sign-yellow);
   font: 8px / 1.2 var(--mono);
   letter-spacing: 0.08em;
   text-align: center;
@@ -706,13 +714,13 @@ p {
 
 .booking {
   padding: 86px 0;
-  background: var(--red);
-  color: #fff;
+  background: var(--sign-yellow);
+  color: var(--sign-navy);
 }
 
 .booking .eyebrow,
 .booking h2 em {
-  color: var(--ink);
+  color: var(--sign-navy);
 }
 
 .booking-inner {
@@ -732,24 +740,25 @@ p {
 }
 
 .call-link {
-  color: #fff;
+  color: var(--sign-navy);
   font-weight: 800;
   text-decoration: none;
-  border-bottom: 1px solid #fff;
+  border-bottom: 1px solid var(--sign-navy);
 }
 
 .call-link span,
 .form-note.is-success,
 .form-note.is-error a {
-  color: var(--lime);
+  color: var(--sign-navy);
 }
 
 .booking-form {
   display: grid;
   gap: 13px;
   padding: 24px;
-  background: var(--ink);
-  box-shadow: 12px 12px 0 var(--lime);
+  background: var(--sign-navy);
+  color: #fff;
+  box-shadow: 12px 12px 0 #fff;
 }
 
 .booking-form label {
@@ -801,7 +810,7 @@ p {
 }
 
 .form-note.is-error {
-  color: #ffb4b0;
+  color: #ffd28a;
 }
 
 footer {
@@ -854,8 +863,8 @@ footer {
     align-items: stretch;
     gap: 0;
     padding: 0.5rem 1rem 1rem;
-    background: #f5f2ea;
-    border-bottom: 1px solid var(--line);
+    background: var(--sign-navy);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.16);
   }
 
   .site-nav.is-open {
@@ -864,7 +873,7 @@ footer {
 
   .site-nav > a {
     padding: 0.85rem 0.25rem;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.16);
   }
 
   .site-header .nav-cta,
