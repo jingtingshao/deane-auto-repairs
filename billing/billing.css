@@ -2,6 +2,8 @@
   --blue: #1565c0;
   --blue-deep: #0d47a1;
   --blue-soft: #edf5ff;
+  --sign-navy: #021534;
+  --sign-yellow: #e9a305;
   --red: #e53935;
   --ink: #1a2332;
   --muted: #5b6777;
@@ -35,21 +37,30 @@ a {
 }
 
 .top {
-  background: linear-gradient(120deg, var(--blue-deep), var(--blue));
+  background: var(--sign-navy);
   color: #fff;
-  padding: 0.5rem 0 0.36rem;
+  padding: 0;
+}
+
+.top::after {
+  content: "";
+  display: block;
+  height: 5px;
+  background: var(--sign-yellow);
 }
 
 .top-bar {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 0.85rem;
 }
 
 .top-meta {
   text-align: right;
   min-width: 0;
+  padding: 0.45rem 0;
+  align-self: center;
 }
 
 .top-meta .doc-title {
@@ -61,6 +72,7 @@ a {
   font-size: 1.28rem;
   line-height: 1.15;
   opacity: 1;
+  color: var(--sign-yellow);
 }
 
 .top-meta .doc-facts {
@@ -80,10 +92,10 @@ a {
 
 .brand-logo {
   display: block;
-  height: 64px;
+  height: 72px;
   width: auto;
-  max-width: min(254px, 80vw);
-  border-radius: 4px;
+  max-width: min(280px, 80vw);
+  border-radius: 0;
 }
 
 .script {
@@ -114,6 +126,8 @@ a {
   display: flex;
   flex-shrink: 0;
   line-height: 0;
+  overflow: hidden;
+  background: var(--sign-navy);
 }
 
 .top .shop-line {
@@ -427,12 +441,17 @@ button.primary {
 
   .top {
     display: block !important;
-    background: #0b1c3f !important;
+    background: #021534 !important;
     color: #fff;
-    padding: 3.15mm 0 2.25mm;
+    padding: 0;
     margin: 0 0 3.6mm;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  .top::after {
+    height: 1.6mm;
+    background: #e9a305;
   }
 
   .top .wrap {
@@ -448,6 +467,7 @@ button.primary {
     height: 18mm;
     width: auto;
     max-width: none;
+    border-radius: 0;
   }
 
   .top .shop-line,

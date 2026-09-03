@@ -58,78 +58,49 @@ function buildBillingPdf(doc) {
       const totals = catalog.computeTotals(doc.lines || []);
       const isInvoice = doc.kind === "invoice";
       const title = isInvoice ? "Tax Invoice" : "Quote";
+      const SIGN_NAVY = "#021534";
+      const SIGN_YELLOW = "#e9a305";
       const file = logoPath();
-      const logoWidth = 182;
-      let headerBottom = 48;
+      const barH = 92;
+      const stripeH = 5;
+      let headerBottom = barH + stripeH + 16;
+
+      pdf.rect(0, 0, pdf.page.width, barH).fill(SIGN_NAVY);
+      const textWidth = pageWidth - 170;
+      const textLeft = left + 170;
 
       if (fs.existsSync(file)) {
-        const logoTop = 40;
-        pdf.image(file, left, logoTop, { fit: [logoWidth, 102] });
-        const textLeft = left + logoWidth + 16;
-        const textWidth = pageWidth - logoWidth - 16;
-        pdf
-          .fillColor("#5b6777")
-          .font("Helvetica")
-          .fontSize(9)
-          .text(`${business.street}, ${business.suburb}, ${business.city}`, textLeft, logoTop + 8, {
-            width: textWidth,
-            align: "right",
-          })
-          .text(business.phoneDisplay, {
-            width: textWidth,
-            align: "right",
-          });
-        pdf.moveDown(0.25);
-        pdf
-          .fillColor("#1a2332")
-          .font("Helvetica-Bold")
-          .fontSize(13)
-          .text(`${title} ${doc.number || ""}`, {
-            width: textWidth,
-            align: "right",
-          });
-        pdf.font("Helvetica").fontSize(9).fillColor("#5b6777");
-        if (isInvoice) {
-          const issued =
-            formatDateShort(doc.issuedAt || doc.sentAt || doc.createdAt) ||
-            formatDateShort(todayIso());
-          pdf.text(`Issue date ${issued}`, { width: textWidth, align: "right" });
-          pdf.text("Due date Immediately", { width: textWidth, align: "right" });
-        } else {
-          if (doc.validUntil) {
-            pdf.text(`Valid until ${formatDateShort(doc.validUntil)}`, {
-              width: textWidth,
-              align: "right",
-            });
-          }
-        }
-        if (business.gstNumber) {
-          pdf.text(`GST number ${business.gstNumber}`, {
-            width: textWidth,
-            align: "right",
-          });
-        }
-        headerBottom = Math.max(pdf.y, logoTop + 102) + 14;
-      } else {
-        pdf
-          .fillColor("#0d47a1")
-          .font("Helvetica-Bold")
-          .fontSize(20)
-          .text(business.name, left, 48, { width: pageWidth, align: "right" });
-        pdf
-          .fillColor("#5b6777")
-          .font("Helvetica")
-          .fontSize(10)
-          .text(`${business.street}, ${business.suburb}, ${business.city}`, {
-            width: pageWidth,
-            align: "right",
-          })
-          .text(business.phoneDisplay, {
-            width: pageWidth,
-            align: "right",
-          });
-        headerBottom = pdf.y + 16;
+        pdf.image(file, left, 0, { fit: [168, barH], align: "left", valign: "center" });
       }
+      pdf.fillColor("#ffffff").font("Helvetica").fontSize(9);
+      pdf.text(`${business.street}, ${business.suburb}, ${business.city}`, textLeft, 10, {
+        width: textWidth,
+        align: "right",
+      });
+      pdf.text(business.phoneDisplay, { width: textWidth, align: "right" });
+      pdf.moveDown(0.2);
+      pdf.fillColor(SIGN_YELLOW).font("Helvetica-Bold").fontSize(13);
+      pdf.text(`${title} ${doc.number || ""}`, { width: textWidth, align: "right" });
+      pdf.font("Helvetica").fontSize(9).fillColor("#ffffff");
+      if (isInvoice) {
+        const issued =
+          formatDateShort(doc.issuedAt || doc.sentAt || doc.createdAt) ||
+          formatDateShort(todayIso());
+        pdf.text(`Issue date ${issued}`, { width: textWidth, align: "right" });
+        pdf.text("Due date Immediately", { width: textWidth, align: "right" });
+      } else if (doc.validUntil) {
+        pdf.text(`Valid until ${formatDateShort(doc.validUntil)}`, {
+          width: textWidth,
+          align: "right",
+        });
+      }
+      if (business.gstNumber) {
+        pdf.text(`GST number ${business.gstNumber}`, {
+          width: textWidth,
+          align: "right",
+        });
+      }
+      pdf.rect(0, barH, pdf.page.width, stripeH).fill(SIGN_YELLOW);
 
       pdf.y = headerBottom;
       pdf.moveDown(0.2);
