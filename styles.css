@@ -154,7 +154,7 @@ a[href^="tel:"] {
 .site-nav {
   display: flex;
   align-items: center;
-  gap: 28px;
+  gap: 18px;
 }
 
 .site-nav > a {
@@ -167,6 +167,15 @@ a[href^="tel:"] {
 .site-header .nav-cta {
   padding: 13px 16px;
   background: var(--ink);
+  color: #fff;
+}
+
+.site-header .nav-cta-winz {
+  background: var(--red);
+  color: #fff;
+}
+
+.site-header .nav-cta-winz b {
   color: #fff;
 }
 
@@ -289,6 +298,11 @@ p {
 .button-red {
   background: var(--red);
   color: #fff;
+}
+
+.button-lime {
+  background: var(--lime);
+  color: var(--ink);
 }
 
 .text-link {
@@ -853,7 +867,8 @@ footer {
     border-bottom: 1px solid var(--line);
   }
 
-  .site-header .nav-cta {
+  .site-header .nav-cta,
+  .site-header .nav-cta-winz {
     margin-top: 0.5rem;
     text-align: center;
     justify-content: center;
