@@ -4,12 +4,13 @@ const QRCode = require("qrcode");
 const business = require("./business");
 const catalog = require("./catalog");
 
+const REVIEW_MESSAGE =
+  "Happy with our service? We’d really appreciate your feedback on Google.";
+
 const MESSAGES = {
-  wof: "Thanks for visiting Deane Auto Repairs today. If you found our service helpful, we’d really appreciate your feedback on Google.",
-  service:
-    "Thanks for choosing Deane Auto Repairs for your vehicle service. We’d love to hear how we did.",
-  repair:
-    "Thanks for trusting us with your vehicle. If you’re happy with the work, we’d really appreciate a quick Google review.",
+  wof: REVIEW_MESSAGE,
+  service: REVIEW_MESSAGE,
+  repair: REVIEW_MESSAGE,
 };
 
 function envTrim(name) {
@@ -34,8 +35,8 @@ function reviewConfigured() {
 }
 
 /**
- * Pick WoF / Service / Repair copy from invoice preset and line items.
- * Combined packages (e.g. Standard + WOF) use the Service message.
+ * Classify invoice as WoF / Service / Repair for admin tracking.
+ * Combined packages (e.g. Standard + WOF) count as Service.
  */
 function reviewKindForInvoice(doc) {
   const preset = String(doc?.preset || "").trim();
@@ -75,8 +76,8 @@ function reviewKindForInvoice(doc) {
   return "repair";
 }
 
-function reviewMessage(kind) {
-  return MESSAGES[kind] || MESSAGES.repair;
+function reviewMessage(_kind) {
+  return REVIEW_MESSAGE;
 }
 
 function reviewPayloadForInvoice(doc) {
@@ -86,7 +87,7 @@ function reviewPayloadForInvoice(doc) {
   return {
     kind,
     url,
-    message: reviewMessage(kind),
+    message: REVIEW_MESSAGE,
     label: "Leave a Google review",
   };
 }
@@ -105,6 +106,7 @@ async function reviewQrPngBuffer(url, size = 160) {
 }
 
 module.exports = {
+  REVIEW_MESSAGE,
   MESSAGES,
   googleReviewUrl,
   reviewConfigured,

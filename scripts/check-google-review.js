@@ -29,18 +29,18 @@ async function checkAsync(name, fn) {
   }
 }
 
-check("wof preset → wof message", () => {
+check("wof preset → shared review message", () => {
   assert.equal(reviewKindForInvoice({ preset: "wof", lines: [] }), "wof");
-  assert.match(reviewMessage("wof"), /Thanks for visiting/);
+  assert.match(reviewMessage("wof"), /Happy with our service/);
 });
 
-check("standard / premium / combo → service", () => {
+check("standard / premium / combo → service kind, same message", () => {
   assert.equal(reviewKindForInvoice({ preset: "standard" }), "service");
   assert.equal(reviewKindForInvoice({ preset: "premium_wof" }), "service");
-  assert.match(reviewMessage("service"), /vehicle service/);
+  assert.match(reviewMessage("service"), /feedback on Google/);
 });
 
-check("custom repair lines → repair", () => {
+check("custom repair lines → repair kind, same message", () => {
   assert.equal(
     reviewKindForInvoice({
       preset: "custom_invoice",
@@ -48,7 +48,7 @@ check("custom repair lines → repair", () => {
     }),
     "repair"
   );
-  assert.match(reviewMessage("repair"), /quick Google review/);
+  assert.match(reviewMessage("repair"), /Happy with our service/);
 });
 
 check("custom wof-only lines → wof", () => {
