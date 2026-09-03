@@ -208,31 +208,36 @@ function render(doc) {
     </section>
     <section class="panel">
       <h2>Items</h2>
-      <table class="lines">
-        <thead>
-          <tr>
-            <th>Description</th>
-            <th class="num">Qty</th>
-            <th class="num">Price excl. GST</th>
-            <th class="num">Total</th>
-          </tr>
-        </thead>
-        <tbody>${lineRows}</tbody>
-        <tfoot>
-          <tr>
-            <td colspan="3">Subtotal excl. GST</td>
-            <td class="num">${money(totals.net)}</td>
-          </tr>
-          <tr>
-            <td colspan="3">GST (15%)</td>
-            <td class="num">${money(totals.gst)}</td>
-          </tr>
-          <tr class="grand">
-            <td colspan="3">Total incl. GST</td>
-            <td class="num">${money(totals.totalIncl)}</td>
-          </tr>
-        </tfoot>
-      </table>
+      <div class="lines-wrap">
+        <table class="lines">
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th class="num">Qty</th>
+              <th class="num">
+                <span class="th-full">Price excl. GST</span>
+                <span class="th-short" aria-hidden="true">Price excl.</span>
+              </th>
+              <th class="num">Total</th>
+            </tr>
+          </thead>
+          <tbody>${lineRows}</tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3">Subtotal excl. GST</td>
+              <td class="num">${money(totals.net)}</td>
+            </tr>
+            <tr>
+              <td colspan="3">GST (15%)</td>
+              <td class="num">${money(totals.gst)}</td>
+            </tr>
+            <tr class="grand">
+              <td colspan="3">Total incl. GST</td>
+              <td class="num">${money(totals.totalIncl)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
       ${doc.notes ? `<p class="note" style="margin-top:1rem">${escapeHtml(doc.notes)}</p>` : ""}
     </section>
     <div class="pay-pin">

@@ -217,6 +217,12 @@ main {
   gap: 0.75rem 1.25rem;
 }
 
+.lines-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .lines {
   width: 100%;
   border-collapse: collapse;
@@ -236,6 +242,10 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--blue-deep);
+}
+
+.lines .th-short {
+  display: none;
 }
 
 .lines th:first-child,
@@ -479,8 +489,89 @@ button.primary {
 }
 
 @media (max-width: 640px) {
+  .wrap {
+    width: min(760px, calc(100% - 1.25rem));
+  }
+
   .grid-2 {
     grid-template-columns: 1fr;
+  }
+
+  .panel {
+    padding: 0.95rem 0.65rem;
+  }
+
+  /*
+   * Fit amount columns on a phone without crushing $1,450.00 into the next cell.
+   * Prefer fitting the viewport over horizontal scroll (scroll was clipping under
+   * rounded panel corners on some mobile browsers).
+   */
+  .lines-wrap {
+    overflow-x: visible;
+  }
+
+  .lines {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+    font-size: 0.9rem;
+  }
+
+  .lines th,
+  .lines td {
+    padding: 0.42rem 0.22rem;
+  }
+
+  .lines th {
+    font-size: 0.62rem;
+    letter-spacing: 0.015em;
+  }
+
+  .lines .th-full {
+    display: none;
+  }
+
+  .lines .th-short {
+    display: inline;
+  }
+
+  .lines th:first-child,
+  .lines td:first-child {
+    width: 34%;
+    padding-right: 0.35rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .lines th:nth-child(2),
+  .lines td:nth-child(2) {
+    width: 10%;
+  }
+
+  .lines th:nth-child(3),
+  .lines td:nth-child(3) {
+    width: 28%;
+  }
+
+  .lines th:nth-child(4),
+  .lines td:nth-child(4) {
+    width: 28%;
+  }
+
+  .lines .num {
+    font-size: 0.84rem;
+    padding-left: 0.28rem;
+    overflow: visible;
+  }
+
+  .lines tfoot td {
+    font-size: 0.84rem;
+  }
+
+  .lines tfoot td:not(.num) {
+    padding-right: 0.4rem;
+    white-space: normal;
+    text-align: right;
   }
 }
 
