@@ -62,7 +62,6 @@ function buildBillingPdf(doc) {
       const totals = catalog.computeTotals(doc.lines || []);
       const isInvoice = doc.kind === "invoice";
       const title = isInvoice ? "Tax Invoice" : "Quote";
-      const title = isInvoice ? "Tax Invoice" : "Quote";
       const SIGN_NAVY = "#021534";
       const SIGN_YELLOW = "#e9a305";
       const review = isInvoice ? reviewPayloadForInvoice(doc) : null;
