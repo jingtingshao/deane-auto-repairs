@@ -343,12 +343,12 @@ button.primary {
 }
 
 .google-review {
-  margin-top: 1.25rem;
+  margin-top: 0.88rem;
 }
 
 .google-review-inner {
   display: flex;
-  gap: 1.25rem;
+  gap: 0.88rem;
   align-items: center;
   justify-content: space-between;
 }
@@ -359,25 +359,28 @@ button.primary {
 }
 
 .google-review-copy h2 {
-  margin: 0 0 0.4rem;
+  margin: 0 0 0.28rem;
   color: var(--blue-deep);
-  font-size: 1.05rem;
+  font-size: 0.88rem;
 }
 
 .google-review-copy p {
   margin: 0;
   color: var(--ink);
+  font-size: 0.82rem;
+  line-height: 1.4;
 }
 
 .review-btn {
   display: inline-block;
-  margin-top: 0.85rem;
-  padding: 0.55rem 0.95rem;
-  border-radius: 8px;
+  margin-top: 0.6rem;
+  padding: 0.38rem 0.66rem;
+  border-radius: 6px;
   background: var(--blue);
   color: #fff !important;
   text-decoration: none;
   font-weight: 700;
+  font-size: 0.82rem;
 }
 
 .google-review-qr {
@@ -388,16 +391,16 @@ button.primary {
 
 .google-review-qr img {
   display: block;
-  width: 132px;
-  height: 132px;
+  width: 92px;
+  height: 92px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 6px;
   background: #fff;
 }
 
 .google-review-qr figcaption {
-  margin-top: 0.35rem;
-  font-size: 0.82rem;
+  margin-top: 0.25rem;
+  font-size: 0.58rem;
   color: var(--muted);
 }
 
@@ -611,22 +614,30 @@ button.primary {
   }
 
   .google-review {
-    margin-top: 0.75rem;
+    margin-top: 0.52rem;
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
   .google-review-inner {
-    gap: 0.75rem;
+    gap: 0.52rem;
   }
 
   .google-review-copy h2 {
     color: var(--blue-deep);
-    font-size: 11pt;
+    font-size: 8pt;
+  }
+
+  .google-review-copy p {
+    font-size: 8.5pt;
   }
 
   .google-review-qr img {
-    width: 28mm;
-    height: 28mm;
+    width: 20mm;
+    height: 20mm;
+  }
+
+  .google-review-qr figcaption {
+    font-size: 7pt;
   }
 }

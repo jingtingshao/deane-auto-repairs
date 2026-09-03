@@ -66,7 +66,7 @@ function buildBillingPdf(doc) {
       let reviewQr = null;
       if (review?.url) {
         try {
-          reviewQr = await reviewQrPngBuffer(review.url, 112);
+          reviewQr = await reviewQrPngBuffer(review.url, 78);
         } catch (err) {
           console.error("Invoice review QR failed:", err.message || err);
         }
@@ -235,14 +235,14 @@ function buildBillingPdf(doc) {
 
       function reviewBlockHeight() {
         if (!review || !reviewQr) return 0;
-        const qrSize = 88;
-        const textWidth = pageWidth - qrSize - 16;
-        pdf.font("Helvetica-Bold").fontSize(10);
-        let h = pdf.currentLineHeight() + 4;
-        pdf.font("Helvetica").fontSize(9);
+        const qrSize = 62;
+        const textWidth = pageWidth - qrSize - 11;
+        pdf.font("Helvetica-Bold").fontSize(7);
+        let h = pdf.currentLineHeight() + 3;
+        pdf.font("Helvetica").fontSize(7);
         h += pdf.heightOfString(review.message, { width: textWidth });
-        h += 6;
-        return Math.max(qrSize + 8, h) + 12;
+        h += 4;
+        return Math.max(qrSize + 6, h) + 8;
       }
 
       function payFooterHeight() {
@@ -282,21 +282,21 @@ function buildBillingPdf(doc) {
 
       function drawReviewBlock(startY) {
         if (!review || !reviewQr) return startY;
-        const qrSize = 88;
-        const gap = 16;
+        const qrSize = 62;
+        const gap = 11;
         const textWidth = pageWidth - qrSize - gap;
-        let y = startY + 10;
+        let y = startY + 7;
         pdf
           .moveTo(left, y)
           .lineTo(left + pageWidth, y)
           .strokeColor("#d7e0ea")
           .lineWidth(1)
           .stroke();
-        y += 10;
-        pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(10);
+        y += 7;
+        pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(7);
         pdf.text("Google review", left, y, { width: textWidth });
-        const titleBottom = pdf.y + 2;
-        pdf.fillColor("#1a2332").font("Helvetica").fontSize(9);
+        const titleBottom = pdf.y + 1;
+        pdf.fillColor("#1a2332").font("Helvetica").fontSize(7);
         pdf.text(review.message, left, titleBottom, { width: textWidth });
         const textBottom = pdf.y;
         pdf.image(reviewQr, left + textWidth + gap, y, {
@@ -304,7 +304,7 @@ function buildBillingPdf(doc) {
           height: qrSize,
         });
         pdf.link(left + textWidth + gap, y, qrSize, qrSize, review.url);
-        pdf.y = Math.max(textBottom, y + qrSize) + 4;
+        pdf.y = Math.max(textBottom, y + qrSize) + 3;
         pdf.x = left;
         return pdf.y;
       }

@@ -268,7 +268,7 @@ function render(doc) {
             </p>
           </div>
           <figure class="google-review-qr">
-            <img src="${escapeHtml(doc.googleReview.qrUrl || "/api/google-review-qr.png")}" width="132" height="132" alt="QR code for Google review" />
+            <img src="${escapeHtml(doc.googleReview.qrUrl || "/api/google-review-qr.png")}" width="92" height="92" alt="QR code for Google review" />
             <figcaption>Scan to review</figcaption>
           </figure>
         </div>

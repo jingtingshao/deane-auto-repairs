@@ -5988,8 +5988,8 @@ app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
       <p><a href="${escapeAttr(url)}">View / print your invoice</a></p>
       ${
         review
-          ? `<p style="margin:1.1rem 0 0.55rem;">${escapeHtml(review.message)}</p>
-      <p><a href="${escapeAttr(review.url)}" style="display:inline-block;background:#1565c0;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:700;">Leave a Google review</a></p>`
+          ? `<p style="margin:0.75rem 0 0.4rem;font-size:13px;line-height:1.4;">${escapeHtml(review.message)}</p>
+      <p><a href="${escapeAttr(review.url)}" style="display:inline-block;background:#1565c0;color:#fff;padding:7px 11px;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px;">Leave a Google review</a></p>`
           : ""
       }
       <p>A PDF copy is attached for your records.</p>
