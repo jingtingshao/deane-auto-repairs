@@ -170,6 +170,11 @@ a[href^="tel:"] {
   color: #fff;
 }
 
+.site-header .nav-cta-winz {
+  background: var(--red);
+  color: #fff;
+}
+
 .nav-cta b {
   color: var(--lime);
 }
