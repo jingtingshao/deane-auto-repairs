@@ -28,6 +28,7 @@ const BLOCKED_STATIC_FILES = new Set([
   "customers.json",
   "jobs.json",
   "appointments.json",
+  "booking-requests.json",
   "supplier-invoices.json",
   "invoice-candidates.json",
   "backup-status.json",

@@ -711,6 +711,7 @@
     Admin.setViewTitle(viewMode === "month" ? "1-month calendar" : "2-week calendar");
     try {
       await loadList();
+      await loadWebBookings();
     } catch (err) {
       alert(err.message);
     }
@@ -739,10 +740,10 @@
       registration: partial.registration || "",
       vehicle: partial.vehicle || "",
       workSummary: partial.workSummary || "",
-      notes: "",
+      notes: partial.notes || "",
       jobId: partial.jobId || "",
       jobNumber: partial.jobNumber || "",
-      source: "manual",
+      source: partial.source || "manual",
     };
     listView.hidden = true;
     editView.hidden = false;
@@ -775,10 +776,73 @@
     return current;
   }
 
+  function renderWebBookings(rows) {
+    const el = document.getElementById("calendar-web-bookings");
+    if (!el) return;
+    const list = Array.isArray(rows) ? rows.slice(0, 12) : [];
+    if (!list.length) {
+      el.hidden = true;
+      el.innerHTML = "";
+      return;
+    }
+    const unseen = list.filter((row) => !row.seenAt);
+    el.hidden = false;
+    el.innerHTML = `<p class="calendar-web-bookings-head">${
+      unseen.length ? `${unseen.length} new website booking${unseen.length === 1 ? "" : "s"}` : "Website bookings"
+    }</p>${list
+      .map((row) => {
+        const when = [row.preferredDate, row.preferredTime].filter(Boolean).join(" · ") || "No preferred time";
+        const plate = String(row.registration || "").trim();
+        return `<article class="calendar-web-row${row.seenAt ? " is-seen" : ""}">
+          <div>
+            <p><strong>${Admin.escapeHtml(row.name || "Customer")}</strong> · ${Admin.escapeHtml(row.helpWith || "Booking")}</p>
+            <small>${Admin.escapeHtml(when)}${plate ? ` · ${Admin.escapeHtml(plate)}` : ""} · ${Admin.escapeHtml(row.phone || "")}</small>
+          </div>
+          <button type="button" class="ghost" data-web-booking="${Admin.escapeAttr(row.id)}">Add to calendar</button>
+        </article>`;
+      })
+      .join("")}`;
+  }
+
+  async function loadWebBookings() {
+    try {
+      const data = await Admin.api("/api/booking-requests");
+      renderWebBookings(data.recent || data.unseen || []);
+    } catch {
+      renderWebBookings([]);
+    }
+  }
+
+  async function fromWebsiteRequest(row) {
+    const preferred = String(row.preferredDate || "").slice(0, 10);
+    const timeRaw = String(row.preferredTime || "").toLowerCase();
+    const noteBits = [
+      "Website booking request.",
+      row.preferredDate || row.preferredTime
+        ? `Preferred: ${[row.preferredDate, row.preferredTime].filter(Boolean).join(" · ")}`
+        : "",
+      row.notes ? `Customer notes: ${row.notes}` : "",
+    ].filter(Boolean);
+    await newAppointment({
+      date: /^\d{4}-\d{2}-\d{2}$/.test(preferred) ? preferred : Admin.todayIso(),
+      startTime: timeRaw.includes("afternoon") ? "13:00" : "09:00",
+      customerName: row.name || "",
+      customerPhone: row.phone || "",
+      customerEmail: row.email || "",
+      registration: row.registration || "",
+      vehicle: row.vehicle || "",
+      workSummary: row.helpWith || "",
+      notes: noteBits.join("\n"),
+      source: "website",
+    });
+  }
+
   window.DeaneCalendar = {
     showList,
     openAppointment,
     newAppointment,
+    fromWebsiteRequest,
+    renderWebBookings,
   };
 
   document.getElementById("btn-cal-prev")?.addEventListener("click", () => {
@@ -802,6 +866,26 @@
   document.getElementById("btn-cal-new")?.addEventListener("click", () =>
     newAppointment({ date: nextBookableDate(anchorDate) })
   );
+  document.getElementById("calendar-web-bookings")?.addEventListener("click", async (event) => {
+    const btn = event.target.closest("[data-web-booking]");
+    if (!btn) return;
+    const id = btn.dataset.webBooking;
+    try {
+      const data = await Admin.api("/api/booking-requests");
+      const row = (data.recent || data.unseen || []).find((item) => item.id === id);
+      if (!row) return;
+      if (!row.seenAt) {
+        await Admin.api(`/api/booking-requests/${encodeURIComponent(id)}/ack`, {
+          method: "POST",
+          body: "{}",
+        });
+      }
+      await fromWebsiteRequest(row);
+      window.DeaneBookingAlerts?.refresh?.();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
   remindTomorrowBtn?.addEventListener("click", () => sendBulkTomorrowSms());
   smsBtn?.addEventListener("click", () => {
     if (!current?.id) return;

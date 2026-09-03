@@ -23,6 +23,7 @@ const business = require("./data/business");
 const catalog = require("./data/catalog");
 const jobsLib = require("./data/jobs");
 const appointmentsLib = require("./data/appointments");
+const bookingRequestsLib = require("./data/booking-requests");
 const { buildBillingPdf, safeFilename } = require("./data/billing-pdf");
 const {
   withCustomerEmailHtml,
@@ -130,6 +131,8 @@ const CUSTOMERS_FILE = path.join(DATA_DIR, "customers.json");
 const CUSTOMERS_SEQ_FILE = path.join(DATA_DIR, "customers-seq.json");
 const JOBS_FILE = path.join(DATA_DIR, "jobs.json");
 const APPOINTMENTS_FILE = path.join(DATA_DIR, "appointments.json");
+const BOOKING_REQUESTS_FILE = path.join(DATA_DIR, "booking-requests.json");
+const BOOKING_REQUESTS_MAX = 200;
 const SUPPLIER_INVOICES_FILE = path.join(DATA_DIR, "supplier-invoices.json");
 const INVOICE_CANDIDATES_FILE = path.join(DATA_DIR, "invoice-candidates.json");
 const PART_AUDIT_FILE = path.join(DATA_DIR, "part-audit-log.json");
@@ -186,6 +189,7 @@ for (const file of [
   CUSTOMERS_FILE,
   JOBS_FILE,
   APPOINTMENTS_FILE,
+  BOOKING_REQUESTS_FILE,
   SUPPLIER_INVOICES_FILE,
   INVOICE_CANDIDATES_FILE,
   PART_AUDIT_FILE,
@@ -295,6 +299,19 @@ function readAppointments() {
 
 function writeAppointments(rows) {
   writeJsonArray(APPOINTMENTS_FILE, rows);
+}
+
+function readBookingRequests() {
+  return readJsonArray(BOOKING_REQUESTS_FILE, "booking requests").map((row) =>
+    bookingRequestsLib.normalizeBookingRequest(row, row.id || randomUUID())
+  );
+}
+
+function writeBookingRequests(rows) {
+  const sorted = [...rows].sort((a, b) =>
+    String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+  );
+  writeJsonArray(BOOKING_REQUESTS_FILE, sorted.slice(0, BOOKING_REQUESTS_MAX));
 }
 
 function syncAppointmentJobMeta(row) {
@@ -4111,24 +4128,49 @@ app.get("/api/sms-inbox", requireAdmin, (_req, res) => {
 });
 
 app.post("/api/booking", async (req, res) => {
-  if (!smtpConfigured()) {
-    return res.status(503).json({
-      error: "Booking email is not configured. Please call 0800 625 9827.",
-    });
+  if (String(req.body?._gotcha || "").trim()) {
+    return res.json({ ok: true });
   }
 
-  const name = String(req.body?.name || "").trim();
-  const email = String(req.body?.email || "").trim();
-  const phone = String(req.body?.phone || "").trim();
-  const vehicle = String(req.body?.vehicle || "").trim();
-  const registration = String(req.body?.registration || req.body?.rego || "").trim();
-  const preferredDate = String(req.body?.preferred_date || req.body?.date || "").trim();
-  const preferredTime = String(req.body?.preferred_time || req.body?.time || "").trim();
-  const helpWith = String(req.body?.help_with || req.body?.help || "").trim();
-  const notes = String(req.body?.notes || "").trim();
+  const name = bookingRequestsLib.blank(req.body?.name);
+  const email = bookingRequestsLib.blank(req.body?.email);
+  const phone = bookingRequestsLib.blank(req.body?.phone);
+  const vehicle = bookingRequestsLib.blank(req.body?.vehicle);
+  const registration = bookingRequestsLib.blank(req.body?.registration || req.body?.rego);
+  const preferredDate = bookingRequestsLib.blank(req.body?.preferred_date || req.body?.date);
+  const preferredTime = bookingRequestsLib.blank(req.body?.preferred_time || req.body?.time);
+  const helpWith = bookingRequestsLib.blank(req.body?.help_with || req.body?.help);
+  const notes = bookingRequestsLib.blank(req.body?.notes);
 
   if (!name || !email || !phone || !helpWith) {
     return res.status(400).json({ error: "Name, email, phone and service type are required." });
+  }
+
+  let saved;
+  try {
+    const rows = readBookingRequests();
+    saved = bookingRequestsLib.normalizeBookingRequest(
+      {
+        name,
+        email,
+        phone,
+        vehicle,
+        registration,
+        preferredDate,
+        preferredTime,
+        helpWith,
+        notes,
+        createdAt: nowIso(),
+      },
+      randomUUID()
+    );
+    rows.unshift(saved);
+    writeBookingRequests(rows);
+  } catch (err) {
+    console.error("Could not save booking request:", err);
+    return res.status(500).json({
+      error: "Could not save the enquiry. Please call 0800 625 9827.",
+    });
   }
 
   const subject = `Booking enquiry: ${helpWith} — ${name}`;
@@ -4144,21 +4186,66 @@ app.post("/api/booking", async (req, res) => {
     `Help with: ${helpWith}\n` +
     `Notes: ${notes || "—"}\n`;
 
+  if (smtpConfigured()) {
+    try {
+      const mailer = createMailer();
+      await mailer.sendMail({
+        from: MAIL_FROM,
+        to: business.email,
+        replyTo: email,
+        subject,
+        text,
+      });
+    } catch (err) {
+      console.error("Booking email failed (request saved for admin):", err);
+    }
+  }
+
+  res.json({ ok: true, id: saved.id });
+});
+
+app.get("/api/booking-requests", requireAdmin, (_req, res) => {
   try {
-    const mailer = createMailer();
-    await mailer.sendMail({
-      from: MAIL_FROM,
-      to: business.email,
-      replyTo: email,
-      subject,
-      text,
+    const rows = readBookingRequests();
+    const unseen = rows.filter((row) => !row.seenAt);
+    res.json({
+      unseen,
+      recent: rows.slice(0, 30),
+      unseenCount: unseen.length,
     });
-    res.json({ ok: true });
   } catch (err) {
-    console.error("Booking email failed:", err);
-    res.status(502).json({
-      error: "Could not send the enquiry. Please call 0800 625 9827.",
-    });
+    console.error("Booking requests list failed:", err);
+    res.status(500).json({ error: "Could not load booking requests." });
+  }
+});
+
+app.post("/api/booking-requests/ack-all", requireAdmin, (_req, res) => {
+  try {
+    const now = nowIso();
+    const rows = readBookingRequests().map((row) =>
+      row.seenAt ? row : { ...row, seenAt: now }
+    );
+    writeBookingRequests(rows);
+    res.json({ ok: true, unseenCount: 0 });
+  } catch (err) {
+    console.error("Booking requests ack-all failed:", err);
+    res.status(500).json({ error: "Could not mark booking requests as seen." });
+  }
+});
+
+app.post("/api/booking-requests/:id/ack", requireAdmin, (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    const rows = readBookingRequests();
+    const index = rows.findIndex((row) => row.id === id);
+    if (index < 0) return res.status(404).json({ error: "Booking request not found." });
+    if (!rows[index].seenAt) rows[index] = { ...rows[index], seenAt: nowIso() };
+    writeBookingRequests(rows);
+    const unseenCount = rows.filter((row) => !row.seenAt).length;
+    res.json({ ok: true, request: rows[index], unseenCount });
+  } catch (err) {
+    console.error("Booking request ack failed:", err);
+    res.status(500).json({ error: "Could not mark booking request as seen." });
   }
 });
 
@@ -4549,6 +4636,7 @@ app.post("/api/admin/restore-workshop", requireAdmin, (req, res) => {
     if (Array.isArray(req.body.partAuditLog)) writeJsonArray(PART_AUDIT_FILE, req.body.partAuditLog);
     if (Array.isArray(req.body.smsLog)) writeJsonArray(SMS_LOG_FILE, req.body.smsLog);
     if (Array.isArray(req.body.smsInbound)) writeJsonArray(SMS_INBOUND_FILE, req.body.smsInbound);
+    if (Array.isArray(req.body.bookingRequests)) writeBookingRequests(req.body.bookingRequests);
 
     res.json({
       ok: true,

@@ -6,6 +6,7 @@ data/customers.json
 data/customers-seq.json
 data/jobs.json
 data/appointments.json
+data/booking-requests.json
 data/supplier-invoices.json
 data/invoice-candidates.json
 data/part-audit-log.json

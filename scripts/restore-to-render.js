@@ -94,6 +94,7 @@ async function main() {
   const partAuditLog = readJson("part-audit-log.json", []);
   const smsLog = readJson("sms-log.json", []);
   const smsInbound = readJson("sms-inbound.json", []);
+  const bookingRequests = readJson("booking-requests.json", []);
   const billingSeq = readJson("billing-seq.json", null);
   const customersSeq = readJson("customers-seq.json", null);
   if (!Array.isArray(customers) || !Array.isArray(billing)) {
@@ -129,6 +130,7 @@ async function main() {
     partAuditLog,
     smsLog,
     smsInbound,
+    bookingRequests,
     billingSeq: billingSeq && typeof billingSeq === "object" ? billingSeq : undefined,
     customersSeq:
       customersSeq && typeof customersSeq === "object" ? customersSeq : undefined,

@@ -16,6 +16,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { todayIso, plusDays } = require("../data/nz-time");
 const appointmentsLib = require("../data/appointments");
+const bookingRequestsLib = require("../data/booking-requests");
 const driveBackup = require("../data/drive-backup");
 const websms = require("../data/websms");
 
@@ -119,6 +120,25 @@ function unitTests() {
   }
 
   try {
+    const row = bookingRequestsLib.normalizeBookingRequest({
+      name: "Jane",
+      preferred_date: "—",
+      preferred_time: "Morning drop-off",
+      help: "WOF",
+      notes: "—",
+    });
+    assert.equal(row.name, "Jane");
+    assert.equal(row.preferredDate, "");
+    assert.equal(row.notes, "");
+    assert.equal(row.helpWith, "WOF");
+    assert.equal(bookingRequestsLib.startTimeFromPreferred("Afternoon drop-off"), "13:00");
+    assert.equal(bookingRequestsLib.startTimeFromPreferred("Morning drop-off"), "09:00");
+    pass("website booking request normalizes blank dashes");
+  } catch (err) {
+    fail("website booking request normalizes blank dashes", err);
+  }
+
+  try {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "deane-backup-"));
     fs.writeFileSync(path.join(dir, "jobs.json"), "[]");
     fs.writeFileSync(path.join(dir, "appointments.json"), "[]");
@@ -168,6 +188,44 @@ async function integrationTests(base, dataDir) {
     pass("admin backup zip download");
   } catch (err) {
     fail("admin backup zip download", err);
+  }
+
+  try {
+    const honeypot = await api(base, "", "POST", "/api/booking", {
+      name: "Bot",
+      email: "bot@example.com",
+      phone: "0210000000",
+      help_with: "WOF",
+      _gotcha: "spam",
+    });
+    assert.equal(honeypot.res.status, 200, honeypot.data?.error || honeypot.text);
+    const created = await api(base, "", "POST", "/api/booking", {
+      name: "Smoke Booker",
+      email: "booker.smoke@example.com",
+      phone: "0219999888",
+      vehicle: "Mazda 3",
+      registration: "BK001",
+      preferred_date: "2026-09-10",
+      preferred_time: "Morning drop-off",
+      help_with: "WOF",
+      notes: "Squeaky brakes",
+    });
+    assert.equal(created.res.status, 200, created.data?.error || created.text);
+    assert.ok(created.data?.id, "missing booking request id");
+    const denied = await api(base, "", "GET", "/api/booking-requests");
+    assert.equal(denied.res.status, 401);
+    const list = await api(base, cookie, "GET", "/api/booking-requests");
+    assert.equal(list.res.status, 200, list.data?.error || list.text);
+    assert.equal(list.data.unseenCount, 1);
+    assert.equal(list.data.unseen[0].name, "Smoke Booker");
+    assert.equal(list.data.unseen[0].helpWith, "WOF");
+    const ack = await api(base, cookie, "POST", `/api/booking-requests/${created.data.id}/ack`, {});
+    assert.equal(ack.res.status, 200, ack.data?.error || ack.text);
+    const after = await api(base, cookie, "GET", "/api/booking-requests");
+    assert.equal(after.data.unseenCount, 0);
+    pass("website booking request saved and admin popup ack");
+  } catch (err) {
+    fail("website booking request saved and admin popup ack", err);
   }
 
   // --- Customers: same email OK, duplicate plate blocked ---

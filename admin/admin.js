@@ -54,6 +54,15 @@ function showStatus(msg) {
 function showApp() {
   loginView.hidden = true;
   app.hidden = false;
+  window.DeaneBookingAlerts?.start?.();
+}
+
+function showLogin() {
+  window.DeaneBookingAlerts?.stop?.();
+  loginView.hidden = false;
+  app.hidden = true;
+  const pinInput = document.getElementById("pin");
+  if (pinInput) pinInput.value = "";
 }
 
 function todayOverline() {
@@ -440,13 +449,6 @@ window.DeaneAdmin = {
     }, 2500);
   },
 };
-
-function showLogin() {
-  loginView.hidden = false;
-  app.hidden = true;
-  const pinInput = document.getElementById("pin");
-  if (pinInput) pinInput.value = "";
-}
 
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();

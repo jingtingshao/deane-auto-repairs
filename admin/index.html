@@ -12,7 +12,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="admin.css?v=20260902backupfoot" />
-    <link rel="stylesheet" href="admin-refresh.css?v=20260826greencomplete" />
+    <link rel="stylesheet" href="admin-refresh.css?v=20260904bookalert" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -36,7 +36,7 @@
         </button>
         <nav>
           <button type="button" id="nav-dashboard" class="active"><b>▦</b> Today</button>
-          <button type="button" id="nav-calendar"><b>▣</b> Calendar</button>
+          <button type="button" id="nav-calendar"><b>▣</b> Calendar <i id="nav-calendar-count" hidden>0</i></button>
           <button type="button" id="nav-jobs"><b>▤</b> Job board <i id="nav-jobs-count" hidden>0</i></button>
           <button type="button" id="nav-supplier-invoices"><b>◫</b> Parts invoices</button>
           <button type="button" id="nav-quotes"><b>$</b> Quotes <i id="nav-quotes-count" hidden>0</i></button>
@@ -209,6 +209,7 @@
               <button type="button" id="btn-cal-remind-tomorrow" class="ghost" hidden>Remind tomorrow</button>
               <button type="button" id="btn-cal-new" class="primary">+ New appointment</button>
             </div>
+            <div id="calendar-web-bookings" class="calendar-web-bookings" hidden></div>
             <div id="calendar-board" class="calendar-board"></div>
           </section>
 
@@ -782,13 +783,32 @@
       </main>
     </div>
 
-    <script src="admin.js?v=20260902sentence"></script>
+    <div
+      id="booking-alert"
+      class="booking-alert"
+      hidden
+      role="alertdialog"
+      aria-labelledby="booking-alert-title"
+      aria-modal="true"
+    >
+      <div class="booking-alert-card">
+        <p class="booking-alert-kicker">WEBSITE</p>
+        <h2 id="booking-alert-title">NEW BOOKING</h2>
+        <div id="booking-alert-list"></div>
+        <div class="booking-alert-actions">
+          <button type="button" id="booking-alert-ok" class="primary">Got it</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="admin.js?v=20260904bookalert"></script>
     <script src="dashboard.js?v=20260902backupfoot"></script>
-    <script src="calendar.js?v=20260830needrs"></script>
+    <script src="calendar.js?v=20260904bookalert"></script>
     <script src="jobs.js?v=20260902sentence"></script>
     <script src="supplier-invoices.js?v=20260829nopreview"></script>
     <script src="billing.js?v=20260902sentence"></script>
     <script src="customers.js?v=20260830oneplate"></script>
     <script src="sms-inbox.js?v=20260830yesno"></script>
+    <script src="booking-alerts.js?v=20260904bookalert"></script>
   </body>
 </html>
