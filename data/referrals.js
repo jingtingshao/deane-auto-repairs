@@ -85,16 +85,24 @@ function customerHasPriorPaidWork(customerId, billingDocs, jobs, options = {}) {
   return false;
 }
 
+/** How many referral rewards this person has already generated as the new customer. */
+function countReferralRewardsForReferred(storeRows, customerId) {
+  const id = String(customerId || "").trim();
+  if (!id) return 0;
+  let count = 0;
+  for (const row of storeRows || []) {
+    if (row.type !== "referral") continue;
+    if (row.referredCustomerId !== id) continue;
+    // Qualified, or any referral that already issued a credit (even if later cancelled).
+    if (row.status === "qualified" || row.creditId) count += 1;
+  }
+  return count;
+}
+
 /** Already used as the "new customer" on a rewarded referral — cannot earn again. */
 function customerAlreadyRewardedAsReferred(storeRows, customerId) {
-  const id = String(customerId || "").trim();
-  if (!id) return false;
-  return (storeRows || []).some(
-    (row) =>
-      row.type === "referral" &&
-      row.referredCustomerId === id &&
-      (row.status === "qualified" || Boolean(row.creditId))
-  );
+  const max = Number(rules.maxRewardsPerReferredCustomer) || 1;
+  return countReferralRewardsForReferred(storeRows, customerId) >= max;
 }
 
 /** True if this person cannot be registered / rewarded as a new referred customer. */
@@ -319,6 +327,13 @@ function cancelReferral(storeRows, referralId) {
 }
 
 function issueCreditForReferral(rows, referral, invoiceId) {
+  if (customerAlreadyRewardedAsReferred(rows, referral.referredCustomerId)) {
+    const err = new Error(
+      "This new customer has already generated a referral reward."
+    );
+    err.status = 400;
+    throw err;
+  }
   const issuedAt = nowIso();
   const credit = normalizeCredit({
     ownerCustomerId: referral.referrerCustomerId,
@@ -574,6 +589,7 @@ module.exports = {
   isInvoicePaidForReferral,
   isQualifyingPaidInvoice,
   customerHasPriorPaidWork,
+  countReferralRewardsForReferred,
   customerAlreadyRewardedAsReferred,
   isExistingCustomerForReferral,
   findFirstQualifyingInvoice,
