@@ -21,6 +21,69 @@ function sentenceCase(value) {
   return lower.charAt(0).toLocaleUpperCase("en-NZ") + lower.slice(1);
 }
 
+/** Keep in sync with data/names.js */
+function capitalizeGivenName(value) {
+  return String(value || "").replace(/[A-Za-zÀ-ÿ]+/g, (word) => {
+    const lower = word.toLocaleLowerCase("en-NZ");
+    return lower.charAt(0).toLocaleUpperCase("en-NZ") + lower.slice(1);
+  });
+}
+
+function uppercaseFamilyName(value) {
+  return String(value || "").toLocaleUpperCase("en-NZ");
+}
+
+function capitalizeVehicleDescription(value) {
+  return capitalizeGivenName(value);
+}
+
+function formatFullCustomerName(value) {
+  const raw = String(value || "");
+  const trailing = raw.match(/\s+$/)?.[0] || "";
+  const body = trailing ? raw.slice(0, -trailing.length) : raw;
+  if (!body) return raw;
+  const parts = body.split(/(\s+)/);
+  const wordIndexes = [];
+  parts.forEach((part, index) => {
+    if (part && !/^\s+$/.test(part)) wordIndexes.push(index);
+  });
+  if (!wordIndexes.length) return raw;
+  if (wordIndexes.length === 1) {
+    parts[wordIndexes[0]] = capitalizeGivenName(parts[wordIndexes[0]]);
+  } else {
+    const lastIndex = wordIndexes.pop();
+    wordIndexes.forEach((index) => {
+      parts[index] = capitalizeGivenName(parts[index]);
+    });
+    parts[lastIndex] = uppercaseFamilyName(parts[lastIndex]);
+  }
+  return parts.join("") + trailing;
+}
+
+function applyLiveTransform(input, transform) {
+  if (!input) return;
+  const start = input.selectionStart;
+  const end = input.selectionEnd;
+  const next = transform(input.value);
+  if (next === input.value) return;
+  input.value = next;
+  try {
+    input.setSelectionRange(start, end);
+  } catch {
+    /* some input types do not support selection */
+  }
+}
+
+function sentenceCaseLive(value) {
+  const raw = String(value || "");
+  const match = raw.match(/^(\s*)(.*?)(\s*)$/);
+  if (!match) return raw;
+  const [, lead, body, trail] = match;
+  if (!body) return raw;
+  const lower = body.toLocaleLowerCase("en-NZ");
+  return lead + lower.charAt(0).toLocaleUpperCase("en-NZ") + lower.slice(1) + trail;
+}
+
 let current = null;
 let checklistMeta = null;
 let reportDocs = [];
@@ -222,6 +285,13 @@ window.DeaneAdmin = {
   confirmPublicCustomerLink,
   formatDateShort,
   formatDateTimeShort,
+  sentenceCase,
+  capitalizeGivenName,
+  uppercaseFamilyName,
+  capitalizeVehicleDescription,
+  formatFullCustomerName,
+  applyLiveTransform,
+  sentenceCaseLive,
   NZ_TZ: "Pacific/Auckland",
   todayIso() {
     return new Intl.DateTimeFormat("en-CA", {
@@ -435,13 +505,18 @@ window.DeaneAdmin = {
       return;
     }
     set("customerId", row.customerId || row.id || "");
-    set("customerName", [row.firstName, row.lastName].filter(Boolean).join(" ") || row.customerName);
+    set(
+      "customerName",
+      formatFullCustomerName(
+        [row.firstName, row.lastName].filter(Boolean).join(" ") || row.customerName || ""
+      )
+    );
     set("customerEmail", row.customerEmail);
     set("customerPhone", row.customerPhone);
     if (vehicle) {
       set("vehicleId", vehicle.id || vehicle.registration || "");
-      set("registration", vehicle.registration);
-      set("vehicle", vehicle.vehicle);
+      set("registration", String(vehicle.registration || "").toUpperCase());
+      set("vehicle", capitalizeVehicleDescription(vehicle.vehicle || ""));
     } else {
       set("vehicleId", "");
       set("registration", "");

@@ -401,11 +401,11 @@ function fillForm(job) {
   set("jobNumber", job.number);
   set("status", job.status || "in_progress");
   set("technicianName", job.technicianName);
-  set("customerName", job.customerName);
+  set("customerName", Admin.formatFullCustomerName(job.customerName || ""));
   set("customerEmail", job.customerEmail);
   set("customerPhone", job.customerPhone);
   set("registration", String(job.registration || "").toUpperCase());
-  set("vehicle", job.vehicle);
+  set("vehicle", Admin.capitalizeVehicleDescription(job.vehicle || ""));
   set("odometer", job.odometer);
   set("workRequested", job.workRequested);
   set("notes", job.notes);
@@ -560,11 +560,11 @@ function collectJob() {
   return {
     status: jobInput("status")?.value || "in_progress",
     technicianName: value("technicianName"),
-    customerName: value("customerName"),
+    customerName: Admin.formatFullCustomerName(value("customerName")),
     customerEmail: value("customerEmail"),
     customerPhone: value("customerPhone"),
     registration: value("registration").toUpperCase(),
-    vehicle: value("vehicle"),
+    vehicle: Admin.capitalizeVehicleDescription(value("vehicle")),
     odometer: value("odometer"),
     workRequested: sentenceCase(jobInput("workRequested")?.value || ""),
     notes: sentenceCase(jobInput("notes")?.value || ""),
@@ -815,17 +815,11 @@ document.getElementById("btn-job-add-appointment")?.addEventListener("click", as
 jobsForm?.addEventListener("input", (e) => {
   const el = e.target;
   if (el?.id === "job-registration" || el?.name === "registration") {
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const next = String(el.value || "").toUpperCase();
-    if (next !== el.value) {
-      el.value = next;
-      try {
-        el.setSelectionRange(start, end);
-      } catch {
-        /* ignore */
-      }
-    }
+    Admin.applyLiveTransform(el, (value) => String(value || "").toUpperCase());
+  } else if (el?.id === "job-customer-name" || el?.name === "customerName") {
+    Admin.applyLiveTransform(el, Admin.formatFullCustomerName);
+  } else if (el?.id === "job-vehicle" || el?.name === "vehicle") {
+    Admin.applyLiveTransform(el, Admin.capitalizeVehicleDescription);
   }
   scheduleJobAutosave();
 });

@@ -350,11 +350,11 @@
       const el = form.elements.namedItem(field);
       if (el) el.value = value ?? "";
     };
-    set("customerName", name);
+    set("customerName", Admin.formatFullCustomerName(name));
     set("customerPhone", hit.row.customerPhone || "");
     set("customerEmail", hit.row.customerEmail || "");
     set("registration", String(hit.vehicle?.registration || "").toUpperCase());
-    set("vehicle", hit.vehicle?.vehicle || "");
+    set("vehicle", Admin.capitalizeVehicleDescription(hit.vehicle?.vehicle || ""));
     if (customerIdInput) customerIdInput.value = hit.row.customerId || "";
     if (partyFind) partyFind.value = hit.vehicle?.registration || name;
     setPartyFindStatus(
@@ -634,13 +634,13 @@
     set("date", dateValue);
     set("durationMinutes", String(row.durationMinutes || 120));
     set("status", row.status || "booked");
-    set("customerName", row.customerName || "");
+    set("customerName", Admin.formatFullCustomerName(row.customerName || ""));
     set("customerPhone", row.customerPhone || "");
     set("customerEmail", row.customerEmail || "");
-    set("registration", row.registration || "");
-    set("vehicle", row.vehicle || "");
-    set("workSummary", row.workSummary || "");
-    set("notes", row.notes || "");
+    set("registration", String(row.registration || "").toUpperCase());
+    set("vehicle", Admin.capitalizeVehicleDescription(row.vehicle || ""));
+    set("workSummary", Admin.sentenceCase(row.workSummary || ""));
+    set("notes", Admin.sentenceCase(row.notes || ""));
     if (customerIdInput) customerIdInput.value = row.customerId || "";
     if (partyFind) partyFind.value = row.registration || row.customerName || "";
     setPartyFindStatus("");
@@ -672,13 +672,13 @@
       durationMinutes: Number(value("durationMinutes")) || 120,
       status: value("status") || "booked",
       customerId,
-      customerName: value("customerName"),
+      customerName: Admin.formatFullCustomerName(value("customerName")),
       customerPhone: value("customerPhone"),
       customerEmail: value("customerEmail"),
       registration: value("registration").toUpperCase(),
-      vehicle: value("vehicle"),
-      workSummary: value("workSummary"),
-      notes: value("notes"),
+      vehicle: Admin.capitalizeVehicleDescription(value("vehicle")),
+      workSummary: Admin.sentenceCase(value("workSummary")),
+      notes: Admin.sentenceCase(value("notes")),
       jobId: value("jobId"),
       source: current?.source || "manual",
       bookingSmsReminderSentAt: current?.bookingSmsReminderSentAt || "",
@@ -979,7 +979,15 @@
   });
   form?.addEventListener("input", (event) => {
     updateEndPreview();
-    const name = event.target?.name;
+    const el = event.target;
+    const name = el?.name;
+    if (name === "customerName") Admin.applyLiveTransform(el, Admin.formatFullCustomerName);
+    else if (name === "vehicle") Admin.applyLiveTransform(el, Admin.capitalizeVehicleDescription);
+    else if (name === "workSummary" || name === "notes") {
+      Admin.applyLiveTransform(el, Admin.sentenceCaseLive);
+    } else if (name === "registration") {
+      Admin.applyLiveTransform(el, (value) => String(value || "").toUpperCase());
+    }
     if (
       customerIdInput?.value &&
       (name === "customerName" ||
@@ -1013,11 +1021,6 @@
         dateEl.reportValidity();
       }
     }
-  });
-  form?.elements?.namedItem?.("registration")?.addEventListener("input", (e) => {
-    const el = e.target;
-    const next = String(el.value || "").toUpperCase();
-    if (next !== el.value) el.value = next;
   });
   partyFind?.addEventListener("input", () => {
     if (customerIdInput) customerIdInput.value = "";

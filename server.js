@@ -21,6 +21,7 @@ const {
 } = require("./data/checklist");
 const business = require("./data/business");
 const catalog = require("./data/catalog");
+const namesLib = require("./data/names");
 const jobsLib = require("./data/jobs");
 const appointmentsLib = require("./data/appointments");
 const bookingRequestsLib = require("./data/booking-requests");
@@ -775,6 +776,8 @@ function customerFieldsForJob(source = {}) {
     }
   }
 
+  fields.customerName = namesLib.formatFullCustomerName(fields.customerName);
+  fields.vehicle = namesLib.capitalizeVehicleDescription(fields.vehicle);
   return fields;
 }
 
@@ -792,7 +795,10 @@ function applyCustomerFieldsToJob(job, fields, overwrite = false) {
     if (!next) continue;
     const cur = String(job[key] || "").trim();
     if (!overwrite && cur) continue;
-    const value = key === "registration" ? next.toUpperCase() : next;
+    let value = next;
+    if (key === "registration") value = next.toUpperCase();
+    else if (key === "customerName") value = namesLib.formatFullCustomerName(next);
+    else if (key === "vehicle") value = namesLib.capitalizeVehicleDescription(next);
     if (value !== cur) {
       job[key] = value;
       changed = true;
@@ -994,7 +1000,9 @@ function applyJobFields(job, body = {}) {
     readyAt,
     collectedAt,
     customerName:
-      body.customerName != null ? String(body.customerName).trim() : job.customerName,
+      body.customerName != null
+        ? namesLib.formatFullCustomerName(String(body.customerName).trim())
+        : job.customerName,
     customerEmail:
       body.customerEmail != null ? String(body.customerEmail).trim() : job.customerEmail,
     customerPhone:
@@ -1004,7 +1012,10 @@ function applyJobFields(job, body = {}) {
     )
       .trim()
       .toUpperCase(),
-    vehicle: body.vehicle != null ? String(body.vehicle).trim() : job.vehicle,
+    vehicle:
+      body.vehicle != null
+        ? namesLib.capitalizeVehicleDescription(String(body.vehicle).trim())
+        : job.vehicle,
     odometer: body.odometer != null ? String(body.odometer).trim() : job.odometer,
     workRequested:
       body.workRequested != null
@@ -2014,7 +2025,9 @@ function normalizeVehicles(body = {}, current = {}) {
     vehicles.push({
       id: row.id || prev?.id || randomUUID(),
       registration,
-      vehicle: capitalizePersonName(String(row?.vehicle || prev?.vehicle || "").trim()),
+      vehicle: namesLib.capitalizeVehicleDescription(
+        String(row?.vehicle || prev?.vehicle || "").trim()
+      ),
       wofExpiry: String(row?.wofExpiry || prev?.wofExpiry || "").trim(),
       wofReminderSentAt: String(row?.wofReminderSentAt || prev?.wofReminderSentAt || "").trim(),
       wofSmsReminderSentAt: String(
@@ -2042,13 +2055,6 @@ function composeCustomerName(firstName, lastName, fallback = "") {
   return joined || String(fallback || "").trim();
 }
 
-function capitalizePersonName(value) {
-  return String(value || "").replace(
-    /(^|[\s-])(\S)/g,
-    (_, sep, ch) => sep + ch.toLocaleUpperCase("en-NZ")
-  );
-}
-
 function namesFromCustomer(row = {}) {
   let firstName = String(row.firstName || "").trim();
   let lastName = String(row.lastName || "").trim();
@@ -2057,8 +2063,8 @@ function namesFromCustomer(row = {}) {
     firstName = split.firstName;
     lastName = split.lastName;
   }
-  firstName = capitalizePersonName(firstName);
-  lastName = capitalizePersonName(lastName);
+  firstName = namesLib.capitalizeGivenName(firstName);
+  lastName = namesLib.uppercaseFamilyName(lastName);
   return {
     firstName,
     lastName,
@@ -2214,7 +2220,7 @@ function upsertCustomerFromParty(party = {}) {
   const phone = String(party.customerPhone || "").trim();
   const email = String(party.customerEmail || "").trim();
   const registration = String(party.registration || "").trim().toUpperCase();
-  const vehicleDesc = capitalizePersonName(String(party.vehicle || "").trim());
+  const vehicleDesc = namesLib.capitalizeVehicleDescription(String(party.vehicle || "").trim());
   if (!registration) {
     // Need a plate to create a durable customer record.
     return { customerId: String(party.customerId || "").trim(), created: false, linked: false };

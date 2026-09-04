@@ -105,28 +105,7 @@ function wofLabel(row) {
 function displayName(row) {
   const names = namesFromRow(row);
   const joined = [names.firstName, names.lastName].filter(Boolean).join(" ").trim();
-  return joined || capitalizePersonName(String(row.customerName || "").trim());
-}
-
-function capitalizePersonName(value) {
-  return String(value || "").replace(
-    /(^|[\s-])(\S)/g,
-    (_, sep, ch) => sep + ch.toLocaleUpperCase("en-NZ")
-  );
-}
-
-function applyLiveTransform(input, transform) {
-  if (!input) return;
-  const start = input.selectionStart;
-  const end = input.selectionEnd;
-  const next = transform(input.value);
-  if (next === input.value) return;
-  input.value = next;
-  try {
-    input.setSelectionRange(start, end);
-  } catch {
-    /* some input types do not support selection */
-  }
+  return joined || Admin.formatFullCustomerName(String(row.customerName || "").trim());
 }
 
 function namesFromRow(row) {
@@ -134,8 +113,8 @@ function namesFromRow(row) {
   const last = String(row?.lastName || "").trim();
   if (first || last) {
     return {
-      firstName: capitalizePersonName(first),
-      lastName: capitalizePersonName(last),
+      firstName: Admin.capitalizeGivenName(first),
+      lastName: Admin.uppercaseFamilyName(last),
     };
   }
   const parts = String(row?.customerName || "")
@@ -143,8 +122,8 @@ function namesFromRow(row) {
     .split(/\s+/)
     .filter(Boolean);
   return {
-    firstName: capitalizePersonName(parts[0] || ""),
-    lastName: capitalizePersonName(parts.slice(1).join(" ")),
+    firstName: Admin.capitalizeGivenName(parts[0] || ""),
+    lastName: Admin.uppercaseFamilyName(parts.slice(1).join(" ")),
   };
 }
 
@@ -538,6 +517,12 @@ function renderCustomers() {
 function bindCustomersListOnce() {
   if (!customersList || customersListBound) return;
   customersListBound = true;
+  customersList.addEventListener("input", (event) => {
+    const el = event.target;
+    const field = el?.getAttribute?.("data-inline");
+    if (field === "firstName") Admin.applyLiveTransform(el, Admin.capitalizeGivenName);
+    if (field === "lastName") Admin.applyLiveTransform(el, Admin.uppercaseFamilyName);
+  });
   customersList.addEventListener("click", (event) => {
     const showAll = event.target.closest("#btn-customers-show-all");
     if (showAll) {
@@ -635,8 +620,8 @@ async function saveInlineCustomer(customerId, btn) {
     return;
   }
   const read = (field) => String(rowEl.querySelector(`[data-inline="${field}"]`)?.value || "").trim();
-  const firstName = capitalizePersonName(read("firstName"));
-  const lastName = capitalizePersonName(read("lastName"));
+  const firstName = Admin.capitalizeGivenName(read("firstName"));
+  const lastName = Admin.uppercaseFamilyName(read("lastName"));
   const customerPhone = read("customerPhone");
   const customerEmail = read("customerEmail");
   const customerAddress = read("customerAddress");
@@ -743,8 +728,8 @@ function showCustomerForm(row = null) {
   const address = document.getElementById("customer-address");
   const phone = document.getElementById("customer-phone");
   const email = document.getElementById("customer-email");
-  if (first) first.value = capitalizePersonName(names.firstName);
-  if (last) last.value = capitalizePersonName(names.lastName);
+  if (first) first.value = Admin.capitalizeGivenName(names.firstName);
+  if (last) last.value = Admin.uppercaseFamilyName(names.lastName);
   if (address) address.value = row?.customerAddress || "";
   if (phone) phone.value = row?.customerPhone || "";
   if (email) email.value = row?.customerEmail || "";
@@ -808,7 +793,7 @@ function renderVehicleRows(vehicles) {
         </label>
         <label>
           Vehicle
-          <input class="vehicle-desc" value="${Admin.escapeAttr(capitalizePersonName(row.vehicle || ""))}" placeholder="e.g. Toyota Camry" autocapitalize="words" />
+          <input class="vehicle-desc" value="${Admin.escapeAttr(Admin.capitalizeVehicleDescription(row.vehicle || ""))}" placeholder="e.g. Toyota Camry" autocapitalize="words" />
         </label>
       </div>`;
 }
@@ -821,7 +806,7 @@ function collectVehiclesFromForm() {
     registration: String(row.querySelector(".vehicle-rego")?.value || "")
       .trim()
       .toUpperCase(),
-    vehicle: capitalizePersonName(String(row.querySelector(".vehicle-desc")?.value || "").trim()),
+    vehicle: Admin.capitalizeVehicleDescription(String(row.querySelector(".vehicle-desc")?.value || "").trim()),
   }));
 }
 
@@ -852,10 +837,10 @@ async function saveCustomer(event) {
   const status = document.getElementById("customer-save-status");
   const vehicles = collectVehiclesFromForm().filter((v) => v.registration).slice(0, 1);
   const body = {
-    firstName: capitalizePersonName(
+    firstName: Admin.capitalizeGivenName(
       (document.getElementById("customer-first-name")?.value || "").trim()
     ),
-    lastName: capitalizePersonName(
+    lastName: Admin.uppercaseFamilyName(
       (document.getElementById("customer-last-name")?.value || "").trim()
     ),
     customerAddress: (document.getElementById("customer-address")?.value || "").trim(),
@@ -1148,18 +1133,18 @@ document.getElementById("btn-wof-sms-remind-all")?.addEventListener("click", () 
 });
 
 document.getElementById("customer-first-name")?.addEventListener("input", (e) => {
-  applyLiveTransform(e.target, capitalizePersonName);
+  Admin.applyLiveTransform(e.target, Admin.capitalizeGivenName);
 });
 document.getElementById("customer-last-name")?.addEventListener("input", (e) => {
-  applyLiveTransform(e.target, capitalizePersonName);
+  Admin.applyLiveTransform(e.target, Admin.uppercaseFamilyName);
 });
 document.getElementById("customer-vehicles")?.addEventListener("input", (e) => {
   if (e.target.classList.contains("vehicle-rego")) {
-    applyLiveTransform(e.target, (value) => String(value || "").toUpperCase());
+    Admin.applyLiveTransform(e.target, (value) => String(value || "").toUpperCase());
     return;
   }
   if (e.target.classList.contains("vehicle-desc")) {
-    applyLiveTransform(e.target, capitalizePersonName);
+    Admin.applyLiveTransform(e.target, Admin.capitalizeVehicleDescription);
   }
 });
 

@@ -1,4 +1,5 @@
-/** Workshop appointments — schedule slots that may or may not link to a job. */
+const catalog = require("./catalog");
+const namesLib = require("./names");
 
 const APPOINTMENT_STATUSES = [
   { id: "booked", label: "Booked" },
@@ -114,15 +115,15 @@ function normalizeAppointment(row = {}, idFallback = "") {
     endTime: endTimeFromStart(startTime, durationMinutes),
     status,
     customerId: String(row.customerId || "").trim(),
-    customerName: String(row.customerName || "").trim(),
+    customerName: namesLib.formatFullCustomerName(String(row.customerName || "").trim()),
     customerPhone: String(row.customerPhone || "").trim(),
     customerEmail: String(row.customerEmail || "").trim(),
     registration: String(row.registration || "")
       .trim()
       .toUpperCase(),
-    vehicle: String(row.vehicle || "").trim(),
-    workSummary: String(row.workSummary || "").trim(),
-    notes: String(row.notes || "").trim(),
+    vehicle: namesLib.capitalizeVehicleDescription(String(row.vehicle || "").trim()),
+    workSummary: catalog.capitalizeLineDescription(row.workSummary),
+    notes: catalog.capitalizeLineDescription(row.notes),
     jobId: String(row.jobId || "").trim(),
     jobNumber: String(row.jobNumber || "").trim(),
     source,
