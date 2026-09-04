@@ -39,6 +39,7 @@ const {
 const { readJsonArray, writeJsonArray } = require("./data/json-store");
 const { blockedStaticPath, safeUploadPath, UPLOAD_EXTS } = require("./data/static-guard");
 const { todayIso, plusDays, nowIso, monthKey, monthShortLabel, monthLongLabel } = require("./data/nz-time");
+const referralsLib = require("./data/referrals");
 const driveBackup = require("./data/drive-backup");
 const websms = require("./data/websms");
 
@@ -138,6 +139,7 @@ const INVOICE_CANDIDATES_FILE = path.join(DATA_DIR, "invoice-candidates.json");
 const PART_AUDIT_FILE = path.join(DATA_DIR, "part-audit-log.json");
 const SMS_INBOUND_FILE = path.join(DATA_DIR, "sms-inbound.json");
 const SMS_LOG_FILE = path.join(DATA_DIR, "sms-log.json");
+const REFERRALS_FILE = path.join(DATA_DIR, "referrals.json");
 const UPLOADS_DIR = (() => {
   const raw = String(process.env.UPLOADS_DIR || "").trim();
   if (raw && isWritableDir(path.resolve(raw))) return path.resolve(raw);
@@ -195,8 +197,54 @@ for (const file of [
   PART_AUDIT_FILE,
   SMS_INBOUND_FILE,
   SMS_LOG_FILE,
+  REFERRALS_FILE,
 ]) {
   if (!fs.existsSync(file)) writeJsonArray(file, []);
+}
+
+function readReferrals() {
+  const rows = referralsLib.readNormalized(readJsonArray(REFERRALS_FILE, "referrals"));
+  if (referralsLib.expireCreditsInPlace(rows)) {
+    try {
+      writeReferrals(rows);
+    } catch (err) {
+      console.error("Could not expire referral credits:", err);
+    }
+  }
+  return rows;
+}
+
+function writeReferrals(rows) {
+  writeJsonArray(REFERRALS_FILE, referralsLib.readNormalized(rows));
+}
+
+function customerNameMap() {
+  const map = new Map();
+  for (const row of readSavedCustomers()) {
+    map.set(row.id, row);
+  }
+  return map;
+}
+
+function billingIdMap(docs) {
+  const map = new Map();
+  for (const doc of docs || []) {
+    if (doc?.id) map.set(doc.id, doc);
+  }
+  return map;
+}
+
+function persistQualifiedReferrals(customerId, billingDocs) {
+  const id = String(customerId || "").trim();
+  if (!id) return [];
+  const result = referralsLib.tryQualifyReferrals(
+    readReferrals(),
+    billingDocs,
+    id,
+    readJobs()
+  );
+  if (result.changed) writeReferrals(result.rows);
+  return result.qualified || [];
 }
 
 function readReports() {
@@ -3063,7 +3111,9 @@ function normalizeInvoicePayment(doc, body = {}, totals) {
   const amountPaid = catalog.round2(
     payments.reduce((sum, row) => sum + row.amount, 0)
   );
-  const paymentStatus = derivePaymentStatus(amountPaid, totalIncl);
+  const referralCreditTotal = referralsLib.referralCreditTotal(doc);
+  const covered = catalog.round2(amountPaid + referralCreditTotal);
+  const paymentStatus = derivePaymentStatus(covered, totalIncl);
   const last = payments[payments.length - 1];
   return {
     payments,
@@ -3071,7 +3121,8 @@ function normalizeInvoicePayment(doc, body = {}, totals) {
     amountPaid,
     paidAt: last?.paidAt || "",
     paymentNote: last?.note || "",
-    balanceDue: catalog.round2(Math.max(0, totalIncl - amountPaid)),
+    referralCreditTotal,
+    balanceDue: catalog.round2(Math.max(0, totalIncl - covered)),
   };
 }
 
@@ -3292,6 +3343,10 @@ function withBillingTotals(doc, isAdmin) {
     payload.paidAt = payment.paidAt;
     payload.paymentNote = payment.paymentNote;
     payload.balanceDue = payment.balanceDue;
+    payload.referralCreditsApplied = referralsLib.normalizeAppliedRows(
+      doc.referralCreditsApplied
+    );
+    payload.referralCreditTotal = payment.referralCreditTotal || 0;
   }
   if (!isAdmin) {
     delete payload.acceptToken;
@@ -4454,6 +4509,175 @@ app.delete("/api/customers/:id", requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/api/referrals/rules", requireAdmin, (_req, res) => {
+  res.json({ ...referralsLib.rules });
+});
+
+app.get("/api/referrals", requireAdmin, (req, res) => {
+  try {
+    const rows = readReferrals();
+    const status = String(req.query.status || "").trim();
+    const customerId = String(req.query.customerId || "").trim();
+    let list = referralsLib.enrichReferralList(
+      rows,
+      customerNameMap(),
+      billingIdMap(readBilling())
+    );
+    if (status) list = list.filter((row) => row.status === status);
+    if (customerId) {
+      list = list.filter(
+        (row) =>
+          row.referrerCustomerId === customerId ||
+          row.referredCustomerId === customerId
+      );
+    }
+    res.json(list);
+  } catch (err) {
+    console.error("Referrals list failed:", err);
+    res.status(err.status || 500).json({ error: err.message || "Could not load referrals." });
+  }
+});
+
+app.post("/api/referrals", requireAdmin, (req, res) => {
+  try {
+    const result = referralsLib.createReferral({
+      referrerCustomerId: req.body?.referrerCustomerId,
+      referredCustomerId: req.body?.referredCustomerId,
+      notes: req.body?.notes,
+      billingDocs: readBilling(),
+      jobs: readJobs(),
+      storeRows: readReferrals(),
+    });
+    writeReferrals(result.rows);
+    const enriched = referralsLib.enrichReferralList(
+      result.rows,
+      customerNameMap(),
+      billingIdMap(readBilling())
+    ).find((row) => row.id === result.referral.id);
+    res.status(result.rejected ? 200 : 201).json({
+      referral: enriched || result.referral,
+      rejected: Boolean(result.rejected),
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post("/api/referrals/:id/cancel", requireAdmin, (req, res) => {
+  try {
+    const result = referralsLib.cancelReferral(readReferrals(), req.params.id);
+    writeReferrals(result.rows);
+    res.json({ ok: true, referral: result.referral });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.get("/api/referral-credits", requireAdmin, (req, res) => {
+  try {
+    const customerId = String(req.query.customerId || "").trim();
+    const rows = readReferrals();
+    if (customerId) {
+      return res.json(referralsLib.creditBalanceSummary(rows, customerId));
+    }
+    const owners = new Map();
+    for (const row of rows) {
+      if (row.type !== "credit") continue;
+      if (!owners.has(row.ownerCustomerId)) owners.set(row.ownerCustomerId, true);
+    }
+    const names = customerNameMap();
+    const list = [...owners.keys()].map((id) => {
+      const summary = referralsLib.creditBalanceSummary(rows, id);
+      const customer = names.get(id);
+      return {
+        ...summary,
+        customerName: customer?.customerName || "",
+      };
+    });
+    res.json(list);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || "Could not load credits." });
+  }
+});
+
+app.post("/api/billing/:id/apply-referral-credits", requireAdmin, (req, res) => {
+  try {
+    const docs = readBilling();
+    const index = docs.findIndex((d) => d.id === req.params.id);
+    if (index < 0) return res.status(404).json({ error: billingMissingError() });
+    const result = referralsLib.applyCreditsToInvoice({
+      storeRows: readReferrals(),
+      invoice: docs[index],
+      creditIds: req.body?.creditIds,
+    });
+    writeReferrals(result.rows);
+    const totals = catalog.computeTotals(result.invoice.lines || []);
+    const payment = normalizeInvoicePayment(result.invoice, {}, totals);
+    result.invoice.paymentStatus = payment.paymentStatus;
+    result.invoice.amountPaid = payment.amountPaid;
+    result.invoice.paidAt = payment.paidAt;
+    result.invoice.paymentNote = payment.paymentNote;
+    ensureHistory(result.invoice);
+    appendHistory(result.invoice, {
+      type: "referral_credit",
+      summary: "Referral credit applied",
+      detail: `${result.appliedAmount.toFixed(2)} from referral credits`,
+      amount: result.appliedAmount,
+    });
+    docs[index] = result.invoice;
+    writeBilling(docs);
+    if (payment.paymentStatus === "paid" && result.invoice.customerId) {
+      try {
+        persistQualifiedReferrals(result.invoice.customerId, docs);
+      } catch (err) {
+        console.error("Could not qualify referrals after credit apply:", err);
+      }
+    }
+    res.json({
+      ok: true,
+      appliedAmount: result.appliedAmount,
+      referralCreditTotal: result.referralCreditTotal,
+      doc: withBillingTotals(docs[index], true),
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post("/api/billing/:id/remove-referral-credits", requireAdmin, (req, res) => {
+  try {
+    const docs = readBilling();
+    const index = docs.findIndex((d) => d.id === req.params.id);
+    if (index < 0) return res.status(404).json({ error: billingMissingError() });
+    const result = referralsLib.removeCreditsFromInvoice({
+      storeRows: readReferrals(),
+      invoice: docs[index],
+    });
+    writeReferrals(result.rows);
+    if (result.removedAmount > 0) {
+      ensureHistory(result.invoice);
+      appendHistory(result.invoice, {
+        type: "referral_credit_removed",
+        summary: "Referral credit removed",
+        amount: result.removedAmount,
+      });
+    }
+    const totals = catalog.computeTotals(result.invoice.lines || []);
+    const payment = normalizeInvoicePayment(result.invoice, {}, totals);
+    result.invoice.paymentStatus = payment.paymentStatus;
+    result.invoice.amountPaid = payment.amountPaid;
+    docs[index] = result.invoice;
+    writeBilling(docs);
+    res.json({
+      ok: true,
+      removedAmount: result.removedAmount,
+      doc: withBillingTotals(docs[index], true),
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
 app.get("/api/reports/:id", (req, res) => {
   const report = readReports().find((r) => r.id === req.params.id);
   if (!report) return res.status(404).json({ error: "Report not found" });
@@ -4680,6 +4904,7 @@ app.post("/api/admin/restore-workshop", requireAdmin, (req, res) => {
     if (Array.isArray(req.body.smsLog)) writeJsonArray(SMS_LOG_FILE, req.body.smsLog);
     if (Array.isArray(req.body.smsInbound)) writeJsonArray(SMS_INBOUND_FILE, req.body.smsInbound);
     if (Array.isArray(req.body.bookingRequests)) writeBookingRequests(req.body.bookingRequests);
+    if (Array.isArray(req.body.referrals)) writeReferrals(req.body.referrals);
 
     res.json({
       ok: true,
@@ -4694,6 +4919,7 @@ app.post("/api/admin/restore-workshop", requireAdmin, (req, res) => {
           ? req.body.supplierInvoices.length
           : undefined,
         smsLog: Array.isArray(req.body.smsLog) ? req.body.smsLog.length : undefined,
+        referrals: Array.isArray(req.body.referrals) ? req.body.referrals.length : undefined,
       },
     });
   } catch (err) {
@@ -5714,6 +5940,7 @@ app.get("/api/billing", requireAdmin, (_req, res) => {
         paymentStatus: payment?.paymentStatus || "",
         amountPaid: payment?.amountPaid ?? null,
         balanceDue: payment?.balanceDue ?? null,
+        referralCreditTotal: payment?.referralCreditTotal ?? 0,
         paymentDates: payment?.payments.map((row) => row.paidAt).filter(Boolean) || [],
         lastEmailedAt: d.lastEmailedAt || "",
         reviewRequestSentAt: d.reviewRequestSentAt || "",
@@ -5936,10 +6163,18 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
 
   if (current.kind === "invoice") {
     const totals = catalog.computeTotals(nextLines);
+    // Preserve referral credits on normal saves — only apply/remove APIs change them.
+    next.referralCreditsApplied = referralsLib.normalizeAppliedRows(
+      current.referralCreditsApplied
+    );
+    next.referralCreditTotal = referralsLib.referralCreditTotal(next);
     const payment = normalizeInvoicePayment(next, body, totals);
-    if (payment.amountPaid > totals.totalIncl + 0.009) {
+    const maxCash = catalog.round2(
+      Math.max(0, totals.totalIncl - payment.referralCreditTotal)
+    );
+    if (payment.amountPaid > maxCash + 0.009) {
       return res.status(400).json({
-        error: `Payment cannot exceed invoice total ($${totals.totalIncl.toFixed(2)}).`,
+        error: `Payment cannot exceed invoice total minus referral credits ($${maxCash.toFixed(2)}).`,
       });
     }
     next.payments = payment.payments;
@@ -6013,6 +6248,22 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
   }
 
   writeBilling(docs);
+
+  if (next.kind === "invoice" && next.customerId) {
+    try {
+      const payment = normalizeInvoicePayment(
+        next,
+        {},
+        catalog.computeTotals(next.lines || [])
+      );
+      if (payment.paymentStatus === "paid") {
+        persistQualifiedReferrals(next.customerId, docs);
+      }
+    } catch (err) {
+      console.error("Could not qualify referrals:", err);
+    }
+  }
+
   res.json(withBillingTotals(docs[index], true));
 });
 
@@ -6747,6 +6998,19 @@ app.post("/api/billing/:id/void", requireAdmin, (req, res) => {
   if (index < 0) return res.status(404).json({ error: "Not found" });
   if (docs[index].status === "invoiced") {
     return res.status(400).json({ error: "This quote already has an invoice." });
+  }
+  const doc = docs[index];
+  if (doc.kind === "invoice" && referralsLib.referralCreditTotal(doc) > 0) {
+    try {
+      const removed = referralsLib.removeCreditsFromInvoice({
+        storeRows: readReferrals(),
+        invoice: doc,
+      });
+      writeReferrals(removed.rows);
+      docs[index] = removed.invoice;
+    } catch (err) {
+      console.error("Could not restore referral credits on void:", err);
+    }
   }
   docs[index].status = "void";
   docs[index].voidedAt = nowIso();

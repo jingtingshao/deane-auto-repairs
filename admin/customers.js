@@ -768,6 +768,30 @@ function showCustomerForm(row = null) {
     invoicesBtn.hidden = !row;
     invoicesBtn.onclick = () => openCustomerInvoices(row);
   }
+  const balanceEl = document.getElementById("customer-referral-balance");
+  if (balanceEl) {
+    balanceEl.hidden = true;
+    balanceEl.textContent = "";
+    if (editingCustomerId) {
+      Admin.api(`/api/referral-credits?customerId=${encodeURIComponent(editingCustomerId)}`)
+        .then((summary) => {
+          const bal = Number(summary?.balance) || 0;
+          const count = Number(summary?.creditCount) || 0;
+          if (bal > 0) {
+            balanceEl.hidden = false;
+            balanceEl.textContent = `Referral balance: $${bal.toFixed(2)} (${count} credit${
+              count === 1 ? "" : "s"
+            }). Apply on the customer’s next invoice (min $50, whole $20).`;
+          } else {
+            balanceEl.hidden = false;
+            balanceEl.textContent = "Referral balance: $0.00";
+          }
+        })
+        .catch(() => {
+          balanceEl.hidden = true;
+        });
+    }
+  }
   form.scrollIntoView({ block: "start", behavior: "smooth" });
   if (first) first.focus();
 }
@@ -812,6 +836,11 @@ function hideCustomerForm() {
   if (customerDeleteBtn) customerDeleteBtn.hidden = true;
   const invoicesBtn = document.getElementById("btn-customer-invoices");
   if (invoicesBtn) invoicesBtn.hidden = true;
+  const balanceEl = document.getElementById("customer-referral-balance");
+  if (balanceEl) {
+    balanceEl.hidden = true;
+    balanceEl.textContent = "";
+  }
   const legend = document.getElementById("customer-form-legend");
   if (legend) legend.textContent = "New customer";
   form.hidden = true;

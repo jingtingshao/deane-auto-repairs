@@ -2588,3 +2588,13 @@ label.check input {
   opacity: 0.85;
   cursor: default;
 }
+
+.referral-credit-box {
+  margin: 0.75rem 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.referral-credit-box .preset-row {
+  margin-top: 0.5rem;
+}
