@@ -74,16 +74,17 @@ function buildBillingPdf(doc) {
         }
       }
       const file = logoPath();
-      const barH = 92;
+      const barH = 108;
       const stripeH = 5;
       let headerBottom = barH + stripeH + 16;
 
       pdf.rect(0, 0, pdf.page.width, barH).fill(SIGN_NAVY);
-      const textWidth = pageWidth - 170;
-      const textLeft = left + 170;
+      const textWidth = pageWidth - 176;
+      const textLeft = left + 176;
 
       if (fs.existsSync(file)) {
-        pdf.image(file, left, 0, { fit: [168, barH], align: "left", valign: "center" });
+        // Transparent PNG sits in the navy bar so the white/gold mark is not a boxed plate.
+        pdf.image(file, left, 8, { fit: [168, barH - 16], align: "left", valign: "center" });
       }
       pdf.fillColor("#ffffff").font("Helvetica").fontSize(9);
       pdf.text(`${business.street}, ${business.suburb}, ${business.city}`, textLeft, 10, {

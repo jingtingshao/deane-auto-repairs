@@ -92,10 +92,14 @@ a {
 
 .brand-logo {
   display: block;
-  height: 72px;
+  height: 88px;
   width: auto;
-  max-width: min(280px, 80vw);
+  max-width: min(220px, 68vw);
+  padding: 0.35rem 0;
+  border: 0;
   border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .script {
@@ -125,9 +129,10 @@ a {
   margin: 0;
   display: flex;
   flex-shrink: 0;
+  align-items: center;
   line-height: 0;
-  overflow: hidden;
-  background: var(--sign-navy);
+  overflow: visible;
+  background: transparent;
 }
 
 .top .shop-line {
@@ -468,8 +473,11 @@ button.primary {
 
 .letterhead-logo {
   display: block;
-  height: 59px;
+  height: 68px;
   width: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .letterhead-contact {
@@ -628,10 +636,14 @@ button.primary {
   }
 
   .brand-logo {
-    height: 18mm;
+    height: 22mm;
     width: auto;
     max-width: none;
+    padding: 1.4mm 0;
+    border: 0;
     border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .top .shop-line,

@@ -5,29 +5,39 @@ const path = require("path");
 const business = require("./business");
 
 const LOGO_CID = "deane-logo@deaneauto.co.nz";
-const LOGO_FILE = path.join(__dirname, "..", "images", "deane-auto-logo.jpg");
+const LOGO_FILE = path.join(__dirname, "..", "images", "deane-auto-logo.png");
+const EMAIL_LOGO_FILE = path.join(__dirname, "..", "images", "deane-auto-logo-email.png");
 
 function logoPath() {
   return LOGO_FILE;
 }
 
+function emailLogoPath() {
+  return EMAIL_LOGO_FILE;
+}
+
 function logoPublicPath() {
-  return "/images/deane-auto-logo.jpg";
+  return "/images/deane-auto-logo.png";
+}
+
+function emailLogoPublicPath() {
+  return "/images/deane-auto-logo-email.png";
 }
 
 function logoAttachment() {
-  if (!fs.existsSync(LOGO_FILE)) return null;
+  const file = fs.existsSync(EMAIL_LOGO_FILE) ? EMAIL_LOGO_FILE : LOGO_FILE;
+  if (!fs.existsSync(file)) return null;
   return {
-    filename: "deane-auto-logo.jpg",
-    path: LOGO_FILE,
+    filename: path.basename(file),
+    path: file,
     cid: LOGO_CID,
-    contentType: "image/jpeg",
+    contentType: "image/png",
     contentDisposition: "inline",
   };
 }
 
-function withCustomerEmailHtml(innerHtml, { logoWidth = 134 } = {}) {
-  const width = Math.max(96, Number(logoWidth) || 134);
+function withCustomerEmailHtml(innerHtml, { logoWidth = 148 } = {}) {
+  const width = Math.max(96, Number(logoWidth) || 148);
   return `<div style="font-family:Arial,Helvetica,sans-serif;color:#1a2332;line-height:1.45;max-width:580px;">
   <div style="padding:8px;">${innerHtml}</div>
   <table role="presentation" cellpadding="0" cellspacing="0" align="left" width="${width}" style="margin-top:16px;border-collapse:collapse;border-top:1px solid #d7e0ea;">
@@ -76,7 +86,9 @@ function withLogoAttachments(extra = []) {
 module.exports = {
   LOGO_CID,
   logoPath,
+  emailLogoPath,
   logoPublicPath,
+  emailLogoPublicPath,
   logoAttachment,
   withCustomerEmailHtml,
   withLogoAttachments,
