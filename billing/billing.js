@@ -176,7 +176,7 @@ function render(doc) {
       <div class="letterhead-inner">
         <div>
           <p class="letterhead-brand">
-            <img class="letterhead-logo" src="/images/deane-auto-logo.jpg" alt="Deane Auto Repairs" />
+            <img class="letterhead-logo" src="/images/deane-auto-logo-email.png" alt="Deane Auto Repairs" />
           </p>
           <p class="letterhead-contact"><strong>${escapeHtml(shopName)}</strong></p>
         </div>

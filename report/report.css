@@ -1,6 +1,8 @@
 :root {
   --blue: #1565c0;
   --blue-deep: #0d47a1;
+  --sign-navy: #021534;
+  --sign-yellow: #e9a305;
   --red: #e53935;
   --ink: #1a2332;
   --muted: #5b6777;
@@ -33,9 +35,20 @@ a {
 }
 
 .top {
-  background: linear-gradient(120deg, var(--blue-deep), var(--blue));
+  background: var(--sign-navy);
   color: #fff;
-  padding: 1.4rem 0 1.2rem;
+  padding: 0;
+}
+
+.top::after {
+  content: "";
+  display: block;
+  height: 5px;
+  background: var(--sign-yellow);
+}
+
+.top .wrap {
+  padding: 0.2rem 0 0.35rem;
 }
 
 .brand {
@@ -44,14 +57,19 @@ a {
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
+  background: transparent;
 }
 
 .brand-logo {
   display: block;
-  height: 56px;
+  height: 88px;
   width: auto;
-  max-width: min(220px, 70vw);
-  border-radius: 4px;
+  max-width: min(220px, 68vw);
+  padding: 0.35rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .script {
@@ -103,7 +121,7 @@ body.has-cover main.wrap {
   display: flex;
   align-items: stretch;
   background:
-    linear-gradient(145deg, rgba(13, 71, 161, 0.94) 0%, rgba(21, 101, 192, 0.88) 48%, rgba(26, 35, 50, 0.92) 100%),
+    linear-gradient(145deg, rgba(2, 21, 52, 0.94) 0%, rgba(13, 71, 161, 0.86) 52%, rgba(2, 21, 52, 0.92) 100%),
     url("https://images.unsplash.com/photo-1487754180451-c456f719a1fc?auto=format&fit=crop&w=1600&q=70")
       center / cover;
   color: #fff;
@@ -124,9 +142,12 @@ body.has-cover main.wrap {
 
 .cover-logo {
   display: block;
-  width: min(280px, 78vw);
+  width: min(260px, 72vw);
   height: auto;
-  border-radius: 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .cover-tag {

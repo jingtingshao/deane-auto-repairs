@@ -12,7 +12,7 @@ module.exports = {
   hoursSunday: "Sunday closed",
   gstNumber: "96-650-434",
   website: "https://www.deaneauto.co.nz",
-  logoPath: "/images/deane-auto-logo.jpg",
+  logoPath: "/images/deane-auto-logo.png",
   // Street pin only — do not search "Deane Auto Repairs" (Google matches competitor Dean Auto Repairs).
   mapsUrl:
     "https://www.google.com/maps/place/63+Hayr+Road,+Three+Kings,+Auckland/@-36.9140797,174.7542951,18z",
