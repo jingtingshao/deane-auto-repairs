@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en-NZ">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Book a service | Deane Auto Repairs</title>
+    <meta
+      name="description"
+      content="Book a service, WOF or brake check at Deane Auto Repairs, 63 Hayr Road, Three Kings. Call 0800 625 9827."
+    />
+    <link rel="canonical" href="https://www.deaneauto.co.nz/book" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css?v=20260904bookqr" />
+  </head>
+  <body class="page-book">
+    <a class="skip-link" href="#book">Skip to booking form</a>
+
+    <div class="top-strip">
+      <div class="shell top-strip-inner">
+        <span><i></i> Open today · Mon–Sat 8:30am – 5:30pm</span>
+        <a href="tel:08006259827">0800 625 9827</a>
+      </div>
+    </div>
+
+    <header class="site-header" data-header>
+      <div class="shell header-inner">
+        <a class="brand" href="/" aria-label="Deane Auto Repairs home">
+          <span class="brand-deane">Deane</span>
+          <span>
+            <strong>AUTO REPAIRS</strong>
+            <small>FULL MECHANICAL REPAIRS</small>
+          </span>
+        </a>
+        <a class="header-phone" href="tel:08006259827">0800 625 9827</a>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="booking" id="book">
+        <div class="shell booking-inner">
+          <div>
+            <h2>Let’s get your<br /><em>car sorted.</em></h2>
+            <p class="booking-intro">
+              Tell us what your vehicle needs and a preferred time — we’ll get
+              back to you to confirm.
+            </p>
+            <a class="call-link" href="tel:08006259827"
+              >Prefer to call? 0800 625 9827 <span>→</span></a
+            >
+          </div>
+          <form class="booking-form" data-booking-form novalidate>
+            <input
+              class="hp-field"
+              type="text"
+              name="_gotcha"
+              tabindex="-1"
+              autocomplete="off"
+              aria-hidden="true"
+            />
+            <div class="form-row">
+              <label
+                >Name<input id="name" name="name" required autocomplete="name" placeholder="Your name"
+              /></label>
+              <label
+                >Phone<input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  required
+                  autocomplete="tel"
+                  placeholder="021 000 0000"
+              /></label>
+            </div>
+            <div class="form-row">
+              <label
+                >Email<input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  autocomplete="email"
+                  placeholder="you@email.com"
+              /></label>
+              <label
+                >Registration<input id="rego" name="rego" placeholder="ABC123"
+              /></label>
+            </div>
+            <label
+              >Vehicle
+              <input
+                id="vehicle"
+                name="vehicle"
+                required
+                placeholder="Make, model, year"
+            /></label>
+            <div class="form-row">
+              <label
+                >Preferred date<input id="date" name="date" type="date"
+              /></label>
+              <label
+                >Preferred time
+                <select id="time" name="time">
+                  <option value="">No preference</option>
+                  <option>Morning drop-off</option>
+                  <option>Afternoon drop-off</option>
+                </select>
+              </label>
+            </div>
+            <label
+              >What can we help with?
+              <select id="help" name="help" required>
+                <option value="">Choose a service</option>
+                <option value="WOF">WOF inspection</option>
+                <option value="Service">Standard / Premium service</option>
+                <option value="Service + WOF">Service + WOF</option>
+                <option value="Pre-Purchase Inspection">Pre-Purchase Inspection</option>
+                <option value="WINZ quote">WINZ quote</option>
+                <option value="Brake inspection">Brake inspection</option>
+                <option value="Repairs / other">Repairs / diagnostics / other</option>
+              </select>
+            </label>
+            <label
+              >Anything else?
+              <textarea
+                id="notes"
+                name="notes"
+                rows="3"
+                placeholder="Tell us about any noises, warning lights or concerns."
+              ></textarea>
+            </label>
+            <button class="button button-light" type="submit" data-submit-btn>
+              Request a booking <span>→</span>
+            </button>
+            <p class="form-note" data-form-status role="status" aria-live="polite" hidden></p>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="shell footer-inner">
+        <p>
+          <strong>DEANE AUTO REPAIRS</strong><br />
+          (Next to BP Petrol Station) · 63 Hayr Road, Three Kings<br />
+          <a href="tel:08006259827">0800 625 9827</a> ·
+          <a href="mailto:deaneautonz@gmail.com">deaneautonz@gmail.com</a>
+        </p>
+        <p>© <span data-year></span> Deane Auto Repairs. Three Kings, Auckland.</p>
+      </div>
+    </footer>
+
+    <script src="/script.js?v=20260904bookqr"></script>
+  </body>
+</html>

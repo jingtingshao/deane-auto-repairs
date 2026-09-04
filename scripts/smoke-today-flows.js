@@ -239,6 +239,17 @@ async function integrationTests(base, dataDir) {
     fail("website booking request saved and admin popup ack", err);
   }
 
+  try {
+    const bookPage = await fetch(`${base}/book`);
+    const html = await bookPage.text();
+    assert.equal(bookPage.status, 200, `status ${bookPage.status}`);
+    assert.ok(html.includes("data-booking-form"), "missing booking form");
+    assert.ok(html.includes('id="help"'), "missing service select");
+    pass("poster booking page /book");
+  } catch (err) {
+    fail("poster booking page /book", err);
+  }
+
   // --- Customers: same email OK, duplicate plate blocked ---
   let customerA = null;
   let customerB = null;

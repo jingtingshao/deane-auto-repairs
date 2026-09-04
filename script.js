@@ -37,6 +37,42 @@
     });
   });
 
+  const HELP_ALIASES = {
+    "service-wof": "Service + WOF",
+    "service+wof": "Service + WOF",
+    wof: "WOF",
+    service: "Service",
+    ppi: "Pre-Purchase Inspection",
+    "pre-purchase": "Pre-Purchase Inspection",
+    winz: "WINZ quote",
+    brakes: "Brake inspection",
+    brake: "Brake inspection",
+    "brake-inspection": "Brake inspection",
+    repairs: "Repairs / other",
+  };
+
+  const applyHelpValue = (value) => {
+    if (!helpSelect || !value) return false;
+    const raw = String(value).trim();
+    const key = raw.toLowerCase().replace(/\s+/g, "-");
+    const mapped = HELP_ALIASES[key] || HELP_ALIASES[raw.toLowerCase()] || raw;
+    const match = [...helpSelect.options].find(
+      (opt) =>
+        opt.value === mapped ||
+        opt.value.toLowerCase() === mapped.toLowerCase() ||
+        opt.value.toLowerCase() === raw.toLowerCase()
+    );
+    if (!match) return false;
+    helpSelect.value = match.value;
+    return true;
+  };
+
+  const bookingParams = new URLSearchParams(location.search);
+  if (applyHelpValue(bookingParams.get("help") || bookingParams.get("type"))) {
+    const booking = document.getElementById("book");
+    if (booking) booking.scrollIntoView();
+  }
+
   const onScroll = () => {
     if (!header) return;
     header.classList.toggle("is-scrolled", window.scrollY > 12);
