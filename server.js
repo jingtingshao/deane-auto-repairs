@@ -237,7 +237,12 @@ function billingIdMap(docs) {
 function persistQualifiedReferrals(customerId, billingDocs) {
   const id = String(customerId || "").trim();
   if (!id) return [];
-  const result = referralsLib.tryQualifyReferrals(readReferrals(), billingDocs, id);
+  const result = referralsLib.tryQualifyReferrals(
+    readReferrals(),
+    billingDocs,
+    id,
+    readJobs()
+  );
   if (result.changed) writeReferrals(result.rows);
   return result.qualified || [];
 }

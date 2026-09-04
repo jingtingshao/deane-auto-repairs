@@ -68,12 +68,14 @@ function isQualifyingPaidInvoice(doc) {
   return isInvoicePaidForReferral(doc, totals);
 }
 
-function customerHasPriorPaidWork(customerId, billingDocs, jobs) {
+function customerHasPriorPaidWork(customerId, billingDocs, jobs, options = {}) {
   const id = String(customerId || "").trim();
+  const exceptInvoiceId = String(options.exceptInvoiceId || "").trim();
   if (!id) return false;
   for (const doc of billingDocs || []) {
     if (String(doc.customerId || "") !== id) continue;
     if (doc.kind !== "invoice" || doc.status === "void") continue;
+    if (exceptInvoiceId && String(doc.id || "") === exceptInvoiceId) continue;
     if (isInvoicePaidForReferral(doc)) return true;
   }
   for (const job of jobs || []) {
@@ -81,6 +83,24 @@ function customerHasPriorPaidWork(customerId, billingDocs, jobs) {
     if (job.status === "completed" || job.status === "collected") return true;
   }
   return false;
+}
+
+/** Already used as the "new customer" on a rewarded referral — cannot earn again. */
+function customerAlreadyRewardedAsReferred(storeRows, customerId) {
+  const id = String(customerId || "").trim();
+  if (!id) return false;
+  return (storeRows || []).some(
+    (row) =>
+      row.type === "referral" &&
+      row.referredCustomerId === id &&
+      (row.status === "qualified" || Boolean(row.creditId))
+  );
+}
+
+/** True if this person cannot be registered / rewarded as a new referred customer. */
+function isExistingCustomerForReferral(customerId, billingDocs, jobs, storeRows, options = {}) {
+  if (customerAlreadyRewardedAsReferred(storeRows, customerId)) return true;
+  return customerHasPriorPaidWork(customerId, billingDocs, jobs, options);
 }
 
 function findFirstQualifyingInvoice(customerId, billingDocs) {
@@ -234,6 +254,18 @@ function createReferral({
     throw err;
   }
 
+  if (customerAlreadyRewardedAsReferred(rows, referredId)) {
+    const rejected = normalizeReferral({
+      referrerCustomerId: referrerId,
+      referredCustomerId: referredId,
+      status: "rejected",
+      rejectionReason: "already_referred_before",
+      notes,
+    });
+    rows.push(rejected);
+    return { rows, referral: rejected, rejected: true };
+  }
+
   if (customerHasPriorPaidWork(referredId, billingDocs, jobs)) {
     const rejected = normalizeReferral({
       referrerCustomerId: referrerId,
@@ -308,9 +340,10 @@ function issueCreditForReferral(rows, referral, invoiceId) {
 
 /**
  * When a referred customer's invoice becomes paid & qualifying, issue $20 to referrer.
+ * Existing customers (prior paid work / prior reward as referred) are rejected — no credit.
  * Returns { changed, qualified: [{ referral, credit }] }
  */
-function tryQualifyReferrals(storeRows, billingDocs, customerId) {
+function tryQualifyReferrals(storeRows, billingDocs, customerId, jobs = []) {
   const rows = readNormalized(storeRows);
   expireCreditsInPlace(rows);
   const id = String(customerId || "").trim();
@@ -324,14 +357,46 @@ function tryQualifyReferrals(storeRows, billingDocs, customerId) {
   );
   if (!pending.length) return { rows, changed: false, qualified: [] };
 
+  // Already received a referral reward as the new customer — never again.
+  if (customerAlreadyRewardedAsReferred(rows, id)) {
+    let changed = false;
+    const now = nowIso();
+    for (const referral of pending) {
+      referral.status = "rejected";
+      referral.rejectionReason = "already_referred_before";
+      referral.updatedAt = now;
+      changed = true;
+    }
+    return { rows, changed, qualified: [] };
+  }
+
   const first = findFirstQualifyingInvoice(id, billingDocs);
   if (!first) return { rows, changed: false, qualified: [] };
 
+  // Any other paid work / completed job means they were already a customer.
+  if (customerHasPriorPaidWork(id, billingDocs, jobs, { exceptInvoiceId: first.id })) {
+    let changed = false;
+    const now = nowIso();
+    for (const referral of pending) {
+      referral.status = "rejected";
+      referral.rejectionReason = "already_existing_customer";
+      referral.updatedAt = now;
+      changed = true;
+    }
+    return { rows, changed, qualified: [] };
+  }
+
+  // Only one reward per new customer — qualify the oldest pending, reject the rest.
+  pending.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+  const [winner, ...extras] = pending;
   const qualified = [];
-  for (const referral of pending) {
-    // Only one pending should exist, but qualify all pending for this referred customer once.
-    const credit = issueCreditForReferral(rows, referral, first.id);
-    qualified.push({ referral, credit });
+  const credit = issueCreditForReferral(rows, winner, first.id);
+  qualified.push({ referral: winner, credit });
+  const now = nowIso();
+  for (const extra of extras) {
+    extra.status = "rejected";
+    extra.rejectionReason = "already_referred_before";
+    extra.updatedAt = now;
   }
   return { rows, changed: true, qualified };
 }
@@ -509,6 +574,8 @@ module.exports = {
   isInvoicePaidForReferral,
   isQualifyingPaidInvoice,
   customerHasPriorPaidWork,
+  customerAlreadyRewardedAsReferred,
+  isExistingCustomerForReferral,
   findFirstQualifyingInvoice,
   normalizeReferral,
   normalizeCredit,

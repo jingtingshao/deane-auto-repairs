@@ -226,9 +226,16 @@
       });
       render();
       if (result.rejected) {
-        alert(
-          "Saved as rejected — that person already looks like an existing customer (prior paid work), so no $20 credit will be issued."
-        );
+        const reason = result.referral?.rejectionReason || "";
+        if (reason === "already_referred_before") {
+          alert(
+            "Saved as rejected — this person was already used as a referral new customer before, so no further $20 credit can be issued."
+          );
+        } else {
+          alert(
+            "Saved as rejected — that person is already an existing customer (prior paid service or completed job), so they cannot be treated as a new customer for a referral reward."
+          );
+        }
       }
     } catch (err) {
       alert(err.message || "Could not save referral.");
