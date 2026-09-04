@@ -781,7 +781,7 @@ function showCustomerForm(row = null) {
             balanceEl.hidden = false;
             balanceEl.textContent = `Referral balance: $${bal.toFixed(2)} (${count} credit${
               count === 1 ? "" : "s"
-            }). Apply on the customer’s next invoice (min $50, max $40).`;
+            }). Apply on the customer’s next invoice (min $50, whole $20).`;
           } else {
             balanceEl.hidden = false;
             balanceEl.textContent = "Referral balance: $0.00";

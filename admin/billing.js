@@ -1296,7 +1296,6 @@ async function renderReferralCredits() {
   const canApply =
     customerId &&
     available >= 20 &&
-    applied < 40 &&
     total + 0.001 >= 50 &&
     invoiceBalanceDue() + 0.001 >= 20;
 
@@ -1305,7 +1304,7 @@ async function renderReferralCredits() {
     applied > 0
       ? `Applied on this invoice: ${money(applied)}. Available wallet: ${money(available)} (${creditCount} credit${creditCount === 1 ? "" : "s"}).`
       : available > 0
-        ? `Available wallet: ${money(available)} (${creditCount} credit${creditCount === 1 ? "" : "s"}). Min spend $50 · max $40 · whole $20 only.`
+        ? `Available wallet: ${money(available)} (${creditCount} credit${creditCount === 1 ? "" : "s"}). Min spend $50 · whole $20 only.`
         : "No referral credits on this customer.";
 
   actionsEl.innerHTML = "";
@@ -1314,9 +1313,11 @@ async function renderReferralCredits() {
     applyBtn.type = "button";
     applyBtn.className = "primary";
     applyBtn.id = "btn-apply-referral-credits";
+    const due = invoiceBalanceDue();
+    const maxApply = Math.min(available, Math.floor(due / 20) * 20);
     applyBtn.textContent =
-      available >= 40 && applied <= 0
-        ? "Apply referral credits (up to $40)"
+      maxApply > 20
+        ? `Apply referral credits (up to ${money(maxApply)})`
         : "Apply referral credit ($20)";
     applyBtn.addEventListener("click", async () => {
       try {

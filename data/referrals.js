@@ -368,13 +368,6 @@ function applyCreditsToInvoice({ storeRows, invoice, creditIds }) {
 
   const already = normalizeAppliedRows(invoice.referralCreditsApplied);
   const alreadyTotal = money(already.reduce((s, r) => s + r.amount, 0));
-  if (alreadyTotal + 0.001 >= rules.maxCreditsPerInvoice) {
-    const err = new Error(
-      `This invoice already uses the maximum $${rules.maxCreditsPerInvoice.toFixed(0)} in referral credits.`
-    );
-    err.status = 400;
-    throw err;
-  }
 
   const amountPaid = money(
     (Array.isArray(invoice.payments) ? invoice.payments : []).reduce(
@@ -382,12 +375,7 @@ function applyCreditsToInvoice({ storeRows, invoice, creditIds }) {
       0
     )
   );
-  let room = money(
-    Math.min(
-      rules.maxCreditsPerInvoice - alreadyTotal,
-      Math.max(0, totals.totalIncl - amountPaid - alreadyTotal)
-    )
-  );
+  let room = money(Math.max(0, totals.totalIncl - amountPaid - alreadyTotal));
   if (room + 0.001 < rules.creditAmount) {
     const err = new Error(
       `Not enough balance left on this invoice for a whole $${rules.creditAmount.toFixed(0)} credit.`
@@ -418,7 +406,6 @@ function applyCreditsToInvoice({ storeRows, invoice, creditIds }) {
 
   for (const credit of pickPool) {
     if (room + 0.001 < rules.creditAmount) break;
-    if (appliedNow + alreadyTotal + 0.001 >= rules.maxCreditsPerInvoice) break;
     // Whole credit only — never split.
     if (money(credit.remaining) + 0.001 < rules.creditAmount) continue;
     if (applied.some((row) => row.creditId === credit.id)) continue;
