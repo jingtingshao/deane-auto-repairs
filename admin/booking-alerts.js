@@ -113,8 +113,8 @@
     try {
       const data = await Admin.api("/api/booking-requests");
       const unseen = Array.isArray(data.unseen) ? data.unseen : [];
-      setNavCount(data.unseenCount ?? unseen.length);
-      window.DeaneCalendar?.renderWebBookings?.(data.recent || unseen);
+      setNavCount(data.pendingCount ?? data.unseenCount ?? unseen.length);
+      window.DeaneCalendar?.renderWebBookings?.(data.recent || data.pending || unseen);
 
       const newIds = unseen.filter((row) => row.id && !shownIds.has(row.id));
       unseen.forEach((row) => {

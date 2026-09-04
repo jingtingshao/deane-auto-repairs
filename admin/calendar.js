@@ -19,7 +19,7 @@
   const smsBtn = document.getElementById("btn-cal-sms");
 
   let viewMode = "fortnight";
-  let anchorDate = activeFortnightStart();
+  let anchorDate = firstOpenDay(Admin.todayIso());
   let rows = [];
   let meta = null;
   let current = null;
@@ -67,31 +67,44 @@
     return new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 0;
   }
 
+  /** First open day on/after iso (Sunday → Monday). Past dates stay past so Prev still works. */
+  function firstOpenDay(iso) {
+    let cursor = String(iso || Admin.todayIso()).slice(0, 10);
+    while (isSunday(cursor)) cursor = plusDays(cursor, 1);
+    return cursor;
+  }
+
+  function addWorkingDays(iso, count) {
+    let cursor = firstOpenDay(iso);
+    const step = Number(count) >= 0 ? 1 : -1;
+    let left = Math.abs(Number(count) || 0);
+    while (left > 0) {
+      cursor = plusDays(cursor, step);
+      if (!isSunday(cursor)) left -= 1;
+    }
+    return cursor;
+  }
+
+  function workingDaysFrom(startIso, count) {
+    const days = [];
+    let cursor = firstOpenDay(startIso);
+    while (days.length < count) {
+      if (!isSunday(cursor)) days.push(cursor);
+      cursor = plusDays(cursor, 1);
+    }
+    return days;
+  }
+
+  function workingDayCount() {
+    return viewMode === "month" ? 24 : 14;
+  }
+
   /** Next bookable day: not in the past, not Sunday (workshop closed). */
   function nextBookableDate(iso) {
     let cursor = String(iso || Admin.todayIso()).slice(0, 10);
     const today = Admin.todayIso();
     if (cursor < today) cursor = today;
-    while (isSunday(cursor)) cursor = plusDays(cursor, 1);
-    return cursor;
-  }
-
-  /**
-   * Rolling 2-week window starts on the Monday of the current bookable week.
-   * On Sunday the Mon–Sat week just ended is dropped — next Monday starts the view.
-   */
-  function activeFortnightStart(iso = Admin.todayIso()) {
-    return startOfWeek(nextBookableDate(iso));
-  }
-
-  /** Skip fully finished Mon–Sat weeks (used every Sunday after midnight NZ). */
-  function snapFortnightStart(fromIso) {
-    let from = startOfWeek(fromIso);
-    const today = Admin.todayIso();
-    while (plusDays(from, 5) < today) {
-      from = plusDays(from, 7);
-    }
-    return from;
+    return firstOpenDay(cursor);
   }
 
   function assertBookableDate(iso) {
@@ -114,14 +127,6 @@
     const today = Admin.todayIso();
     const existing = String(existingDate || "").slice(0, 10);
     dateEl.min = existing && existing < today ? existing : today;
-  }
-
-  function startOfWeek(iso) {
-    const [y, m, d] = String(iso).slice(0, 10).split("-").map(Number);
-    const utc = new Date(Date.UTC(y, m - 1, d));
-    const day = utc.getUTCDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    return plusDays(iso, diff);
   }
 
   function formatDayHeading(iso) {
@@ -155,29 +160,16 @@
   }
 
   function rangeBounds() {
-    const from = snapFortnightStart(anchorDate);
-    if (viewMode === "month") {
-      // Four Mon–Sat weeks (skip Sundays).
-      return { from, to: plusDays(from, 26) };
-    }
-    // Default: two Mon–Sat weeks.
-    return { from, to: plusDays(from, 12) };
+    const days = boardDays();
+    return { from: days[0], to: days[days.length - 1] };
   }
 
   function boardDays() {
-    const { from } = rangeBounds();
-    const days = [];
-    const weekCount = viewMode === "month" ? 4 : 2;
-    for (let week = 0; week < weekCount; week += 1) {
-      for (let i = 0; i < 6; i += 1) {
-        days.push(plusDays(from, week * 7 + i));
-      }
-    }
-    return days;
+    return workingDaysFrom(anchorDate, workingDayCount());
   }
 
   function stepDays() {
-    return viewMode === "month" ? 28 : 14;
+    return workingDayCount();
   }
 
   function updateRangeLabel() {
@@ -545,6 +537,7 @@
       .map((day) => {
         const dayRows = rows.filter((r) => r.date === day);
         const past = day < Admin.todayIso();
+        const isToday = day === Admin.todayIso();
         const bookable = !past && !isSunday(day);
         const heading = formatShortDay(day);
         const slots = dayRows.length
@@ -580,7 +573,7 @@
         const weekday = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][
           new Date(Date.UTC(y, m - 1, d)).getUTCDay()
         ];
-        return `<article class="cal-day cal-day-${weekday}${past ? " is-past" : ""}${bookable ? " is-bookable" : ""}" data-day="${Admin.escapeAttr(day)}">
+        return `<article class="cal-day cal-day-${weekday}${past ? " is-past" : ""}${isToday ? " is-today" : ""}${bookable ? " is-bookable" : ""}" data-day="${Admin.escapeAttr(day)}">
           <header class="cal-day-header">
             <strong>${Admin.escapeHtml(heading)}</strong>
             ${bookable ? `<button type="button" class="ghost cal-day-add" data-book-day="${Admin.escapeAttr(day)}">+ Book</button>` : ""}
@@ -697,18 +690,18 @@
     editView.hidden = true;
     current = null;
     if (opts.date) {
-      anchorDate = String(opts.date).slice(0, 10);
-    } else if (viewMode === "fortnight" || viewMode === "month") {
-      // Sunday roll: finished Mon–Sat weeks drop out of the default view.
-      if (plusDays(startOfWeek(anchorDate), 5) < Admin.todayIso()) {
-        anchorDate = activeFortnightStart();
+      anchorDate = firstOpenDay(opts.date);
+    } else {
+      const days = workingDaysFrom(anchorDate, workingDayCount());
+      if (days.length && days[days.length - 1] < Admin.todayIso()) {
+        anchorDate = firstOpenDay(Admin.todayIso());
       }
     }
     if (opts.view) viewMode = opts.view;
     document.querySelectorAll("[data-cal-view]").forEach((btn) => {
       btn.classList.toggle("is-active", btn.dataset.calView === viewMode);
     });
-    Admin.setViewTitle(viewMode === "month" ? "1-month calendar" : "2-week calendar");
+    Admin.setViewTitle(viewMode === "month" ? "Next 24 open days" : "Next 14 open days");
     try {
       await loadList();
       await loadWebBookings();
@@ -744,6 +737,7 @@
       jobId: partial.jobId || "",
       jobNumber: partial.jobNumber || "",
       source: partial.source || "manual",
+      bookingRequestId: partial.bookingRequestId || "",
     };
     listView.hidden = true;
     editView.hidden = false;
@@ -759,6 +753,7 @@
     const payload = collectPayload();
     assertBookableDate(payload.date);
     if (!payload.customerName) throw new Error("Customer name is required.");
+    const bookingRequestId = String(current?.bookingRequestId || "").trim();
     if (current?.id) {
       current = await Admin.api(`/api/appointments/${current.id}`, {
         method: "PUT",
@@ -770,35 +765,57 @@
         body: JSON.stringify(payload),
       });
     }
+    if (bookingRequestId) {
+      try {
+        await Admin.api(`/api/booking-requests/${encodeURIComponent(bookingRequestId)}/added`, {
+          method: "POST",
+          body: "{}",
+        });
+      } catch (err) {
+        console.error("Could not mark website booking as added:", err);
+      }
+      window.DeaneBookingAlerts?.refresh?.();
+    }
     await loadJobOptions();
     fillForm(current);
-    showStatus("Saved");
+    showStatus(bookingRequestId ? "Saved — website booking marked added" : "Saved");
     return current;
   }
 
   function renderWebBookings(rows) {
     const el = document.getElementById("calendar-web-bookings");
     if (!el) return;
-    const list = Array.isArray(rows) ? rows.slice(0, 12) : [];
+    const all = Array.isArray(rows) ? rows : [];
+    const pending = all.filter((row) => !row.handledAt);
+    const handled = all.filter((row) => row.handledAt);
+    const list = [...pending, ...handled].slice(0, 12);
     if (!list.length) {
       el.hidden = true;
       el.innerHTML = "";
       return;
     }
-    const unseen = list.filter((row) => !row.seenAt);
     el.hidden = false;
     el.innerHTML = `<p class="calendar-web-bookings-head">${
-      unseen.length ? `${unseen.length} new website booking${unseen.length === 1 ? "" : "s"}` : "Website bookings"
+      pending.length
+        ? `${pending.length} website booking${pending.length === 1 ? "" : "s"} to add`
+        : "Website bookings"
     }</p>${list
       .map((row) => {
         const when = [row.preferredDate, row.preferredTime].filter(Boolean).join(" · ") || "No preferred time";
         const plate = String(row.registration || "").trim();
-        return `<article class="calendar-web-row${row.seenAt ? " is-seen" : ""}">
+        const added = Boolean(row.handledAt);
+        const actions = added
+          ? `<span class="calendar-web-added">Added to calendar</span>
+             <button type="button" class="ghost danger" data-web-booking-delete="${Admin.escapeAttr(row.id)}">Delete</button>`
+          : `<button type="button" class="ghost" data-web-booking-add="${Admin.escapeAttr(row.id)}">Add to calendar</button>
+             <button type="button" class="ghost" data-web-booking-done="${Admin.escapeAttr(row.id)}">Mark added</button>
+             <button type="button" class="ghost danger" data-web-booking-delete="${Admin.escapeAttr(row.id)}">Delete</button>`;
+        return `<article class="calendar-web-row${added ? " is-added" : ""}">
           <div>
             <p><strong>${Admin.escapeHtml(row.name || "Customer")}</strong> · ${Admin.escapeHtml(row.helpWith || "Booking")}</p>
             <small>${Admin.escapeHtml(when)}${plate ? ` · ${Admin.escapeHtml(plate)}` : ""} · ${Admin.escapeHtml(row.phone || "")}</small>
           </div>
-          <button type="button" class="ghost" data-web-booking="${Admin.escapeAttr(row.id)}">Add to calendar</button>
+          <div class="calendar-web-row-actions">${actions}</div>
         </article>`;
       })
       .join("")}`;
@@ -834,6 +851,7 @@
       workSummary: row.helpWith || "",
       notes: noteBits.join("\n"),
       source: "website",
+      bookingRequestId: row.id || "",
     });
   }
 
@@ -846,15 +864,15 @@
   };
 
   document.getElementById("btn-cal-prev")?.addEventListener("click", () => {
-    anchorDate = plusDays(anchorDate, -stepDays());
+    anchorDate = addWorkingDays(anchorDate, -stepDays());
     showList();
   });
   document.getElementById("btn-cal-next")?.addEventListener("click", () => {
-    anchorDate = plusDays(anchorDate, stepDays());
+    anchorDate = addWorkingDays(anchorDate, stepDays());
     showList();
   });
   document.getElementById("btn-cal-today")?.addEventListener("click", () => {
-    anchorDate = activeFortnightStart();
+    anchorDate = firstOpenDay(Admin.todayIso());
     showList();
   });
   document.querySelectorAll("[data-cal-view]").forEach((btn) => {
@@ -867,12 +885,30 @@
     newAppointment({ date: nextBookableDate(anchorDate) })
   );
   document.getElementById("calendar-web-bookings")?.addEventListener("click", async (event) => {
-    const btn = event.target.closest("[data-web-booking]");
-    if (!btn) return;
-    const id = btn.dataset.webBooking;
+    const addBtn = event.target.closest("[data-web-booking-add]");
+    const doneBtn = event.target.closest("[data-web-booking-done]");
+    const deleteBtn = event.target.closest("[data-web-booking-delete]");
+    if (!addBtn && !doneBtn && !deleteBtn) return;
+    const id = addBtn?.dataset.webBookingAdd || doneBtn?.dataset.webBookingDone || deleteBtn?.dataset.webBookingDelete;
     try {
+      if (deleteBtn) {
+        if (!confirm("Delete this website booking from the list?")) return;
+        await Admin.api(`/api/booking-requests/${encodeURIComponent(id)}`, { method: "DELETE" });
+        window.DeaneBookingAlerts?.refresh?.();
+        await loadWebBookings();
+        return;
+      }
+      if (doneBtn) {
+        await Admin.api(`/api/booking-requests/${encodeURIComponent(id)}/added`, {
+          method: "POST",
+          body: "{}",
+        });
+        window.DeaneBookingAlerts?.refresh?.();
+        await loadWebBookings();
+        return;
+      }
       const data = await Admin.api("/api/booking-requests");
-      const row = (data.recent || data.unseen || []).find((item) => item.id === id);
+      const row = (data.recent || data.pending || data.unseen || []).find((item) => item.id === id);
       if (!row) return;
       if (!row.seenAt) {
         await Admin.api(`/api/booking-requests/${encodeURIComponent(id)}/ack`, {

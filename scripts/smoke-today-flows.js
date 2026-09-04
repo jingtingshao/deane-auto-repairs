@@ -131,6 +131,7 @@ function unitTests() {
     assert.equal(row.preferredDate, "");
     assert.equal(row.notes, "");
     assert.equal(row.helpWith, "WOF");
+    assert.equal(row.handledAt, "");
     assert.equal(bookingRequestsLib.startTimeFromPreferred("Afternoon drop-off"), "13:00");
     assert.equal(bookingRequestsLib.startTimeFromPreferred("Morning drop-off"), "09:00");
     pass("website booking request normalizes blank dashes");
@@ -221,8 +222,18 @@ async function integrationTests(base, dataDir) {
     assert.equal(list.data.unseen[0].helpWith, "WOF");
     const ack = await api(base, cookie, "POST", `/api/booking-requests/${created.data.id}/ack`, {});
     assert.equal(ack.res.status, 200, ack.data?.error || ack.text);
-    const after = await api(base, cookie, "GET", "/api/booking-requests");
-    assert.equal(after.data.unseenCount, 0);
+    const afterAck = await api(base, cookie, "GET", "/api/booking-requests");
+    assert.equal(afterAck.data.unseenCount, 0);
+    assert.equal(afterAck.data.pendingCount, 1);
+    const added = await api(base, cookie, "POST", `/api/booking-requests/${created.data.id}/added`, {});
+    assert.equal(added.res.status, 200, added.data?.error || added.text);
+    const afterAdded = await api(base, cookie, "GET", "/api/booking-requests");
+    assert.equal(afterAdded.data.pendingCount, 0);
+    assert.ok(afterAdded.data.recent[0].handledAt);
+    const removed = await api(base, cookie, "DELETE", `/api/booking-requests/${created.data.id}`);
+    assert.equal(removed.res.status, 200, removed.data?.error || removed.text);
+    const afterDelete = await api(base, cookie, "GET", "/api/booking-requests");
+    assert.equal(afterDelete.data.recent.length, 0);
     pass("website booking request saved and admin popup ack");
   } catch (err) {
     fail("website booking request saved and admin popup ack", err);

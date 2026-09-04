@@ -26,6 +26,7 @@ function normalizeBookingRequest(row = {}, idFallback = "") {
     helpWith: blank(row.helpWith || row.help_with || row.help),
     notes: blank(row.notes),
     seenAt: blank(row.seenAt),
+    handledAt: blank(row.handledAt),
     createdAt: blank(row.createdAt),
   };
 }

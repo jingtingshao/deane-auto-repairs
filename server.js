@@ -4204,14 +4204,24 @@ app.post("/api/booking", async (req, res) => {
   res.json({ ok: true, id: saved.id });
 });
 
+function bookingRequestCounts(rows) {
+  const unseen = rows.filter((row) => !row.seenAt && !row.handledAt);
+  const pending = rows.filter((row) => !row.handledAt);
+  return {
+    unseen,
+    pending,
+    unseenCount: unseen.length,
+    pendingCount: pending.length,
+  };
+}
+
 app.get("/api/booking-requests", requireAdmin, (_req, res) => {
   try {
     const rows = readBookingRequests();
-    const unseen = rows.filter((row) => !row.seenAt);
+    const counts = bookingRequestCounts(rows);
     res.json({
-      unseen,
+      ...counts,
       recent: rows.slice(0, 30),
-      unseenCount: unseen.length,
     });
   } catch (err) {
     console.error("Booking requests list failed:", err);
@@ -4226,7 +4236,7 @@ app.post("/api/booking-requests/ack-all", requireAdmin, (_req, res) => {
       row.seenAt ? row : { ...row, seenAt: now }
     );
     writeBookingRequests(rows);
-    res.json({ ok: true, unseenCount: 0 });
+    res.json({ ok: true, ...bookingRequestCounts(rows) });
   } catch (err) {
     console.error("Booking requests ack-all failed:", err);
     res.status(500).json({ error: "Could not mark booking requests as seen." });
@@ -4241,11 +4251,44 @@ app.post("/api/booking-requests/:id/ack", requireAdmin, (req, res) => {
     if (index < 0) return res.status(404).json({ error: "Booking request not found." });
     if (!rows[index].seenAt) rows[index] = { ...rows[index], seenAt: nowIso() };
     writeBookingRequests(rows);
-    const unseenCount = rows.filter((row) => !row.seenAt).length;
-    res.json({ ok: true, request: rows[index], unseenCount });
+    res.json({ ok: true, request: rows[index], ...bookingRequestCounts(rows) });
   } catch (err) {
     console.error("Booking request ack failed:", err);
     res.status(500).json({ error: "Could not mark booking request as seen." });
+  }
+});
+
+app.post("/api/booking-requests/:id/added", requireAdmin, (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    const rows = readBookingRequests();
+    const index = rows.findIndex((row) => row.id === id);
+    if (index < 0) return res.status(404).json({ error: "Booking request not found." });
+    const now = nowIso();
+    rows[index] = {
+      ...rows[index],
+      seenAt: rows[index].seenAt || now,
+      handledAt: rows[index].handledAt || now,
+    };
+    writeBookingRequests(rows);
+    res.json({ ok: true, request: rows[index], ...bookingRequestCounts(rows) });
+  } catch (err) {
+    console.error("Booking request added mark failed:", err);
+    res.status(500).json({ error: "Could not mark booking request as added." });
+  }
+});
+
+app.delete("/api/booking-requests/:id", requireAdmin, (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    const rows = readBookingRequests();
+    const next = rows.filter((row) => row.id !== id);
+    if (next.length === rows.length) return res.status(404).json({ error: "Booking request not found." });
+    writeBookingRequests(next);
+    res.json({ ok: true, ...bookingRequestCounts(next) });
+  } catch (err) {
+    console.error("Booking request delete failed:", err);
+    res.status(500).json({ error: "Could not delete booking request." });
   }
 });
 

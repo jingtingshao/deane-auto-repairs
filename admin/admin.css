@@ -2561,9 +2561,8 @@ label.check input {
   cursor: pointer;
 }
 
-.cal-day.is-bookable:hover {
-  border-color: var(--cal-day-accent, #c5d8f0);
-  box-shadow: 0 4px 14px rgba(26, 35, 50, 0.08);
+.cal-day.is-today {
+  box-shadow: 0 0 0 2px var(--lime, #dbea4c);
 }
 
 .cal-day-header {

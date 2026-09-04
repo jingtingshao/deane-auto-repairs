@@ -1023,9 +1023,9 @@
   padding: 0.7rem 0.85rem;
 }
 
-.calendar-web-row.is-seen {
-  border-left-color: #90a4ae;
-  opacity: 0.88;
+.calendar-web-row.is-added {
+  border-left-color: var(--green, #25855a);
+  opacity: 0.92;
 }
 
 .calendar-web-row p {
@@ -1034,6 +1034,22 @@
 
 .calendar-web-row small {
   color: var(--muted);
+}
+
+.calendar-web-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.calendar-web-added {
+  align-self: center;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--green, #25855a);
 }
 
 @keyframes booking-alert-pop {

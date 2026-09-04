@@ -11,8 +11,8 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260902backupfoot" />
-    <link rel="stylesheet" href="admin-refresh.css?v=20260904bookalert" />
+    <link rel="stylesheet" href="admin.css?v=20260904fromtoday" />
+    <link rel="stylesheet" href="admin-refresh.css?v=20260904bookadded" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -194,7 +194,7 @@
 
         <section id="calendar-section" hidden>
           <section id="calendar-list-view">
-            <p class="muted small">Default is the next two working weeks (Mon–Sat). Each Sunday the finished week drops off. Switch to 1 month for four weeks. Use + Book to add an appointment.</p>
+            <p class="muted small">Starts today and shows the next 14 open days (Sunday closed). Switch to 1 month for 24 open days. Use + Book to add an appointment.</p>
             <div class="calendar-toolbar">
               <div class="calendar-nav">
                 <button type="button" id="btn-cal-prev" class="ghost">←</button>
@@ -203,7 +203,7 @@
                 <strong id="calendar-range-label"></strong>
               </div>
               <div class="calendar-view-toggle filter-row">
-                <button type="button" class="ghost is-active" data-cal-view="fortnight">2 weeks</button>
+                <button type="button" class="ghost is-active" data-cal-view="fortnight">14 days</button>
                 <button type="button" class="ghost" data-cal-view="month">1 month</button>
               </div>
               <button type="button" id="btn-cal-remind-tomorrow" class="ghost" hidden>Remind tomorrow</button>
@@ -803,12 +803,12 @@
 
     <script src="admin.js?v=20260904bookalert"></script>
     <script src="dashboard.js?v=20260902backupfoot"></script>
-    <script src="calendar.js?v=20260904bookalert"></script>
+    <script src="calendar.js?v=20260904fromtoday"></script>
     <script src="jobs.js?v=20260902sentence"></script>
     <script src="supplier-invoices.js?v=20260829nopreview"></script>
     <script src="billing.js?v=20260902sentence"></script>
     <script src="customers.js?v=20260830oneplate"></script>
     <script src="sms-inbox.js?v=20260830yesno"></script>
-    <script src="booking-alerts.js?v=20260904bookalert"></script>
+    <script src="booking-alerts.js?v=20260904bookadded"></script>
   </body>
 </html>
