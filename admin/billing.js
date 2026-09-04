@@ -812,8 +812,11 @@ function fillForm(doc) {
         btn.classList.remove("is-active");
       });
       renderPayments();
+      renderReferralCredits();
     } else {
       paymentRows = [];
+      const refBox = document.getElementById("billing-referral-credits");
+      if (refBox) refBox.hidden = true;
     }
   }
 
@@ -1224,7 +1227,8 @@ function paymentsTotal() {
 
 function invoiceBalanceDue() {
   const total = Number(currentBill?.totals?.totalIncl) || invoiceTotalIncl();
-  return round2(Math.max(0, total - paymentsTotal()));
+  const credits = Number(currentBill?.referralCreditTotal) || 0;
+  return round2(Math.max(0, total - paymentsTotal() - credits));
 }
 
 function selectedPayMethod() {
@@ -1245,17 +1249,126 @@ function updatePaymentSummary() {
   if (!el || currentBill?.kind !== "invoice") return;
   const total = Number(currentBill.totals?.totalIncl) || invoiceTotalIncl();
   const paid = paymentsTotal();
+  const credits = Number(currentBill.referralCreditTotal) || 0;
   const due = invoiceBalanceDue();
   let status =
-    paid <= 0 ? "Unpaid" : due <= 0 ? "Paid" : "Deposit / partial";
+    paid + credits <= 0 ? "Unpaid" : due <= 0 ? "Paid" : "Deposit / partial";
   if (due > 0 && currentBill.overdue) status = "Overdue";
-  el.textContent = `Status: ${status} · Paid ${money(paid)} · Balance due ${money(due)} · Invoice ${money(total)}`;
+  const creditBit =
+    credits > 0 ? ` · Referral credit ${money(credits)}` : "";
+  el.textContent = `Status: ${status} · Paid ${money(paid)}${creditBit} · Balance due ${money(due)} · Invoice ${money(total)}`;
   const hint = document.getElementById("billing-pay-full-hint");
   if (hint) {
     hint.textContent =
       due > 0
         ? `Add payment records the full balance due (${money(due)}).`
         : "Nothing left to pay.";
+  }
+}
+
+async function renderReferralCredits() {
+  const box = document.getElementById("billing-referral-credits");
+  const summaryEl = document.getElementById("billing-referral-summary");
+  const actionsEl = document.getElementById("billing-referral-actions");
+  if (!box || !summaryEl || !actionsEl) return;
+  if (!currentBill || currentBill.kind !== "invoice" || currentBill.status === "void") {
+    box.hidden = true;
+    return;
+  }
+
+  const applied = Number(currentBill.referralCreditTotal) || 0;
+  const customerId = String(currentBill.customerId || "").trim();
+  let available = 0;
+  let creditCount = 0;
+  if (customerId) {
+    try {
+      const bal = await Admin.api(
+        `/api/referral-credits?customerId=${encodeURIComponent(customerId)}`
+      );
+      available = Number(bal.balance) || 0;
+      creditCount = Number(bal.creditCount) || 0;
+    } catch {
+      available = 0;
+    }
+  }
+
+  const total = Number(currentBill.totals?.totalIncl) || invoiceTotalIncl();
+  const canApply =
+    customerId &&
+    available >= 20 &&
+    applied < 40 &&
+    total + 0.001 >= 50 &&
+    invoiceBalanceDue() + 0.001 >= 20;
+
+  box.hidden = false;
+  summaryEl.textContent =
+    applied > 0
+      ? `Applied on this invoice: ${money(applied)}. Available wallet: ${money(available)} (${creditCount} credit${creditCount === 1 ? "" : "s"}).`
+      : available > 0
+        ? `Available wallet: ${money(available)} (${creditCount} credit${creditCount === 1 ? "" : "s"}). Min spend $50 · max $40 · whole $20 only.`
+        : "No referral credits on this customer.";
+
+  actionsEl.innerHTML = "";
+  if (canApply) {
+    const applyBtn = document.createElement("button");
+    applyBtn.type = "button";
+    applyBtn.className = "primary";
+    applyBtn.id = "btn-apply-referral-credits";
+    applyBtn.textContent =
+      available >= 40 && applied <= 0
+        ? "Apply referral credits (up to $40)"
+        : "Apply referral credit ($20)";
+    applyBtn.addEventListener("click", async () => {
+      try {
+        const result = await Admin.api(
+          `/api/billing/${currentBill.id}/apply-referral-credits`,
+          { method: "POST", body: "{}" }
+        );
+        currentBill = result.doc;
+        paymentRows = (currentBill.payments || []).map((p) => ({
+          id: p.id || crypto.randomUUID(),
+          amount: Number(p.amount) || 0,
+          paidAt: p.paidAt || "",
+          note: p.note || "",
+        }));
+        renderPayments();
+        await renderReferralCredits();
+        Admin.showStatus?.(
+          `Applied ${money(result.appliedAmount)} referral credit.`
+        );
+      } catch (err) {
+        alert(err.message || "Could not apply referral credits.");
+      }
+    });
+    actionsEl.appendChild(applyBtn);
+  }
+  if (applied > 0) {
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "ghost";
+    removeBtn.id = "btn-remove-referral-credits";
+    removeBtn.textContent = "Remove referral credits";
+    removeBtn.addEventListener("click", async () => {
+      if (!confirm("Remove referral credits from this invoice?")) return;
+      try {
+        const result = await Admin.api(
+          `/api/billing/${currentBill.id}/remove-referral-credits`,
+          { method: "POST", body: "{}" }
+        );
+        currentBill = result.doc;
+        paymentRows = (currentBill.payments || []).map((p) => ({
+          id: p.id || crypto.randomUUID(),
+          amount: Number(p.amount) || 0,
+          paidAt: p.paidAt || "",
+          note: p.note || "",
+        }));
+        renderPayments();
+        await renderReferralCredits();
+      } catch (err) {
+        alert(err.message || "Could not remove referral credits.");
+      }
+    });
+    actionsEl.appendChild(removeBtn);
   }
 }
 

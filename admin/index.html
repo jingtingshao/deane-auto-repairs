@@ -42,6 +42,7 @@
           <button type="button" id="nav-quotes"><b>$</b> Quotes <i id="nav-quotes-count" hidden>0</i></button>
           <button type="button" id="nav-invoices"><b>$</b> Invoices <i id="nav-invoices-count" hidden>0</i></button>
           <button type="button" id="nav-customers"><b>◉</b> Customers</button>
+          <button type="button" id="nav-referrals"><b>🎁</b> Referrals</button>
           <button type="button" id="nav-sms-inbox"><b>✉</b> SMS Inbox</button>
           <button type="button" id="nav-reports"><b>▧</b> Service reports</button>
         </nav>
@@ -547,6 +548,7 @@
                 <label>Email<input id="customer-email" name="customerEmail" type="email" /></label>
               </div>
               <label>Address<textarea id="customer-address" name="customerAddress" rows="2"></textarea></label>
+              <p id="customer-referral-balance" class="muted small" hidden></p>
               <div class="vehicles-block">
                 <div class="vehicles-head">
                   <p class="vehicles-label">Vehicle (one plate per customer)</p>
@@ -563,6 +565,49 @@
             </fieldset>
           </form>
           <div id="customers-list" class="report-list"></div>
+        </section>
+
+        <section id="referrals-section" hidden>
+          <p class="muted small">
+            Earn <strong>$20</strong> for every successful referral. Credits stack, last 6 months,
+            earliest expiry used first. Min spend $50 · max $40 per invoice · whole $20 only ·
+            no cash-out · not transferable. New customer must complete first qualifying paid service.
+          </p>
+          <div id="referrals-filter" class="filter-row">
+            <button type="button" class="ghost is-active" data-ref-tab="referrals">Referrals</button>
+            <button type="button" class="ghost" data-ref-tab="credits">Credits</button>
+            <button type="button" class="primary" id="btn-referral-new">+ Register referral</button>
+          </div>
+
+          <form id="referral-form" class="report-form" hidden>
+            <fieldset>
+              <legend>Register referral</legend>
+              <div class="grid-2">
+                <label>
+                  Referrer (gets $20)
+                  <select id="referral-referrer" required>
+                    <option value="">Select customer…</option>
+                  </select>
+                </label>
+                <label>
+                  New customer (first paid service)
+                  <select id="referral-referred" required>
+                    <option value="">Select customer…</option>
+                  </select>
+                </label>
+              </div>
+              <label>
+                Notes
+                <input id="referral-notes" type="text" placeholder="Optional" autocomplete="off" />
+              </label>
+              <div class="line-actions">
+                <button type="submit" class="primary">Save referral</button>
+                <button type="button" class="ghost" id="btn-referral-cancel">Cancel</button>
+              </div>
+            </fieldset>
+          </form>
+
+          <div id="referrals-list" class="report-list"></div>
         </section>
 
         <section id="sms-inbox-section" hidden>
@@ -696,6 +741,11 @@
                   Amounts are GST-inclusive. Status updates from the total paid.
                 </p>
                 <p id="billing-payment-summary" class="muted small"></p>
+                <div id="billing-referral-credits" class="referral-credit-box" hidden>
+                  <p class="pay-method-label">Referral credits</p>
+                  <p id="billing-referral-summary" class="muted small"></p>
+                  <div id="billing-referral-actions" class="preset-row"></div>
+                </div>
                 <div class="line-table-wrap">
                   <table class="line-table parts-table">
                     <thead>
@@ -801,13 +851,14 @@
       </div>
     </div>
 
-    <script src="admin.js?v=20260904bookalert"></script>
+    <script src="admin.js?v=20260904referral"></script>
     <script src="dashboard.js?v=20260902backupfoot"></script>
     <script src="calendar.js?v=20260904bookalert"></script>
     <script src="jobs.js?v=20260902sentence"></script>
     <script src="supplier-invoices.js?v=20260829nopreview"></script>
-    <script src="billing.js?v=20260902sentence"></script>
-    <script src="customers.js?v=20260830oneplate"></script>
+    <script src="billing.js?v=20260904referral"></script>
+    <script src="customers.js?v=20260904referral"></script>
+    <script src="referrals.js?v=20260904referral"></script>
     <script src="sms-inbox.js?v=20260830yesno"></script>
     <script src="booking-alerts.js?v=20260904bookalert"></script>
   </body>
