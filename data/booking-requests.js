@@ -8,9 +8,17 @@ function blank(value) {
 
 function startTimeFromPreferred(value) {
   const raw = blank(value).toLowerCase();
+  if (!raw) return "";
   if (raw.includes("afternoon")) return "13:00";
   if (raw.includes("morning")) return "09:00";
-  return "";
+  const match = raw.match(/(\d{1,2})\s*:\s*(\d{2})/);
+  if (!match) return "";
+  let hour = Number(match[1]);
+  const minute = match[2];
+  if (/\bpm\b/.test(raw) && hour < 12) hour += 12;
+  if (/\bam\b/.test(raw) && hour === 12) hour = 0;
+  if (hour < 0 || hour > 23) return "";
+  return `${String(hour).padStart(2, "0")}:${minute}`;
 }
 
 function normalizeBookingRequest(row = {}, idFallback = "") {

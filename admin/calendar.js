@@ -833,6 +833,16 @@
   async function fromWebsiteRequest(row) {
     const preferred = String(row.preferredDate || "").slice(0, 10);
     const timeRaw = String(row.preferredTime || "").toLowerCase();
+    const clockMatch = timeRaw.match(/(\d{1,2})\s*:\s*(\d{2})/);
+    let startTime = "09:00";
+    if (clockMatch) {
+      const hour = Number(clockMatch[1]);
+      if (hour >= 0 && hour <= 23) {
+        startTime = `${String(hour).padStart(2, "0")}:${clockMatch[2]}`;
+      }
+    } else if (timeRaw.includes("afternoon")) {
+      startTime = "13:00";
+    }
     const noteBits = [
       "Website booking request.",
       row.preferredDate || row.preferredTime
@@ -842,7 +852,7 @@
     ].filter(Boolean);
     await newAppointment({
       date: /^\d{4}-\d{2}-\d{2}$/.test(preferred) ? preferred : Admin.todayIso(),
-      startTime: timeRaw.includes("afternoon") ? "13:00" : "09:00",
+      startTime,
       customerName: row.name || "",
       customerPhone: row.phone || "",
       customerEmail: row.email || "",

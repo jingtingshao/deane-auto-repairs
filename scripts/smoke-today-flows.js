@@ -123,7 +123,7 @@ function unitTests() {
     const row = bookingRequestsLib.normalizeBookingRequest({
       name: "Jane",
       preferred_date: "—",
-      preferred_time: "Morning drop-off",
+      preferred_time: "09:00",
       help: "WOF",
       notes: "—",
     });
@@ -134,6 +134,8 @@ function unitTests() {
     assert.equal(row.handledAt, "");
     assert.equal(bookingRequestsLib.startTimeFromPreferred("Afternoon drop-off"), "13:00");
     assert.equal(bookingRequestsLib.startTimeFromPreferred("Morning drop-off"), "09:00");
+    assert.equal(bookingRequestsLib.startTimeFromPreferred("8:00"), "08:00");
+    assert.equal(bookingRequestsLib.startTimeFromPreferred("16:00"), "16:00");
     pass("website booking request normalizes blank dashes");
   } catch (err) {
     fail("website booking request normalizes blank dashes", err);
@@ -207,7 +209,7 @@ async function integrationTests(base, dataDir) {
       vehicle: "Mazda 3",
       registration: "BK001",
       preferred_date: "2026-09-10",
-      preferred_time: "Morning drop-off",
+      preferred_time: "09:00",
       help_with: "WOF",
       notes: "Squeaky brakes",
     });
