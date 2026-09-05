@@ -580,6 +580,7 @@
             no cash-out · not transferable.
             <strong>Each new customer can generate only one referral reward</strong>
             (existing customers cannot be registered as a “new customer” again).
+            After a credit is used, Referrals and Credits show the invoice it was applied to.
           </p>
           <div id="referrals-filter" class="filter-row">
             <button type="button" class="ghost is-active" data-ref-tab="referrals">Referrals</button>
@@ -745,7 +746,7 @@
               <fieldset id="billing-payment-fieldset" hidden>
                 <legend>Payment</legend>
                 <p class="muted small">
-                  Tap Cash or EFTPOS, then Add payment to record the full balance due.
+                  Choose Cash, EFTPOS or Credits, then Add payment.
                   Amounts are GST-inclusive. Status updates from the total paid.
                 </p>
                 <p id="billing-payment-summary" class="muted small"></p>
@@ -777,6 +778,9 @@
                     <div class="pay-method-row" role="group" aria-label="Paid by">
                       <button type="button" class="ghost" data-pay-method="Cash">Cash</button>
                       <button type="button" class="ghost" data-pay-method="EFTPOS">EFTPOS</button>
+                      <button type="button" class="ghost" data-pay-method="Credits" id="pay-method-credits" data-admin-only>
+                        Credits
+                      </button>
                     </div>
                   </div>
                   <p id="billing-pay-full-hint" class="muted small">Add payment records the full balance due.</p>
@@ -864,9 +868,9 @@
     <script src="calendar.js?v=20260905staffrole"></script>
     <script src="jobs.js?v=20260905staffrole"></script>
     <script src="supplier-invoices.js?v=20260829nopreview"></script>
-    <script src="billing.js?v=20260906fixedinv"></script>
+    <script src="billing.js?v=20260906paycredits2"></script>
     <script src="customers.js?v=20260906techcustomers"></script>
-    <script src="referrals.js?v=20260904oneReward"></script>
+    <script src="referrals.js?v=20260906usedon"></script>
     <script src="sms-inbox.js?v=20260830yesno"></script>
     <script src="booking-alerts.js?v=20260904bookadded"></script>
   </body>

@@ -10,6 +10,7 @@
   let tab = "referrals";
   let referrals = [];
   let creditOwners = [];
+  let creditLedger = [];
   let customers = [];
 
   function money(n) {
@@ -46,7 +47,38 @@
   }
 
   async function loadCredits() {
-    creditOwners = await Admin.api("/api/referral-credits");
+    const data = await Admin.api("/api/referral-credits");
+    if (Array.isArray(data)) {
+      creditOwners = data;
+      creditLedger = [];
+    } else {
+      creditOwners = data?.balances || [];
+      creditLedger = data?.ledger || [];
+    }
+  }
+
+  function invoiceButtons(items) {
+    const rows = Array.isArray(items) ? items.filter((u) => u.invoiceId) : [];
+    if (!rows.length) return "—";
+    return rows
+      .map((u) => {
+        const label = Admin.escapeHtml(u.invoiceNumber || "Invoice");
+        return `<button type="button" class="ghost" data-open-invoice="${Admin.escapeAttr(
+          u.invoiceId
+        )}">${label}</button>`;
+      })
+      .join(" ");
+  }
+
+  function bindInvoiceOpens(root) {
+    root?.querySelectorAll("[data-open-invoice]").forEach((btn) => {
+      btn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        Admin.setSection("invoices");
+        window.DeaneBilling?.openDoc?.(btn.dataset.openInvoice);
+      });
+    });
   }
 
   function renderReferrals() {
@@ -67,6 +99,7 @@
             <th>Status</th>
             <th>Qualifying invoice</th>
             <th>Credit</th>
+            <th>Used on invoice</th>
             <th></th>
           </tr>
         </thead>
@@ -90,14 +123,20 @@
               const canCancel =
                 row.status === "pending" ||
                 (row.status === "qualified" && row.creditStatus === "active");
+              const qualifyBtn = row.qualifyingInvoiceId
+                ? `<button type="button" class="ghost" data-open-invoice="${Admin.escapeAttr(
+                    row.qualifyingInvoiceId
+                  )}">${Admin.escapeHtml(row.qualifyingInvoiceNumber || "Invoice")}</button>`
+                : "—";
               return `
             <tr>
               <td>${Admin.escapeHtml(when || "—")}</td>
               <td>${Admin.escapeHtml(row.referrerName || "—")}</td>
               <td>${Admin.escapeHtml(row.referredName || "—")}</td>
               <td>${Admin.escapeHtml(statusLabel(row.status))}${reason}</td>
-              <td>${Admin.escapeHtml(row.qualifyingInvoiceNumber || "—")}</td>
+              <td>${qualifyBtn}</td>
               <td class="muted small">${Admin.escapeHtml(creditBits.join(" · ") || "—")}</td>
+              <td>${invoiceButtons(row.usedOn)}</td>
               <td>${
                 canCancel
                   ? `<button type="button" class="ghost" data-cancel-referral="${Admin.escapeAttr(
@@ -112,6 +151,7 @@
       </table>
     </div>`;
 
+    bindInvoiceOpens(listEl);
     listEl.querySelectorAll("[data-cancel-referral]").forEach((btn) => {
       btn.addEventListener("click", async () => {
         if (!confirm("Cancel this referral?")) return;
@@ -132,12 +172,18 @@
   function renderCredits() {
     if (!listEl) return;
     const withBalance = (creditOwners || []).filter((row) => Number(row.balance) > 0);
-    if (!withBalance.length) {
+    const usedRows = (creditLedger || []).filter((row) => row.status === "used");
+    const otherRows = (creditLedger || []).filter(
+      (row) => row.status === "expired" || row.status === "void"
+    );
+    if (!withBalance.length && !usedRows.length && !otherRows.length) {
       listEl.innerHTML =
-        `<p class="muted">No active referral credits. Credits appear after a referred customer’s first qualifying paid service ($50+).</p>`;
+        `<p class="muted">No referral credits yet. Credits appear after a referred customer’s first qualifying paid service ($50+).</p>`;
       return;
     }
-    listEl.innerHTML = `
+    const activeTable = withBalance.length
+      ? `
+    <h3 class="muted small">Available</h3>
     <div class="billing-table-wrap">
       <table class="billing-table">
         <thead>
@@ -168,7 +214,48 @@
             .join("")}
         </tbody>
       </table>
-    </div>`;
+    </div>`
+      : `<p class="muted">No unused credits right now.</p>`;
+
+    const usedTable = usedRows.length
+      ? `
+    <h3 class="muted small">Used on invoices</h3>
+    <div class="billing-table-wrap">
+      <table class="billing-table">
+        <thead>
+          <tr>
+            <th>Customer</th>
+            <th>Amount</th>
+            <th>Used on invoice</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${usedRows
+            .map((row) => {
+              const when = (row.usedOn || [])
+                .map((u) => u.usedAt)
+                .filter(Boolean)
+                .sort()
+                .slice(-1)[0];
+              return `
+            <tr>
+              <td>${Admin.escapeHtml(row.ownerName || "—")}</td>
+              <td>${money(row.amount)}</td>
+              <td>${invoiceButtons(row.usedOn)}</td>
+              <td>${Admin.escapeHtml(
+                when ? Admin.formatDateShort(when) : "—"
+              )}</td>
+            </tr>`;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>`
+      : "";
+
+    listEl.innerHTML = `${activeTable}${usedTable}`;
+    bindInvoiceOpens(listEl);
   }
 
   function render() {

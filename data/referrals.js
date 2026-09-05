@@ -558,6 +558,20 @@ function removeCreditsFromInvoice({ storeRows, invoice }) {
   return { rows, invoice, removedAmount };
 }
 
+function usedOnFromCredit(credit, billingById) {
+  return (credit?.usedOn || [])
+    .map((u) => {
+      const invoice = billingById.get(u.invoiceId);
+      return {
+        invoiceId: String(u.invoiceId || "").trim(),
+        invoiceNumber: invoice?.number || "",
+        amount: money(u.amount),
+        usedAt: String(u.usedAt || "").trim(),
+      };
+    })
+    .filter((u) => u.invoiceId);
+}
+
 function enrichReferralList(rows, customersById, billingById) {
   return rows
     .filter((row) => row.type === "referral")
@@ -566,6 +580,7 @@ function enrichReferralList(rows, customersById, billingById) {
       const referred = customersById.get(row.referredCustomerId);
       const invoice = billingById.get(row.qualifyingInvoiceId);
       const credit = rows.find((c) => c.type === "credit" && c.id === row.creditId);
+      const usedOn = usedOnFromCredit(credit, billingById);
       return {
         ...row,
         referrerName: referrer?.customerName || referrer?.name || "",
@@ -574,9 +589,38 @@ function enrichReferralList(rows, customersById, billingById) {
         creditStatus: credit?.status || "",
         creditExpiresAt: credit?.expiresAt || "",
         creditRemaining: credit ? credit.remaining : null,
+        usedOn,
+        usedOnInvoiceNumber: usedOn
+          .map((u) => u.invoiceNumber || "invoice")
+          .join(", "),
       };
     })
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+function creditLedger(rows, customersById, billingById) {
+  return rows
+    .filter((row) => row.type === "credit")
+    .map((row) => {
+      const owner = customersById.get(row.ownerCustomerId);
+      const usedOn = usedOnFromCredit(row, billingById);
+      return {
+        id: row.id,
+        ownerCustomerId: row.ownerCustomerId,
+        ownerName: owner?.customerName || owner?.name || "",
+        status: row.status,
+        amount: row.amount,
+        remaining: row.remaining,
+        issuedAt: row.issuedAt,
+        expiresAt: row.expiresAt,
+        referralId: row.referralId,
+        usedOn,
+        usedOnInvoiceNumber: usedOn
+          .map((u) => u.invoiceNumber || "invoice")
+          .join(", "),
+      };
+    })
+    .sort((a, b) => String(b.issuedAt || b.createdAt || "").localeCompare(String(a.issuedAt || a.createdAt || "")));
 }
 
 module.exports = {
@@ -605,4 +649,5 @@ module.exports = {
   applyCreditsToInvoice,
   removeCreditsFromInvoice,
   enrichReferralList,
+  creditLedger,
 };

@@ -4749,6 +4749,7 @@ app.get("/api/referral-credits", requireOwnerAdmin, (req, res) => {
       if (!owners.has(row.ownerCustomerId)) owners.set(row.ownerCustomerId, true);
     }
     const names = customerNameMap();
+    const billingById = billingIdMap(readBilling());
     const list = [...owners.keys()].map((id) => {
       const summary = referralsLib.creditBalanceSummary(rows, id);
       const customer = names.get(id);
@@ -4757,7 +4758,10 @@ app.get("/api/referral-credits", requireOwnerAdmin, (req, res) => {
         customerName: customer?.customerName || "",
       };
     });
-    res.json(list);
+    res.json({
+      balances: list,
+      ledger: referralsLib.creditLedger(rows, names, billingById),
+    });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || "Could not load credits." });
   }
@@ -4784,7 +4788,7 @@ app.post("/api/billing/:id/apply-referral-credits", requireOwnerAdmin, (req, res
     appendHistory(result.invoice, {
       type: "referral_credit",
       summary: "Referral credit applied",
-      detail: `${result.appliedAmount.toFixed(2)} from referral credits`,
+      detail: `${result.appliedAmount.toFixed(2)} from referral credits on ${result.invoice.number || "invoice"}`,
       amount: result.appliedAmount,
     });
     docs[index] = result.invoice;

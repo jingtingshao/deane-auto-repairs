@@ -1257,7 +1257,7 @@ function selectedPayMethod() {
 function requirePayMethod() {
   const method = selectedPayMethod();
   if (method) return method;
-  alert("Choose Cash or EFTPOS.");
+  alert("Choose Cash, EFTPOS or Credits.");
   return "";
 }
 
@@ -1278,7 +1278,9 @@ function updatePaymentSummary() {
   if (hint) {
     hint.textContent =
       due > 0
-        ? `Add payment records the full balance due (${money(due)}).`
+        ? selectedPayMethod() === "Credits"
+          ? `Add payment applies whole $20 referral credit(s) against the ${money(due)} due.`
+          : `Add payment records the full balance due (${money(due)}).`
         : "Nothing left to pay.";
   }
 }
@@ -1397,20 +1399,36 @@ async function renderReferralCredits() {
 
 function renderPayments() {
   if (!billingPaymentsEl) return;
-  if (!paymentRows.length) {
-    billingPaymentsEl.innerHTML =
-      '<tr><td colspan="4" class="muted">No payments yet.</td></tr>';
-  } else {
-    billingPaymentsEl.innerHTML = paymentRows
-      .map(
-        (p, index) => `<tr data-index="${index}">
+  const creditRows = (currentBill?.referralCreditsApplied || []).filter(
+    (row) => Number(row.amount) > 0
+  );
+  const payHtml = paymentRows.length
+    ? paymentRows
+        .map(
+          (p, index) => `<tr data-index="${index}">
           <td>${Admin.escapeHtml(Admin.formatDateShort(p.paidAt) || "—")}</td>
           <td>${money(p.amount)}</td>
           <td>${Admin.escapeHtml(p.note || "")}</td>
           <td><button type="button" class="ghost" data-remove-pay="${index}">×</button></td>
         </tr>`
-      )
-      .join("");
+        )
+        .join("")
+    : "";
+  const creditHtml = creditRows
+    .map(
+      (row) => `<tr>
+          <td>${Admin.escapeHtml(Admin.formatDateShort(row.usedAt) || "—")}</td>
+          <td>${money(row.amount)}</td>
+          <td>Referral credit</td>
+          <td></td>
+        </tr>`
+    )
+    .join("");
+  if (!payHtml && !creditHtml) {
+    billingPaymentsEl.innerHTML =
+      '<tr><td colspan="4" class="muted">No payments yet.</td></tr>';
+  } else {
+    billingPaymentsEl.innerHTML = `${creditHtml}${payHtml}`;
     billingPaymentsEl.querySelectorAll("[data-remove-pay]").forEach((btn) => {
       btn.addEventListener("click", () => {
         paymentRows.splice(Number(btn.dataset.removePay), 1);
@@ -1420,6 +1438,37 @@ function renderPayments() {
     });
   }
   updatePaymentSummary();
+}
+
+async function applyCreditsAsPayment() {
+  if (!currentBill?.id || currentBill.unsaved) {
+    alert("Save the invoice first, then apply credits.");
+    return;
+  }
+  if (Admin.isTechnician?.()) {
+    alert("Only the admin account can apply referral credits.");
+    return;
+  }
+  try {
+    const result = await Admin.api(
+      `/api/billing/${currentBill.id}/apply-referral-credits`,
+      { method: "POST", body: "{}" }
+    );
+    currentBill = result.doc;
+    paymentRows = (currentBill.payments || []).map((p) => ({
+      id: p.id || crypto.randomUUID(),
+      amount: Number(p.amount) || 0,
+      paidAt: p.paidAt || "",
+      note: p.note || "",
+    }));
+    renderPayments();
+    await renderReferralCredits();
+    Admin.showStatus?.(
+      `Applied ${money(result.appliedAmount)} referral credit.`
+    );
+  } catch (err) {
+    alert(err.message || "Could not apply referral credits.");
+  }
 }
 
 function addPaymentRow(amount, note) {
@@ -1842,13 +1891,18 @@ document.querySelectorAll("[data-pay-method]").forEach((btn) => {
     document.querySelectorAll("[data-pay-method]").forEach((other) => {
       other.classList.toggle("is-active", other === btn);
     });
+    updatePaymentSummary();
   });
 });
 
-document.getElementById("btn-add-payment")?.addEventListener("click", () => {
+document.getElementById("btn-add-payment")?.addEventListener("click", async () => {
   if (currentBill?.kind !== "invoice") return;
   const method = requirePayMethod();
   if (!method) return;
+  if (method === "Credits") {
+    await applyCreditsAsPayment();
+    return;
+  }
   addPaymentRow(invoiceBalanceDue(), method);
 });
 
@@ -1856,6 +1910,10 @@ document.getElementById("btn-add-deposit-30")?.addEventListener("click", () => {
   if (currentBill?.kind !== "invoice") return;
   const method = requirePayMethod();
   if (!method) return;
+  if (method === "Credits") {
+    alert("Use Cash or EFTPOS for a 30% deposit. Credits are whole $20 amounts only.");
+    return;
+  }
   const total = Number(currentBill.totals?.totalIncl) || invoiceTotalIncl();
   addPaymentRow(round2(total * 0.3), method);
 });
