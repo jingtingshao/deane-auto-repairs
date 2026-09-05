@@ -1,8 +1,8 @@
 /** Fixed-price packages aligned to the public website.
- * Advertised package prices ($79 / $199 / $279 / $125) are GST-inclusive.
+ * Advertised package prices ($79 / $99 / $199 / $279 / $125) are GST-inclusive.
  * Line unitPriceIncl fields are stored excl. GST.
  * GST on advertised packages uses IRD 3/23 of the inclusive amount so totals
- * match the website ($79, $125, $199, $279, $278, $358).
+ * match the website ($79, $99, $125, $199, $279, $278, $358).
  */
 
 const GST_RATE = 0.15;
@@ -11,6 +11,7 @@ const QUOTE_VALID_DAYS = 7;
 
 const ADVERTISED_INCL = {
   wof: 79,
+  basic: 99,
   standard: 199,
   premium: 279,
   labourHour: 125,
@@ -48,6 +49,7 @@ function exclFromIncl(incl) {
 
 const PRICE = {
   wof: exclFromIncl(ADVERTISED_INCL.wof),
+  basic: exclFromIncl(ADVERTISED_INCL.basic),
   standard: exclFromIncl(ADVERTISED_INCL.standard),
   premium: exclFromIncl(ADVERTISED_INCL.premium),
   labourHour: exclFromIncl(ADVERTISED_INCL.labourHour),
@@ -126,6 +128,15 @@ const PRESETS = [
     lines: [{ description: "WOF inspection", qty: 1, unitPriceIncl: PRICE.wof }],
   },
   {
+    id: "basic",
+    kind: "invoice",
+    label: "Basic $99",
+    title: "Basic Service",
+    lines: [
+      { description: "Basic Service (petrol)", qty: 1, unitPriceIncl: PRICE.basic },
+    ],
+  },
+  {
     id: "standard",
     kind: "invoice",
     label: "Standard $199",
@@ -187,6 +198,12 @@ const QUICK_ADDS = [
     unitPriceIncl: PRICE.wof,
   },
   {
+    label: "+ Basic $99",
+    description: "Basic Service (petrol)",
+    qty: 1,
+    unitPriceIncl: PRICE.basic,
+  },
+  {
     label: "+ Standard $199",
     description: "Standard Service (petrol)",
     qty: 1,
@@ -227,7 +244,7 @@ function lineLooksLikeService(description) {
 
 /** Fixed website packages (Standard / Premium / Full Service) — not labour or parts. */
 function lineLooksLikePackageService(description) {
-  return /(standard|premium|full)\s+service/i.test(String(description || "").trim());
+  return /(basic|standard|premium|full)\s+service/i.test(String(description || "").trim());
 }
 
 function lineLooksLikeConsumable(description) {

@@ -42,6 +42,7 @@ function reviewKindForInvoice(doc) {
   const preset = String(doc?.preset || "").trim();
   if (preset === "wof") return "wof";
   if (
+    preset === "basic" ||
     preset === "standard" ||
     preset === "premium" ||
     preset === "standard_wof" ||

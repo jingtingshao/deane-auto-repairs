@@ -43,6 +43,7 @@ function isPackageServiceLine(description) {
   return (
     /^wof\b/.test(d) ||
     d.includes("wof inspection") ||
+    d.includes("basic service") ||
     d.includes("standard service") ||
     d.includes("premium service")
   );
