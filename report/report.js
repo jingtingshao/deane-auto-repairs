@@ -42,8 +42,12 @@ function formatDateShort(value) {
 
 function jobLabel(report) {
   const map = {
+    basic_service: "Basic Service",
     standard_service: "Standard Service",
-    premium_service: "Premium Service",
+    premium_service: "Premium / European Service",
+    diesel_service: "Diesel Service",
+    european_service: "European Service",
+    ppi: "Pre-purchase inspection",
     full_service: "Premium Service",
     wof: "WOF",
     standard_wof: "Standard Service + WOF",
@@ -54,6 +58,9 @@ function jobLabel(report) {
   if (map[report.jobType]) return map[report.jobType];
   if (report.servicePackage === "premium" || report.servicePackage === "full") {
     return "Premium Service";
+  }
+  if (report.servicePackage === "basic") {
+    return "Basic Service";
   }
   return "Service";
 }
@@ -94,7 +101,8 @@ function render(report, meta) {
   loading.hidden = true;
   reportEl.hidden = false;
 
-  const checks = report.checks || {};
+  const defaults = meta.defaults || {};
+  const checks = { ...defaults, ...(report.checks || {}) };
   const counts = { ok: 0, watch: 0, attention: 0, na: 0 };
   Object.values(checks).forEach((c) => {
     if (counts[c.status] != null) counts[c.status] += 1;

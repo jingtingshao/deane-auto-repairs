@@ -148,10 +148,28 @@ const PRESETS = [
   {
     id: "premium",
     kind: "invoice",
-    label: "Premium $279",
+    label: "Premium / European $279",
     title: "Premium Service",
     lines: [
-      { description: "Premium Service (petrol)", qty: 1, unitPriceIncl: PRICE.premium },
+      { description: "Premium Service (petrol / European)", qty: 1, unitPriceIncl: PRICE.premium },
+    ],
+  },
+  {
+    id: "diesel",
+    kind: "invoice",
+    label: "Diesel $279",
+    title: "Diesel Service",
+    lines: [
+      { description: "Diesel Service", qty: 1, unitPriceIncl: PRICE.premium },
+    ],
+  },
+  {
+    id: "ppi",
+    kind: "invoice",
+    label: "PPI $199",
+    title: "Pre-purchase inspection",
+    lines: [
+      { description: "Pre-purchase inspection", qty: 1, unitPriceIncl: PRICE.standard },
     ],
   },
   {
@@ -210,10 +228,22 @@ const QUICK_ADDS = [
     unitPriceIncl: PRICE.standard,
   },
   {
-    label: "+ Premium $279",
-    description: "Premium Service (petrol)",
+    label: "+ Premium / European $279",
+    description: "Premium Service (petrol / European)",
     qty: 1,
     unitPriceIncl: PRICE.premium,
+  },
+  {
+    label: "+ Diesel $279",
+    description: "Diesel Service",
+    qty: 1,
+    unitPriceIncl: PRICE.premium,
+  },
+  {
+    label: "+ PPI $199",
+    description: "Pre-purchase inspection",
+    qty: 1,
+    unitPriceIncl: PRICE.standard,
   },
   {
     label: "+ Labour $125/hr",
@@ -239,12 +269,16 @@ function lineLooksLikeWof(description) {
 }
 
 function lineLooksLikeService(description) {
-  return /\bservice\b/i.test(String(description || "").trim());
+  const d = String(description || "").trim();
+  return /\bservice\b/i.test(d) || /pre-purchase inspection/i.test(d);
 }
 
 /** Fixed website packages (Standard / Premium / Full Service) — not labour or parts. */
 function lineLooksLikePackageService(description) {
-  return /(basic|standard|premium|full)\s+service/i.test(String(description || "").trim());
+  return (
+    /(basic|standard|premium|full|diesel|european)\s+service/i.test(String(description || "").trim()) ||
+    /pre-purchase inspection/i.test(String(description || "").trim())
+  );
 }
 
 function lineLooksLikeConsumable(description) {

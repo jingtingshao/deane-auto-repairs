@@ -45,7 +45,10 @@ function isPackageServiceLine(description) {
     d.includes("wof inspection") ||
     d.includes("basic service") ||
     d.includes("standard service") ||
-    d.includes("premium service")
+    d.includes("premium service") ||
+    d.includes("diesel service") ||
+    d.includes("european service") ||
+    d.includes("pre-purchase inspection")
   );
 }
 

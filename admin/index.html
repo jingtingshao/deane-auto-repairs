@@ -110,8 +110,11 @@
                 <label
                   >Job type
                   <select name="jobType">
+                    <option value="basic_service">Basic Service ($99)</option>
                     <option value="standard_service">Standard Service ($199)</option>
-                    <option value="premium_service">Premium Service ($279)</option>
+                    <option value="premium_service">Premium / European Service ($279)</option>
+                    <option value="diesel_service">Diesel Service ($279)</option>
+                    <option value="ppi">Pre-purchase inspection ($199)</option>
                     <option value="wof">WOF only ($79)</option>
                     <option value="standard_wof">Standard Service + WOF</option>
                     <option value="premium_wof">Premium Service + WOF</option>
@@ -121,6 +124,7 @@
                 <label
                   >Service package
                   <select name="servicePackage" id="servicePackage">
+                    <option value="basic">Basic ($99)</option>
                     <option value="standard">Standard ($199)</option>
                     <option value="premium">Premium ($279)</option>
                   </select>
@@ -855,12 +859,12 @@
       </div>
     </div>
 
-    <script src="admin.js?v=20260905staffrole"></script>
+    <script src="admin.js?v=20260906basicna"></script>
     <script src="dashboard.js?v=20260902backupfoot"></script>
     <script src="calendar.js?v=20260905staffrole"></script>
     <script src="jobs.js?v=20260905staffrole"></script>
     <script src="supplier-invoices.js?v=20260829nopreview"></script>
-    <script src="billing.js?v=20260906basic99"></script>
+    <script src="billing.js?v=20260906fixedinv"></script>
     <script src="customers.js?v=20260906techcustomers"></script>
     <script src="referrals.js?v=20260904oneReward"></script>
     <script src="sms-inbox.js?v=20260830yesno"></script>

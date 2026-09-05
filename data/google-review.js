@@ -45,6 +45,9 @@ function reviewKindForInvoice(doc) {
     preset === "basic" ||
     preset === "standard" ||
     preset === "premium" ||
+    preset === "diesel" ||
+    preset === "european" ||
+    preset === "ppi" ||
     preset === "standard_wof" ||
     preset === "premium_wof"
   ) {

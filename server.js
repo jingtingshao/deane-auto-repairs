@@ -19,6 +19,7 @@ const {
   normalizePackage,
   itemsForPackage,
   emptyChecks,
+  BASIC_CHECK_CODES,
 } = require("./data/checklist");
 const business = require("./data/business");
 const catalog = require("./data/catalog");
@@ -497,13 +498,24 @@ function reportNumberFromInvoice(number) {
 function jobTypeFromInvoice(invoice) {
   const id = String(invoice?.preset || "");
   if (id === "wof") return "wof";
+  if (id === "basic") return "basic_service";
   if (id === "premium") return "premium_service";
+  if (id === "diesel") return "diesel_service";
+  if (id === "european") return "european_service";
+  if (id === "ppi") return "ppi";
   if (id === "standard") return "standard_service";
+  if (id === "standard_wof") return "standard_wof";
+  if (id === "premium_wof") return "premium_wof";
   return "repair";
 }
 
 function packageFromInvoice(invoice) {
-  return String(invoice?.preset || "") === "premium" ? "premium" : "standard";
+  const id = String(invoice?.preset || "");
+  if (id === "premium" || id === "diesel" || id === "european" || id === "ppi" || id === "premium_wof") {
+    return "premium";
+  }
+  if (id === "basic") return "basic";
+  return "standard";
 }
 
 function alignLinkedReportNumbers(reports) {
@@ -3952,7 +3964,15 @@ app.use(
 );
 app.use("/report", express.static(path.join(ROOT, "report"), { dotfiles: "deny" }));
 app.use("/billing", express.static(path.join(ROOT, "billing"), { dotfiles: "deny" }));
-app.use(express.static(ROOT, { index: "index.html", dotfiles: "deny" }));
+app.use(express.static(ROOT, {
+  index: "index.html",
+  dotfiles: "deny",
+  setHeaders(res, filePath) {
+    if (String(filePath || "").replace(/\\/g, "/").includes("/preview/")) {
+      res.setHeader("Cache-Control", "no-store");
+    }
+  },
+}));
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -4480,11 +4500,12 @@ app.get("/api/checklist", (req, res) => {
     package: pkg,
     statuses: STATUSES,
     groups: itemsForPackage(pkg),
+    defaults: emptyChecks(pkg),
     actions: {
-      standard: ACTIONS.standard,
+      standard: pkg === "basic" ? ACTIONS.basic : ACTIONS.standard,
       premiumExtra: pkg === "premium" ? ACTIONS.premiumExtra : [],
       fullExtra: pkg === "premium" ? ACTIONS.premiumExtra : [],
-      either: ACTIONS.either,
+      either: pkg === "basic" ? [] : ACTIONS.either,
     },
   });
 });
@@ -4873,8 +4894,14 @@ app.put("/api/reports/:id", requireAdmin, (req, res) => {
   let checks = body.checks || current.checks;
   if (nextPackage !== current.servicePackage) {
     const fresh = emptyChecks(nextPackage);
-    for (const code of Object.keys(fresh)) {
-      if (checks[code]) fresh[code] = checks[code];
+    if (nextPackage === "basic") {
+      for (const code of BASIC_CHECK_CODES) {
+        if (checks[code]) fresh[code] = checks[code];
+      }
+    } else if (current.servicePackage !== "basic") {
+      for (const code of Object.keys(fresh)) {
+        if (checks[code]) fresh[code] = checks[code];
+      }
     }
     checks = fresh;
   }
@@ -6785,7 +6812,7 @@ function withReportPhotos(report) {
 }
 
 function emptyReportRecord(now, extra = {}) {
-  const servicePackage = extra.servicePackage || "standard";
+  const servicePackage = normalizePackage(extra.servicePackage || "standard");
   let jobType = extra.jobType || "standard_service";
   if (jobType === "full_service") jobType = "premium_service";
   if (jobType === "full_wof") jobType = "premium_wof";

@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en-NZ">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Service price list · Deane Auto Repairs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --navy: #021534;
+        --gold: #e9a305;
+        --ink: #1a2332;
+        --muted: #5b6777;
+        --line: #cfd8e3;
+        --paper: #f7f5ef;
+        --ok: #1b7a3a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--paper);
+        font-family: "Source Sans 3", "Segoe UI", sans-serif;
+        font-size: 13px;
+        line-height: 1.35;
+      }
+      .page {
+        width: min(210mm, calc(100% - 24px));
+        margin: 16px auto 32px;
+        background: #fff;
+        border: 1px solid var(--line);
+        overflow: hidden;
+      }
+      .masthead {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        background: var(--navy);
+        color: #fff;
+        padding: 0 16px;
+      }
+      .masthead .brand {
+        margin: 0;
+        line-height: 0;
+        flex-shrink: 0;
+        background: var(--navy);
+      }
+      .brand-logo {
+        display: block;
+        height: 76px;
+        width: auto;
+      }
+      .contact {
+        text-align: right;
+        font-size: 12px;
+        line-height: 1.4;
+        padding: 10px 0;
+      }
+      .contact strong {
+        display: block;
+        font-family: "Barlow Condensed", sans-serif;
+        font-size: 20px;
+        letter-spacing: 0.04em;
+        color: var(--gold);
+      }
+      .contact a {
+        color: #fff;
+        text-decoration: none;
+      }
+      .gold-bar {
+        height: 5px;
+        background: var(--gold);
+      }
+      .body {
+        padding: 14px 16px 18px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-family: "Barlow Condensed", sans-serif;
+        font-size: 26px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .lead {
+        margin: 0 0 10px;
+        color: var(--muted);
+      }
+      .packs {
+        display: grid;
+        grid-template-columns: 0.85fr 0.85fr 0.95fr 1.35fr 1.15fr;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .pack {
+        border: 1px solid var(--line);
+        padding: 8px 7px 7px;
+      }
+      .pack b {
+        display: block;
+        font-family: "Barlow Condensed", sans-serif;
+        font-size: 15px;
+        letter-spacing: 0.03em;
+      }
+      .pack .price {
+        font-family: "Barlow Condensed", sans-serif;
+        font-size: 22px;
+        font-weight: 800;
+        color: var(--navy);
+      }
+      .pack p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11.5px;
+      }
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 4px 5px;
+        vertical-align: top;
+      }
+      th {
+        font-family: "Barlow Condensed", sans-serif;
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        text-align: center;
+        background: var(--navy);
+        color: #fff;
+      }
+      th:first-child,
+      td:first-child {
+        text-align: left;
+        background: #fff;
+        color: var(--ink);
+        font-weight: 600;
+      }
+      th:first-child {
+        background: var(--navy);
+        color: #fff;
+      }
+      .group td {
+        background: #eef2f6;
+        font-family: "Barlow Condensed", sans-serif;
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        font-weight: 800;
+        padding-top: 7px;
+      }
+      .tick {
+        text-align: center;
+        color: var(--ok);
+        font-weight: 800;
+      }
+      .dash {
+        text-align: center;
+        color: #9aa6b2;
+      }
+      .notes,
+      .extras {
+        margin-top: 12px;
+      }
+      .notes h2,
+      .extras h2 {
+        margin: 0 0 6px;
+        font-family: "Barlow Condensed", sans-serif;
+        font-size: 16px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .notes li,
+      .extras td {
+        font-size: 11.5px;
+      }
+      .extras table th {
+        background: #31445c;
+      }
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      footer {
+        margin-top: 12px;
+        padding-top: 8px;
+        border-top: 2px solid var(--navy);
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      @media print {
+        body {
+          background: #fff;
+        }
+        .page {
+          width: auto;
+          margin: 0;
+          border: 0;
+        }
+        .no-print {
+          display: none;
+        }
+        .masthead,
+        th,
+        .gold-bar {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <p class="no-print" style="text-align: center; font-size: 13px">
+      In-store / counter copy. Open this file and print. Digital service reports now match these checks.
+    </p>
+    <article class="page">
+      <header class="masthead">
+        <p class="brand">
+          <img
+            class="brand-logo"
+            src="/images/deane-auto-logo.jpg"
+            alt="Deane Auto Repairs"
+            width="181"
+            height="92"
+          />
+        </p>
+        <div class="contact">
+          <strong><a href="tel:08006259827">0800 625 9827</a></strong>
+          63 Hayr Road, Three Kings, Auckland<br />
+          (Next to BP Petrol Station)<br />
+          <a href="mailto:deaneautonz@gmail.com">deaneautonz@gmail.com</a><br />
+          Mon–Sat 8:30am – 5:30pm · Sunday closed
+        </div>
+      </header>
+      <div class="gold-bar"></div>
+
+      <div class="body">
+        <h1>Complete service price list</h1>
+        <p class="lead">
+          GST included. Digital service report with photo-backed findings on every service package.
+          Premium, Diesel and European use the same inspection. Extra oils, filters or procedures are quoted first.
+        </p>
+
+        <div class="packs">
+          <div class="pack">
+            <b>WOF</b>
+            <span class="price">$79</span>
+            <p>Safety inspection. Recheck free if repairs are done here.</p>
+          </div>
+          <div class="pack">
+            <b>Basic</b>
+            <span class="price">$99</span>
+            <p>Oil &amp; filter service for petrol cars.</p>
+          </div>
+          <div class="pack">
+            <b>Standard</b>
+            <span class="price">$199</span>
+            <p>Essential maintenance &amp; vehicle health check. Allow ~1 hour.</p>
+          </div>
+          <div class="pack">
+            <b>Premium / Diesel / European</b>
+            <span class="price">$279</span>
+            <p>Same inspection, diagnostics &amp; road test. Allow ~1.5 hours.</p>
+          </div>
+          <div class="pack">
+            <b>Pre-purchase inspection</b>
+            <span class="price">$199</span>
+            <p>Written report with photos before you buy.</p>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>What’s included</th>
+              <th>Basic<br />$99</th>
+              <th>Standard<br />$199</th>
+              <th>Premium / Diesel / European<br />$279</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="group"><td colspan="4">Engine &amp; fluids</td></tr>
+            <tr>
+              <td>Engine oil change *</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Engine oil filter replacement *</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Brake fluid — level &amp; condition</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Coolant — level &amp; condition</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Radiator cap &amp; hose inspection</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Power steering fluid — level &amp; condition †</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Washer fluid top-up</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Transmission / gearbox fluid level &amp; leaks †</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Differential fluid level &amp; leaks †</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Engine / transmission oil leak inspection</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+
+            <tr class="group"><td colspan="4">Brakes, tyres &amp; suspension</td></tr>
+            <tr>
+              <td>Tyre pressure &amp; condition</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Steering &amp; CV boot inspection</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Suspension inspection</td>
+              <td class="dash">—</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Wheel bearings — check for excessive play</td>
+              <td class="dash">—</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Brake warning / ABS lights</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Brake inspection (wheels on)</td>
+              <td class="dash">—</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Detailed brake inspection — wheels off</td>
+              <td class="dash">—</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Front pads — inspect / measure</td>
+              <td class="dash">—</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Rear pads / shoes — inspect / measure</td>
+              <td class="dash">—</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Front discs / rotors — inspect</td>
+              <td class="dash">—</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Rear discs / drums — inspect</td>
+              <td class="dash">—</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Brake lines / hoses — wheels-off check</td>
+              <td class="dash">—</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Parking brake — check / adjust</td>
+              <td class="dash">—</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+            </tr>
+
+            <tr class="group"><td colspan="4">Electrical &amp; safety</td></tr>
+            <tr>
+              <td>Battery condition test</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Exterior lights &amp; indicators</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Dashboard warning lights</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Service light reset (where possible)</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+
+            <tr class="group"><td colspan="4">Vehicle inspection</td></tr>
+            <tr>
+              <td>Air filter visual inspection</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Cabin / pollen filter check</td>
+              <td class="dash">—</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Drive belt inspection</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Exhaust system visual inspection</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Spark plug inspection †</td>
+              <td class="dash">—</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Wiper blade check</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+
+            <tr class="group"><td colspan="4">Diagnostics, road test &amp; report</td></tr>
+            <tr>
+              <td>Diagnostic scan</td>
+              <td class="dash">—</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Road test (up to 50 km/h)</td>
+              <td class="dash">—</td>
+              <td class="dash">—</td>
+              <td class="tick">✓</td>
+            </tr>
+            <tr>
+              <td>Digital service report &amp; recommendations</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+              <td class="tick">✓</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="notes">
+          <h2>Service notes</h2>
+          <ul>
+            <li>* Engine oil and filter included up to the applicable standard quantity / specification. Extra oil or specialised oil is quoted first.</li>
+            <li>† Where fitted / applicable to the vehicle.</li>
+            <li>Premium, Diesel and European share the same checklist. Diesel-specific items (fuel filter, additives, DPF-related work) and European manufacturer oils, parts or procedures are quoted before we proceed.</li>
+            <li>WOF $79. Recheck is free when the repairs are done at this workshop.</li>
+            <li>Pre-purchase inspection (written report with photos): $199.</li>
+          </ul>
+        </div>
+
+        <div class="extras two-col">
+          <div>
+            <h2>Other workshop prices</h2>
+            <table>
+              <tr>
+                <th>Item</th>
+                <th>Price</th>
+              </tr>
+              <tr>
+                <td>Workshop / diagnostic labour</td>
+                <td>$125/hr</td>
+              </tr>
+              <tr>
+                <td>Standalone diagnostic scan</td>
+                <td>$69</td>
+              </tr>
+              <tr>
+                <td>Diagnostic add-on to Standard</td>
+                <td>+$29</td>
+              </tr>
+              <tr>
+                <td>Front or rear pads labour</td>
+                <td>From $135 + parts</td>
+              </tr>
+              <tr>
+                <td>Pads + discs labour</td>
+                <td>From $195 + parts</td>
+              </tr>
+              <tr>
+                <td>Brake fluid flush</td>
+                <td>From $99</td>
+              </tr>
+              <tr>
+                <td>Coolant replacement</td>
+                <td>$99</td>
+              </tr>
+              <tr>
+                <td>Cooling system pressure test</td>
+                <td>$49</td>
+              </tr>
+              <tr>
+                <td>Radiator flush</td>
+                <td>$129</td>
+              </tr>
+            </table>
+          </div>
+          <div>
+            <h2>&nbsp;</h2>
+            <table>
+              <tr>
+                <th>Item</th>
+                <th>Price</th>
+              </tr>
+              <tr>
+                <td>Battery test with a service / quote</td>
+                <td>Included</td>
+              </tr>
+              <tr>
+                <td>Battery install (bought here)</td>
+                <td>Free</td>
+              </tr>
+              <tr>
+                <td>Battery install (customer-supplied)</td>
+                <td>$30</td>
+              </tr>
+              <tr>
+                <td>Spark plug replacement</td>
+                <td>From $99 + parts</td>
+              </tr>
+              <tr>
+                <td>Ignition coil replacement</td>
+                <td>From $59 + parts</td>
+              </tr>
+              <tr>
+                <td>Air filter</td>
+                <td>From $25 + parts</td>
+              </tr>
+              <tr>
+                <td>Cabin filter</td>
+                <td>From $35 + parts</td>
+              </tr>
+              <tr>
+                <td>Fuel filter</td>
+                <td>From $79</td>
+              </tr>
+              <tr>
+                <td>CVT fluid service</td>
+                <td>From $199</td>
+              </tr>
+              <tr>
+                <td>Auto transmission service</td>
+                <td>From $229</td>
+              </tr>
+              <tr>
+                <td>Manual gearbox oil</td>
+                <td>$129</td>
+              </tr>
+              <tr>
+                <td>Differential oil</td>
+                <td>From $99</td>
+              </tr>
+              <tr>
+                <td>Shock replacement labour</td>
+                <td>From $99</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+
+        <footer>
+          <span>Drive better with Deane Auto · GST 96-650-434 · www.deaneauto.co.nz</span>
+          <span>Quality service. A safer tomorrow.</span>
+        </footer>
+      </div>
+    </article>
+  </body>
+</html>

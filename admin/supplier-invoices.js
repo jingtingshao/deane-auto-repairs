@@ -208,7 +208,17 @@ function isPackageOrLabourLine(text) {
   if (!t) return true;
   if (/workshop labour/.test(t) || /labour \(per hour\)/.test(t)) return true;
   if (/\bwof\b/.test(t) || /warrant of fitness/.test(t)) return true;
-  if (/basic service/.test(t) || /standard service/.test(t) || /premium service/.test(t) || /full service/.test(t)) return true;
+  if (
+    /basic service/.test(t) ||
+    /standard service/.test(t) ||
+    /premium service/.test(t) ||
+    /full service/.test(t) ||
+    /diesel service/.test(t) ||
+    /european service/.test(t) ||
+    /pre-purchase inspection/.test(t)
+  ) {
+    return true;
+  }
   return false;
 }
 

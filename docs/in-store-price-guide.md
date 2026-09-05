@@ -1,100 +1,109 @@
 # In-store price guide
 
-**Internal use only** — not shown on the public website.  
-Use for quotes at the counter / over the phone. Confirm final price before work starts.
+**Internal / counter use.** Printable sheet: `preview/service-price-list.html`  
+Not a substitute for a job-specific quote. Confirm extras before work starts.
 
-**Business:** Deane Auto Repairs · (Next to BP Petrol Station) · 63 Hayr Road, Three Kings  
+**Deane Auto Repairs** · (Next to BP Petrol Station) · 63 Hayr Road, Three Kings, Auckland  
 **Phone:** 0800 625 9827 · **Email:** deaneautonz@gmail.com  
-**Hours:** Mon–Sat 8:30am – 5:30pm · Sunday closed
+**Hours:** Mon–Sat 8:30am – 5:30pm · Sunday closed  
+GST included unless noted. GST 96-650-434.
 
-GST included unless noted.
-
----
-
-## On the website (public)
-
-| Item | Price |
-|------|-------|
-| Standard Service (petrol) | $199 |
-| Premium Service (petrol) | $279 |
-| Diesel Service | From $249 |
-| European Service | From $279 |
-| WOF inspection | $79 |
-| WOF recheck (repairs done here) | Free |
-| Pre-Purchase Inspection — written report with photos | $199 |
+This list merges the shop wall flyer with the digital service-report checklist. Premium, Diesel and European share the same inspection; extra oils, filters or procedures are quoted first.
 
 ---
 
-## Brake service
+## Service packages
 
-| Item | Price |
-|------|-------|
-| Brake Inspection | Free* |
-| Front Pads Labour | From $135 + parts |
-| Rear Pads Labour | From $135 + parts |
-| Pads + Discs Labour | From $195 + parts |
-| Brake Fluid Flush | From $99 |
-
-## Cooling system
-
-| Item | Price |
-|------|-------|
-| Coolant Replacement | $99 |
-| Cooling System Pressure Test | $49 |
-| Radiator Flush | $129 |
-
-## Battery
-
-| Item | Price |
-|------|-------|
-| Battery Test | Free* |
-| Battery Replacement | Install free when battery purchased here |
-| Battery Installation (customer-supplied) | $30 |
-
-## Engine
-
-| Item | Price |
-|------|-------|
-| Spark Plug Replacement | From $99 + parts |
-| Ignition Coil Replacement | From $59 + parts |
-| Air Filter | From $25 + parts |
-| Cabin Filter | From $35 + parts |
-| Fuel Filter | From $79 |
-
-## Transmission
-
-| Item | Price |
-|------|-------|
-| CVT Fluid Service | From $199 |
-| Auto Transmission Service | From $229 |
-| Manual Gearbox Oil | $129 |
-| Differential Oil | From $99 |
-
-## Diagnostics
-
-| Item | Price |
-|------|-------|
-| Basic diagnostic scan | Included with Premium Service |
-| Standard Service add-on | +$29 |
-| Standalone | $69 |
-| Further diagnostic testing | $125/hr |
-
-## Suspension
-
-| Item | Price |
-|------|-------|
-| Suspension Check | Free* |
-| Shock Replacement Labour | From $99 |
-| Ball Joint | Quote |
-| Bushes | Quote |
-
-## Labour rate
-
-| Item | Price |
-|------|-------|
-| Workshop labour (incl. GST) | $125/hr |
-| Diagnostic labour (incl. GST) | $125/hr |
+| Package | Price | Time | Report checklist |
+|---------|-------|------|------------------|
+| WOF inspection | $79 | — | WOF items on the job |
+| WOF recheck (repairs done here) | Free | — | — |
+| Basic (petrol oil & filter) | $99 | — | Oil, filter, washer, service light, digital report |
+| Standard | $199 | ~1 hour | Standard |
+| Premium / Diesel / European | $279 | ~1.5 hours | Same Premium checklist; extras quoted |
+| Pre-purchase inspection | $199 | — | Written report with photos |
 
 ---
 
-\* Brake inspection, battery test and suspension check are free when included with an on-site inspection, service or quote. A standalone visit for inspection only may incur diagnostic labour at $125/hr.
+## What’s included (flyer + digital report)
+
+✓ = included · — = not in that package. Premium / Diesel / European share the same ticks.
+
+### Engine & fluids
+| Check | Basic | Standard | Premium / Diesel / European |
+|-------|:-----:|:--------:|:---------------------------:|
+| Engine oil change * | ✓ | ✓ | ✓ |
+| Engine oil filter * | ✓ | ✓ | ✓ |
+| Brake fluid — level & condition | — | ✓ | ✓ |
+| Coolant — level & condition | — | ✓ | ✓ |
+| Radiator cap & hoses | — | ✓ | ✓ |
+| Power steering fluid † | — | ✓ | ✓ |
+| Washer fluid top-up | ✓ | ✓ | ✓ |
+| Transmission / gearbox fluid † | — | ✓ | ✓ |
+| Differential fluid † | — | ✓ | ✓ |
+| Engine / transmission oil leak inspection | — | ✓ | ✓ |
+
+### Brakes, tyres & suspension
+| Check | Basic | Standard | Premium / Diesel / European |
+|-------|:-----:|:--------:|:---------------------------:|
+| Tyre pressure & condition | — | ✓ | ✓ |
+| Steering & CV boots | — | ✓ | ✓ |
+| Suspension inspection | — | — | ✓ |
+| Wheel bearings — excessive play | — | — | ✓ |
+| Brake warning / ABS lights | — | ✓ | ✓ |
+| Brake inspection (wheels on) | — | — | ✓ |
+| Detailed brake inspection (wheels off) | — | — | ✓ |
+| Front pads inspect / measure | — | — | ✓ |
+| Rear pads / shoes inspect / measure | — | — | ✓ |
+| Front discs / rotors | — | — | ✓ |
+| Rear discs / drums | — | — | ✓ |
+| Brake lines / hoses (wheels off) | — | — | ✓ |
+| Parking brake check / adjust | — | — | ✓ |
+
+### Electrical, inspection, diagnostics
+| Check | Basic | Standard | Premium / Diesel / European |
+|-------|:-----:|:--------:|:---------------------------:|
+| Battery condition test | — | ✓ | ✓ |
+| Exterior lights & indicators | — | ✓ | ✓ |
+| Dashboard warning lights | — | ✓ | ✓ |
+| Service light reset | ✓ | ✓ | ✓ |
+| Air filter visual | — | ✓ | ✓ |
+| Cabin / pollen filter check | — | — | ✓ |
+| Drive belts | — | ✓ | ✓ |
+| Exhaust visual | — | ✓ | ✓ |
+| Spark plug inspection † | — | — | ✓ |
+| Wiper blades | — | ✓ | ✓ |
+| Diagnostic scan | — | — | ✓ |
+| Road test (up to 50 km/h) | — | — | ✓ |
+| Digital service report | ✓ | ✓ | ✓ |
+
+\* Oil and filter up to the standard quantity / spec for that service. Extra or specialised oil is quoted first.  
+† Where fitted.
+
+---
+
+## Other workshop prices
+
+| Item | Price |
+|------|-------|
+| Workshop / diagnostic labour | $125/hr |
+| Standalone diagnostic scan | $69 |
+| Diagnostic add-on to Standard | +$29 |
+| Front or rear pads labour | From $135 + parts |
+| Pads + discs labour | From $195 + parts |
+| Brake fluid flush | From $99 |
+| Coolant replacement | $99 |
+| Cooling system pressure test | $49 |
+| Radiator flush | $129 |
+| Battery install (bought here) | Free |
+| Battery install (customer-supplied) | $30 |
+| Spark plug replacement | From $99 + parts |
+| Ignition coil replacement | From $59 + parts |
+| Air filter | From $25 + parts |
+| Cabin filter | From $35 + parts |
+| Fuel filter | From $79 |
+| CVT fluid service | From $199 |
+| Auto transmission service | From $229 |
+| Manual gearbox oil | $129 |
+| Differential oil | From $99 |
+| Shock replacement labour | From $99 |

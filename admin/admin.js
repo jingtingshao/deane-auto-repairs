@@ -795,8 +795,12 @@ reportSearch?.addEventListener("search", renderReportList);
 
 function labelJob(jobType, pkg) {
   const map = {
+    basic_service: "Basic Service",
     standard_service: "Standard Service",
-    premium_service: "Premium Service",
+    premium_service: "Premium / European Service",
+    diesel_service: "Diesel Service",
+    european_service: "European Service",
+    ppi: "Pre-purchase inspection",
     full_service: "Premium Service",
     wof: "WOF",
     standard_wof: "Standard + WOF",
@@ -806,12 +810,15 @@ function labelJob(jobType, pkg) {
   };
   if (map[jobType]) return map[jobType];
   if (pkg === "premium" || pkg === "full") return "Premium Service";
+  if (pkg === "basic") return "Basic Service";
   if (pkg === "standard") return "Standard Service";
   return "Service";
 }
 
 function normalizePkg(pkg) {
-  return pkg === "full" || pkg === "premium" ? "premium" : "standard";
+  if (pkg === "full" || pkg === "premium") return "premium";
+  if (pkg === "basic") return "basic";
+  return "standard";
 }
 
 async function openReport(id) {
@@ -932,11 +939,12 @@ function fillForm(r) {
 
 async function renderChecklist(pkg, checks) {
   checklistMeta = await fetch(`/api/checklist?package=${pkg}`).then((r) => r.json());
+  const defaults = checklistMeta.defaults || {};
   checklistEl.innerHTML = checklistMeta.groups
     .map((group) => {
       const rows = group.items
         .map((item) => {
-          const state = checks[item.code] || { status: "ok", note: "" };
+          const state = checks[item.code] || defaults[item.code] || { status: "ok", note: "" };
           return `
           <div class="check-row" data-code="${item.code}">
             <div>
@@ -970,12 +978,14 @@ async function renderChecklist(pkg, checks) {
 
 function renderActions(r) {
   const pkg = normalizePkg(r.servicePackage);
+  const fallbackCore =
+    pkg === "basic" ? ACTIONS_FALLBACK.basic : ACTIONS_FALLBACK.standard;
   const blocks = [
-    ...ACTIONS_FALLBACK.standard.map((a) => ({ ...a, group: "Standard" })),
+    ...fallbackCore.map((a) => ({ ...a, group: pkg === "basic" ? "Basic" : "Standard" })),
     ...(pkg === "premium"
       ? ACTIONS_FALLBACK.premiumExtra.map((a) => ({ ...a, group: "Premium" }))
       : []),
-    ...ACTIONS_FALLBACK.either.map((a) => ({ ...a, group: "Other" })),
+    ...(pkg === "basic" ? [] : ACTIONS_FALLBACK.either.map((a) => ({ ...a, group: "Other" }))),
   ];
 
   // Prefer live checklist actions if loaded
@@ -983,11 +993,11 @@ function renderActions(r) {
   const premiumActions = live?.premiumExtra || live?.fullExtra || [];
   const list = live
     ? [
-        ...live.standard.map((a) => ({ ...a, group: "Standard" })),
+        ...live.standard.map((a) => ({ ...a, group: pkg === "basic" ? "Basic" : "Standard" })),
         ...(pkg === "premium"
           ? premiumActions.map((a) => ({ ...a, group: "Premium" }))
           : []),
-        ...live.either.map((a) => ({ ...a, group: "Other" })),
+        ...((pkg === "basic" ? [] : live.either) || []).map((a) => ({ ...a, group: "Other" })),
       ]
     : blocks;
 
@@ -1000,6 +1010,11 @@ function renderActions(r) {
 }
 
 const ACTIONS_FALLBACK = {
+  basic: [
+    { id: "oil", label: "Engine oil replaced (as quoted)" },
+    { id: "oil_filter", label: "Oil filter replaced" },
+    { id: "washer", label: "Washer fluid topped up" },
+  ],
   standard: [
     { id: "oil", label: "Engine oil replaced (full synthetic as quoted)" },
     { id: "oil_filter", label: "Oil filter replaced" },
@@ -1009,6 +1024,8 @@ const ACTIONS_FALLBACK = {
     { id: "exterior_lights", label: "Exterior lights & indicators checked" },
     { id: "dashboard_lights", label: "Dashboard warning lights checked" },
     { id: "tyre_pressures", label: "Tyre pressures set" },
+    { id: "cv_boots", label: "Steering / CV boots checked" },
+    { id: "oil_leaks", label: "Engine / transmission oil leaks inspected" },
     { id: "service_light", label: "Service light reset (where possible)" },
     { id: "digital_report", label: "Digital service report prepared" },
   ],
@@ -1017,6 +1034,7 @@ const ACTIONS_FALLBACK = {
     { id: "wheels_off", label: "Road wheels removed — brake inspection" },
     { id: "brakes_measured", label: "Brake pads / discs inspected (wheels off)" },
     { id: "steering_suspension", label: "Steering / CV boots & suspension checked" },
+    { id: "wheel_bearings", label: "Wheel bearings checked for play" },
     { id: "spark_plugs", label: "Spark plugs inspected" },
     { id: "cabin_filter", label: "Cabin / pollen filter checked" },
     { id: "diagnostic", label: "Diagnostic scan completed" },
@@ -1136,7 +1154,7 @@ document.getElementById("servicePackage").addEventListener("change", async () =>
   if (!current) return;
   const pkg = normalizePkg(reportForm.servicePackage.value);
   reportForm.servicePackage.value = pkg;
-  const checks = collectPayload().checks;
+  const checks = pkg === "basic" ? {} : collectPayload().checks;
   await renderChecklist(pkg, checks);
   current.servicePackage = pkg;
   renderActions({ ...current, servicePackage: pkg, actionsDone: collectPayload().actionsDone });
@@ -1145,8 +1163,16 @@ document.getElementById("servicePackage").addEventListener("change", async () =>
 reportForm.elements.namedItem("jobType").addEventListener("change", async () => {
   if (!current) return;
   const jobType = reportForm.elements.namedItem("jobType").value;
-  if (jobType.startsWith("premium") || jobType.startsWith("full")) {
+  if (
+    jobType.startsWith("premium") ||
+    jobType.startsWith("full") ||
+    jobType.startsWith("diesel") ||
+    jobType.startsWith("european") ||
+    jobType === "ppi"
+  ) {
     reportForm.servicePackage.value = "premium";
+  } else if (jobType.startsWith("basic")) {
+    reportForm.servicePackage.value = "basic";
   } else if (jobType.startsWith("standard")) {
     reportForm.servicePackage.value = "standard";
   } else {

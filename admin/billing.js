@@ -102,10 +102,19 @@ async function loadCatalog() {
   return catalogMeta;
 }
 
+const FIXED_WEBSITE_INVOICE_PRESETS = new Set([
+  "wof",
+  "basic",
+  "standard",
+  "premium",
+  "diesel",
+  "ppi",
+]);
+
 function renderPresetButtons() {
   const presets = catalogMeta?.presets || [];
   invoicePresetsEl.innerHTML = presets
-    .filter((p) => p.kind === "invoice")
+    .filter((p) => p.kind === "invoice" && FIXED_WEBSITE_INVOICE_PRESETS.has(p.id))
     .map(
       (p) =>
         `<button type="button" data-preset="${Admin.escapeAttr(p.id)}">${Admin.escapeHtml(p.label)}</button>`
@@ -965,7 +974,10 @@ function lineLooksLikeWof(description) {
 }
 
 function lineLooksLikePackageService(description) {
-  return /(basic|standard|premium|full)\s+service/i.test(String(description || "").trim());
+  return (
+    /(basic|standard|premium|full|diesel|european)\s+service/i.test(String(description || "").trim()) ||
+    /pre-purchase inspection/i.test(String(description || "").trim())
+  );
 }
 
 function lineLooksLikeConsumable(description) {
