@@ -1290,12 +1290,7 @@ async function renderReferralCredits() {
   const summaryEl = document.getElementById("billing-referral-summary");
   const actionsEl = document.getElementById("billing-referral-actions");
   if (!box || !summaryEl || !actionsEl) return;
-  if (
-    Admin.isTechnician?.() ||
-    !currentBill ||
-    currentBill.kind !== "invoice" ||
-    currentBill.status === "void"
-  ) {
+  if (!currentBill || currentBill.kind !== "invoice" || currentBill.status === "void") {
     box.hidden = true;
     return;
   }
@@ -1304,7 +1299,7 @@ async function renderReferralCredits() {
   const customerId = String(currentBill.customerId || "").trim();
   let available = 0;
   let creditCount = 0;
-  if (customerId && !Admin.isTechnician?.()) {
+  if (customerId) {
     try {
       const bal = await Admin.api(
         `/api/referral-credits?customerId=${encodeURIComponent(customerId)}`
@@ -1443,10 +1438,6 @@ function renderPayments() {
 async function applyCreditsAsPayment() {
   if (!currentBill?.id || currentBill.unsaved) {
     alert("Save the invoice first, then apply credits.");
-    return;
-  }
-  if (Admin.isTechnician?.()) {
-    alert("Only the admin account can apply referral credits.");
     return;
   }
   try {

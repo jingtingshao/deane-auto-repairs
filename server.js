@@ -4736,12 +4736,15 @@ app.post("/api/referrals/:id/cancel", requireOwnerAdmin, (req, res) => {
   }
 });
 
-app.get("/api/referral-credits", requireOwnerAdmin, (req, res) => {
+app.get("/api/referral-credits", requireAdmin, (req, res) => {
   try {
     const customerId = String(req.query.customerId || "").trim();
     const rows = readReferrals();
     if (customerId) {
       return res.json(referralsLib.creditBalanceSummary(rows, customerId));
+    }
+    if (staffFromReq(req)?.role !== "admin") {
+      return res.status(403).json({ error: "Admin only" });
     }
     const owners = new Map();
     for (const row of rows) {
@@ -4767,7 +4770,7 @@ app.get("/api/referral-credits", requireOwnerAdmin, (req, res) => {
   }
 });
 
-app.post("/api/billing/:id/apply-referral-credits", requireOwnerAdmin, (req, res) => {
+app.post("/api/billing/:id/apply-referral-credits", requireAdmin, (req, res) => {
   try {
     const docs = readBilling();
     const index = docs.findIndex((d) => d.id === req.params.id);
@@ -4811,7 +4814,7 @@ app.post("/api/billing/:id/apply-referral-credits", requireOwnerAdmin, (req, res
   }
 });
 
-app.post("/api/billing/:id/remove-referral-credits", requireOwnerAdmin, (req, res) => {
+app.post("/api/billing/:id/remove-referral-credits", requireAdmin, (req, res) => {
   try {
     const docs = readBilling();
     const index = docs.findIndex((d) => d.id === req.params.id);
