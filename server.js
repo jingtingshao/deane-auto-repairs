@@ -11,7 +11,8 @@ const multer = require("multer");
 const pdfParseModule = require("pdf-parse");
 const Tesseract = require("tesseract.js");
 const nodemailer = require("nodemailer");
-const { randomUUID, randomBytes } = require("crypto");
+const { randomUUID, randomBytes, createHash, timingSafeEqual } = require("crypto");
+const { AsyncLocalStorage } = require("async_hooks");
 const {
   ACTIONS,
   STATUSES,
@@ -79,6 +80,39 @@ function resolveAdminPin() {
 }
 
 const ADMIN_PIN = resolveAdminPin();
+const TECH_USERNAMES = ["dean01", "dean02"];
+const staffContext = new AsyncLocalStorage();
+
+function secretsEqual(a, b) {
+  const left = createHash("sha256").update(String(a)).digest();
+  const right = createHash("sha256").update(String(b)).digest();
+  return timingSafeEqual(left, right);
+}
+
+function resolveTechUsers() {
+  const users = {};
+  for (const username of TECH_USERNAMES) {
+    const key = `TECH_${username.toUpperCase()}_PASSWORD`;
+    const password = String(process.env[key] || "").trim();
+    if (!password) continue;
+    if (KNOWN_WEAK_PINS.has(password.toLowerCase()) || password.length < 8) {
+      console.error(
+        `${key} is too weak or matches a published default. Set a strong password (8+ characters).`
+      );
+      if (isProduction()) process.exit(1);
+      continue;
+    }
+    users[username] = password;
+  }
+  if (!Object.keys(users).length) {
+    console.warn(
+      "Technician logins are not configured. Set TECH_DEAN01_PASSWORD and TECH_DEAN02_PASSWORD to enable dean01 / dean02."
+    );
+  }
+  return users;
+}
+
+const TECH_USERS = resolveTechUsers();
 /** Temporary public-site lock. Empty = unlocked (go-live). Set SITE_PIN on Render until the website is ready. */
 const SITE_PIN = String(process.env.SITE_PIN || "").trim();
 const ROOT = __dirname;
@@ -1073,8 +1107,10 @@ function sanitizePhotoRefs(input) {
 }
 
 function nowActor(req) {
-  const session = readAdminSession(req);
-  if (session) return "admin";
+  const staff = staffFromReq(req);
+  if (staff?.username) return staff.username;
+  const stored = staffContext.getStore();
+  if (stored?.staff?.username) return stored.staff.username;
   return "system";
 }
 
@@ -3135,12 +3171,15 @@ function normalizeInvoicePayment(doc, body = {}, totals) {
 function appendHistory(doc, entry = {}) {
   if (!doc || typeof doc !== "object") return;
   if (!Array.isArray(doc.history)) doc.history = [];
+  const stored = staffContext.getStore();
+  const actor = String(entry.actor || stored?.staff?.username || "").trim();
   doc.history.push({
     id: randomUUID(),
     at: entry.at || nowIso(),
     type: String(entry.type || "note"),
     summary: String(entry.summary || "").trim(),
     detail: String(entry.detail || "").trim(),
+    actor,
     amount:
       entry.amount == null || entry.amount === ""
         ? null
@@ -3506,11 +3545,27 @@ function pruneAdminSessions() {
   }
 }
 
-function createAdminSession() {
+function createAdminSession(role = "admin", username = "admin") {
   pruneAdminSessions();
   const token = randomBytes(32).toString("hex");
-  adminSessions.set(token, { expiresAt: Date.now() + ADMIN_SESSION_MS });
+  adminSessions.set(token, {
+    expiresAt: Date.now() + ADMIN_SESSION_MS,
+    role: role === "technician" ? "technician" : "admin",
+    username: String(username || "admin").trim().toLowerCase() || "admin",
+  });
   return token;
+}
+
+function staffFromReq(req) {
+  const row = readAdminSession(req);
+  if (!row) return null;
+  const role = row.session.role === "technician" ? "technician" : "admin";
+  const username = String(row.session.username || (role === "admin" ? "admin" : "")).trim();
+  return { token: row.token, role, username };
+}
+
+function isOwnerAdmin(req) {
+  return staffFromReq(req)?.role === "admin";
 }
 
 function pruneSiteSessions() {
@@ -3641,8 +3696,74 @@ function requireSiteUnlock(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (!isAdminRequest(req)) {
+  const staff = staffFromReq(req);
+  if (!staff) {
     return res.status(401).json({ error: "Please sign in" });
+  }
+  staffContext.run({ staff }, () => next());
+}
+
+function requireOwnerAdmin(req, res, next) {
+  const staff = staffFromReq(req);
+  if (!staff) {
+    return res.status(401).json({ error: "Please sign in" });
+  }
+  if (staff.role !== "admin") {
+    return res.status(403).json({ error: "Admin only" });
+  }
+  staffContext.run({ staff }, () => next());
+}
+
+function workshopCurrentIndex() {
+  const jobs = readJobs();
+  const reports = readReports();
+  const activeJobIds = new Set();
+  const linkedBillingIds = new Set();
+  const openReportBillingIds = new Set();
+  for (const job of jobs) {
+    const status = jobsLib.normalizeJobStatus(job.status, job.parts || []);
+    if (status === "collected") continue;
+    activeJobIds.add(job.id);
+    if (job.quoteId) linkedBillingIds.add(job.quoteId);
+    if (job.invoiceId) linkedBillingIds.add(job.invoiceId);
+  }
+  for (const report of reports) {
+    if (String(report.status || "") === "published") continue;
+    if (report.invoiceId) openReportBillingIds.add(report.invoiceId);
+  }
+  return { activeJobIds, linkedBillingIds, openReportBillingIds, reports };
+}
+
+function isCurrentWorkshopBilling(doc, index = workshopCurrentIndex()) {
+  if (!doc || doc.status === "void") return false;
+  if (doc.jobId && index.activeJobIds.has(doc.jobId)) return true;
+  if (index.linkedBillingIds.has(doc.id)) return true;
+  if (index.openReportBillingIds.has(doc.id)) return true;
+  if (doc.reportId) {
+    const report = (index.reports || []).find((row) => row.id === doc.reportId);
+    if (report && String(report.status || "") !== "published") return true;
+  }
+  if (doc.kind === "quote") {
+    return doc.status === "draft" || doc.status === "sent" || doc.status === "accepted";
+  }
+  if (doc.kind === "invoice") {
+    const totals = catalog.computeTotals(doc.lines || []);
+    const payment = normalizeInvoicePayment(doc, {}, totals);
+    return Boolean(payment.paymentStatus && payment.paymentStatus !== "paid");
+  }
+  return false;
+}
+
+function requireCurrentBillingIfTech(req, res, next) {
+  const staff = staffFromReq(req);
+  if (!staff || staff.role !== "technician") return next();
+  const docs = readBilling();
+  const doc = docs.find((row) => row && row.id === req.params.id);
+  if (!doc) return res.status(404).json({ error: billingMissingError() });
+  if (!isCurrentWorkshopBilling(doc)) {
+    return res.status(403).json({
+      error: "This quote/invoice is in history. Ask admin to open it.",
+    });
   }
   next();
 }
@@ -4172,7 +4293,7 @@ app.post("/api/websms/webhook", (req, res) => {
   }
 });
 
-app.get("/api/sms-inbox", requireAdmin, (_req, res) => {
+app.get("/api/sms-inbox", requireOwnerAdmin, (_req, res) => {
   try {
     const rows = readSmsLog()
       .slice()
@@ -4377,14 +4498,24 @@ app.post("/api/admin/login", (req, res) => {
       error: "Too many sign-in attempts. Try again in 15 minutes.",
     });
   }
-  if (String(req.body?.pin || "") !== ADMIN_PIN) {
+  const username = String(req.body?.username || "").trim().toLowerCase();
+  const secret = String(req.body?.password || req.body?.pin || "").trim();
+  let role = "";
+  let loginName = "";
+  if (username && TECH_USERS[username] && secretsEqual(secret, TECH_USERS[username])) {
+    role = "technician";
+    loginName = username;
+  } else if ((!username || username === "admin") && secretsEqual(secret, ADMIN_PIN)) {
+    role = "admin";
+    loginName = "admin";
+  } else {
     recordLoginFailure(ip);
-    return res.status(401).json({ error: "Wrong PIN" });
+    return res.status(401).json({ error: "Wrong username or password" });
   }
   clearLoginFailures(ip);
-  const token = createAdminSession();
+  const token = createAdminSession(role, loginName);
   res.setHeader("Set-Cookie", adminCookieHeader(req, token, ADMIN_SESSION_MS));
-  res.json({ ok: true });
+  res.json({ ok: true, role, username: loginName });
 });
 
 app.post("/api/admin/logout", (req, res) => {
@@ -4394,8 +4525,13 @@ app.post("/api/admin/logout", (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/admin/session", requireAdmin, (_req, res) => {
-  res.json({ ok: true });
+app.get("/api/admin/session", requireAdmin, (req, res) => {
+  const staff = staffFromReq(req);
+  res.json({
+    ok: true,
+    role: staff?.role || "admin",
+    username: staff?.username || "admin",
+  });
 });
 
 app.get("/api/reports", requireAdmin, (_req, res) => {
@@ -4500,7 +4636,7 @@ app.put("/api/customers/:id", requireAdmin, (req, res) => {
   }
 });
 
-app.delete("/api/customers/:id", requireAdmin, (req, res) => {
+app.delete("/api/customers/:id", requireOwnerAdmin, (req, res) => {
   const rows = readSavedCustomers();
   const customer = rows.find((c) => c.id === req.params.id);
   if (!customer) return res.status(404).json({ error: "Customer not found" });
@@ -4515,11 +4651,11 @@ app.delete("/api/customers/:id", requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/referrals/rules", requireAdmin, (_req, res) => {
+app.get("/api/referrals/rules", requireOwnerAdmin, (_req, res) => {
   res.json({ ...referralsLib.rules });
 });
 
-app.get("/api/referrals", requireAdmin, (req, res) => {
+app.get("/api/referrals", requireOwnerAdmin, (req, res) => {
   try {
     const rows = readReferrals();
     const status = String(req.query.status || "").trim();
@@ -4544,7 +4680,7 @@ app.get("/api/referrals", requireAdmin, (req, res) => {
   }
 });
 
-app.post("/api/referrals", requireAdmin, (req, res) => {
+app.post("/api/referrals", requireOwnerAdmin, (req, res) => {
   try {
     const result = referralsLib.createReferral({
       referrerCustomerId: req.body?.referrerCustomerId,
@@ -4569,7 +4705,7 @@ app.post("/api/referrals", requireAdmin, (req, res) => {
   }
 });
 
-app.post("/api/referrals/:id/cancel", requireAdmin, (req, res) => {
+app.post("/api/referrals/:id/cancel", requireOwnerAdmin, (req, res) => {
   try {
     const result = referralsLib.cancelReferral(readReferrals(), req.params.id);
     writeReferrals(result.rows);
@@ -4579,7 +4715,7 @@ app.post("/api/referrals/:id/cancel", requireAdmin, (req, res) => {
   }
 });
 
-app.get("/api/referral-credits", requireAdmin, (req, res) => {
+app.get("/api/referral-credits", requireOwnerAdmin, (req, res) => {
   try {
     const customerId = String(req.query.customerId || "").trim();
     const rows = readReferrals();
@@ -4606,7 +4742,7 @@ app.get("/api/referral-credits", requireAdmin, (req, res) => {
   }
 });
 
-app.post("/api/billing/:id/apply-referral-credits", requireAdmin, (req, res) => {
+app.post("/api/billing/:id/apply-referral-credits", requireOwnerAdmin, (req, res) => {
   try {
     const docs = readBilling();
     const index = docs.findIndex((d) => d.id === req.params.id);
@@ -4650,7 +4786,7 @@ app.post("/api/billing/:id/apply-referral-credits", requireAdmin, (req, res) => 
   }
 });
 
-app.post("/api/billing/:id/remove-referral-credits", requireAdmin, (req, res) => {
+app.post("/api/billing/:id/remove-referral-credits", requireOwnerAdmin, (req, res) => {
   try {
     const docs = readBilling();
     const index = docs.findIndex((d) => d.id === req.params.id);
@@ -4711,6 +4847,9 @@ app.post("/api/reports/from-invoice/:id", requireAdmin, (req, res) => {
     const docs = readBilling();
     const invoice = docs.find((d) => d.id === req.params.id);
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+    if (staffFromReq(req)?.role === "technician" && !isCurrentWorkshopBilling(invoice)) {
+      return res.status(403).json({ error: "This quote/invoice is in history. Ask admin to open it." });
+    }
     const ensured = ensureReportFromInvoice(docs, invoice);
     if (ensured.created) writeBilling(docs);
     res.status(ensured.created ? 201 : 200).json(ensured.report);
@@ -4790,7 +4929,7 @@ app.post("/api/reports/:id/publish", requireAdmin, (req, res) => {
   res.json(reports[index]);
 });
 
-app.get("/api/admin/email-status", requireAdmin, (_req, res) => {
+app.get("/api/admin/email-status", requireOwnerAdmin, (_req, res) => {
   let customersSaved = 0;
   try {
     customersSaved = readSavedCustomers().length;
@@ -4807,11 +4946,11 @@ app.get("/api/admin/email-status", requireAdmin, (_req, res) => {
   });
 });
 
-app.get("/api/admin/backup-status", requireAdmin, (_req, res) => {
+app.get("/api/admin/backup-status", requireOwnerAdmin, (_req, res) => {
   res.json(driveBackup.publicStatus(DATA_DIR));
 });
 
-app.get("/api/admin/backup.zip", requireAdmin, async (_req, res) => {
+app.get("/api/admin/backup.zip", requireOwnerAdmin, async (_req, res) => {
   let zipPath = "";
   try {
     const { includePhotos } = driveBackup.getConfig();
@@ -4846,7 +4985,7 @@ app.get("/api/admin/backup.zip", requireAdmin, async (_req, res) => {
   }
 });
 
-app.post("/api/admin/backup", requireAdmin, async (_req, res) => {
+app.post("/api/admin/backup", requireOwnerAdmin, async (_req, res) => {
   try {
     const result = await driveBackup.runBackup({
       dataDir: DATA_DIR,
@@ -4860,7 +4999,7 @@ app.post("/api/admin/backup", requireAdmin, async (_req, res) => {
   }
 });
 
-app.post("/api/admin/restore-workshop", requireAdmin, (req, res) => {
+app.post("/api/admin/restore-workshop", requireOwnerAdmin, (req, res) => {
   try {
     if (req.body?.replace !== true) {
       return res.status(400).json({
@@ -5032,7 +5171,7 @@ function snapshotForPlate(plate, reports, customers) {
   };
 }
 
-app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
+app.get("/api/admin/dashboard", requireOwnerAdmin, (req, res) => {
   try {
     const jobs = readJobs();
     const jobCounts = {
@@ -5334,7 +5473,7 @@ app.get("/api/admin/dashboard", requireAdmin, (req, res) => {
   }
 });
 
-app.post("/api/customers/wof-reminder", requireAdmin, async (req, res) => {
+app.post("/api/customers/wof-reminder", requireOwnerAdmin, async (req, res) => {
   if (!smtpConfigured()) {
     return res.status(503).json({
       error:
@@ -5358,7 +5497,7 @@ app.post("/api/customers/wof-reminder", requireAdmin, async (req, res) => {
   }
 });
 
-app.post("/api/customers/wof-reminder-bulk", requireAdmin, async (req, res) => {
+app.post("/api/customers/wof-reminder-bulk", requireOwnerAdmin, async (req, res) => {
   if (!smtpConfigured()) {
     return res.status(503).json({
       error:
@@ -5413,7 +5552,7 @@ app.post("/api/customers/wof-reminder-bulk", requireAdmin, async (req, res) => {
   res.json(summary);
 });
 
-app.post("/api/customers/wof-sms-reminder", requireAdmin, async (req, res) => {
+app.post("/api/customers/wof-sms-reminder", requireOwnerAdmin, async (req, res) => {
   if (!websms.websmsConfigured()) {
     return res.status(503).json({
       error:
@@ -5435,7 +5574,7 @@ app.post("/api/customers/wof-sms-reminder", requireAdmin, async (req, res) => {
   }
 });
 
-app.post("/api/customers/wof-sms-reminder-bulk", requireAdmin, async (req, res) => {
+app.post("/api/customers/wof-sms-reminder-bulk", requireOwnerAdmin, async (req, res) => {
   if (!websms.websmsConfigured()) {
     return res.status(503).json({
       error:
@@ -5901,8 +6040,11 @@ app.get("/api/billing/catalog", requireAdmin, (_req, res) => {
   });
 });
 
-app.get("/api/billing", requireAdmin, (_req, res) => {
+app.get("/api/billing", requireAdmin, (req, res) => {
+  const staff = staffFromReq(req);
+  const currentIndex = staff?.role === "technician" ? workshopCurrentIndex() : null;
   const docs = readBilling()
+    .filter((d) => !currentIndex || isCurrentWorkshopBilling(d, currentIndex))
     .map((d) => {
       const totals = catalog.computeTotals(d.lines);
       const payment =
@@ -6077,6 +6219,10 @@ app.get("/api/billing/:id", (req, res) => {
   const index = docs.findIndex((d) => d.id === req.params.id);
   if (index < 0) return res.status(404).json({ error: "Not found" });
   const doc = docs[index];
+  const staff = staffFromReq(req);
+  if (staff?.role === "technician" && !isCurrentWorkshopBilling(doc)) {
+    return res.status(404).json({ error: "Not found" });
+  }
 
   const isAdmin = isAdminRequest(req);
   const viewOk = publicViewTokenOk(doc, req.query.v);
@@ -6121,7 +6267,7 @@ function billingMissingError() {
   return `Invoice/quote not found.${freeHint}`;
 }
 
-app.put("/api/billing/:id", requireAdmin, (req, res) => {
+app.put("/api/billing/:id", requireAdmin, requireCurrentBillingIfTech, (req, res) => {
   const docs = readBilling();
   const index = docs.findIndex((d) => d.id === req.params.id);
   if (index < 0) return res.status(404).json({ error: billingMissingError() });
@@ -6273,7 +6419,7 @@ app.put("/api/billing/:id", requireAdmin, (req, res) => {
   res.json(withBillingTotals(docs[index], true));
 });
 
-app.post("/api/billing/:id/issue", requireAdmin, (req, res) => {
+app.post("/api/billing/:id/issue", requireAdmin, requireCurrentBillingIfTech, (req, res) => {
   const docs = readBilling();
   const index = docs.findIndex((d) => d.id === req.params.id);
   if (index < 0) return res.status(404).json({ error: billingMissingError() });
@@ -6286,7 +6432,7 @@ app.post("/api/billing/:id/issue", requireAdmin, (req, res) => {
   }
 });
 
-app.post("/api/billing/:id/email", requireAdmin, async (req, res) => {
+app.post("/api/billing/:id/email", requireAdmin, requireCurrentBillingIfTech, async (req, res) => {
   if (!smtpConfigured()) {
     return res.status(503).json({
       error:
@@ -6899,7 +7045,7 @@ app.post("/api/billing/:id/accept", async (req, res) => {
   });
 });
 
-app.post("/api/billing/:id/convert", requireAdmin, (req, res) => {
+app.post("/api/billing/:id/convert", requireAdmin, requireCurrentBillingIfTech, (req, res) => {
   const docs = readBilling();
   const index = docs.findIndex((d) => d.id === req.params.id);
   if (index < 0) return res.status(404).json({ error: "Not found" });
@@ -6928,7 +7074,7 @@ app.post("/api/billing/:id/convert", requireAdmin, (req, res) => {
   }
 });
 
-app.post("/api/billing/:id/revise", requireAdmin, (req, res) => {
+app.post("/api/billing/:id/revise", requireAdmin, requireCurrentBillingIfTech, (req, res) => {
   const docs = readBilling();
   const source = docs.find((d) => d.id === req.params.id);
   if (!source) return res.status(404).json({ error: billingMissingError() });
@@ -6998,7 +7144,7 @@ app.post("/api/billing/:id/revise", requireAdmin, (req, res) => {
   res.status(201).json(withBillingTotals(doc, true));
 });
 
-app.post("/api/billing/:id/void", requireAdmin, (req, res) => {
+app.post("/api/billing/:id/void", requireOwnerAdmin, (req, res) => {
   const docs = readBilling();
   const index = docs.findIndex((d) => d.id === req.params.id);
   if (index < 0) return res.status(404).json({ error: "Not found" });
@@ -7030,7 +7176,7 @@ app.post("/api/billing/:id/void", requireAdmin, (req, res) => {
   res.json(withBillingTotals(docs[index], true));
 });
 
-app.delete("/api/billing/:id", requireAdmin, (req, res) => {
+app.delete("/api/billing/:id", requireAdmin, requireCurrentBillingIfTech, (req, res) => {
   const docs = readBilling();
   const doc = docs.find((d) => d.id === req.params.id);
   if (!doc) return res.status(404).json({ error: "Not found" });
@@ -7183,7 +7329,7 @@ async function sendBookingConfirmSms(appointmentId) {
   };
 }
 
-app.get("/api/appointments/booking-sms-tomorrow", requireAdmin, (_req, res) => {
+app.get("/api/appointments/booking-sms-tomorrow", requireOwnerAdmin, (_req, res) => {
   try {
     const tomorrow = plusDays(todayIso(), 1);
     const eligible = readAppointments()
@@ -7202,7 +7348,7 @@ app.get("/api/appointments/booking-sms-tomorrow", requireAdmin, (_req, res) => {
   }
 });
 
-app.post("/api/appointments/booking-sms-reminder", requireAdmin, async (req, res) => {
+app.post("/api/appointments/booking-sms-reminder", requireOwnerAdmin, async (req, res) => {
   try {
     const id = String(req.body?.appointmentId || "").trim();
     if (!id) return res.status(400).json({ error: "appointmentId is required." });
@@ -7217,7 +7363,7 @@ app.post("/api/appointments/booking-sms-reminder", requireAdmin, async (req, res
   }
 });
 
-app.post("/api/appointments/booking-sms-reminder-bulk", requireAdmin, async (req, res) => {
+app.post("/api/appointments/booking-sms-reminder-bulk", requireOwnerAdmin, async (req, res) => {
   try {
     if (!websms.websmsConfigured()) {
       return res.status(503).json({
@@ -7790,6 +7936,9 @@ app.post("/api/jobs/:jobId/invoices/:invoiceId/attach-parts", requireAdmin, (req
   const docs = readBilling();
   const invoice = docs.find((d) => d.id === req.params.invoiceId && d.kind === "invoice");
   if (!invoice) return res.status(404).json({ error: "Invoice not found" });
+  if (staffFromReq(req)?.role === "technician" && !isCurrentWorkshopBilling(invoice)) {
+    return res.status(403).json({ error: "This quote/invoice is in history. Ask admin to open it." });
+  }
   if (invoice.status === "void") {
     return res.status(400).json({ error: "This invoice has been voided." });
   }
@@ -7838,7 +7987,7 @@ app.post("/api/jobs/:jobId/invoices/:invoiceId/attach-parts", requireAdmin, (req
 
 app.post(
   "/api/supplier-invoices/import-file",
-  requireAdmin,
+  requireOwnerAdmin,
   ocrImportUpload.single("file"),
   async (req, res) => {
     try {
@@ -7961,7 +8110,7 @@ app.post(
   }
 );
 
-app.post("/api/supplier-invoices", requireAdmin, (req, res) => {
+app.post("/api/supplier-invoices", requireOwnerAdmin, (req, res) => {
   try {
     const payload = validateSupplierInvoiceInput(req.body || {});
     const rows = readSupplierInvoices();
@@ -7998,7 +8147,7 @@ app.post("/api/supplier-invoices", requireAdmin, (req, res) => {
   }
 });
 
-app.get("/api/supplier-invoices", requireAdmin, (_req, res) => {
+app.get("/api/supplier-invoices", requireOwnerAdmin, (_req, res) => {
   const candidateRows = readInvoiceCandidates();
   const rows = readSupplierInvoices()
     .map((row) => normalizeSupplierInvoice(row))
@@ -8041,7 +8190,7 @@ app.get("/api/supplier-invoices", requireAdmin, (_req, res) => {
   res.json(rows);
 });
 
-app.get("/api/supplier-invoices/:invoiceId", requireAdmin, (req, res) => {
+app.get("/api/supplier-invoices/:invoiceId", requireOwnerAdmin, (req, res) => {
   const rows = readSupplierInvoices();
   const invoice = rows.find((row) => row.id === req.params.invoiceId);
   if (!invoice) return res.status(404).json({ error: "Supplier invoice not found" });
@@ -8062,7 +8211,7 @@ app.get("/api/supplier-invoices/:invoiceId", requireAdmin, (req, res) => {
   });
 });
 
-app.put("/api/supplier-invoices/:invoiceId", requireAdmin, (req, res) => {
+app.put("/api/supplier-invoices/:invoiceId", requireOwnerAdmin, (req, res) => {
   try {
     const rows = readSupplierInvoices();
     const index = rows.findIndex((row) => row.id === req.params.invoiceId);
@@ -8098,7 +8247,7 @@ app.put("/api/supplier-invoices/:invoiceId", requireAdmin, (req, res) => {
 
 app.post(
   "/api/supplier-invoices/:invoiceId/images",
-  requireAdmin,
+  requireOwnerAdmin,
   invoiceEvidenceUpload.array("images", 12),
   (req, res) => {
     const rows = readSupplierInvoices();
@@ -8121,7 +8270,7 @@ app.post(
   }
 );
 
-app.post("/api/supplier-invoices/:invoiceId/parse", requireAdmin, (req, res) => {
+app.post("/api/supplier-invoices/:invoiceId/parse", requireOwnerAdmin, (req, res) => {
   const invoices = readSupplierInvoices();
   const invoiceIndex = invoices.findIndex((row) => row.id === req.params.invoiceId);
   if (invoiceIndex < 0) return res.status(404).json({ error: "Supplier invoice not found" });
@@ -8177,7 +8326,7 @@ app.post("/api/supplier-invoices/:invoiceId/parse", requireAdmin, (req, res) => 
   res.status(201).json({ invoice: refreshed || invoices[invoiceIndex], candidates: matched });
 });
 
-app.get("/api/supplier-invoices/:invoiceId/candidates", requireAdmin, (req, res) => {
+app.get("/api/supplier-invoices/:invoiceId/candidates", requireOwnerAdmin, (req, res) => {
   const invoice = readSupplierInvoices().find((row) => row.id === req.params.invoiceId);
   if (!invoice) return res.status(404).json({ error: "Supplier invoice not found" });
   const rows = readInvoiceCandidates()
@@ -8187,7 +8336,7 @@ app.get("/api/supplier-invoices/:invoiceId/candidates", requireAdmin, (req, res)
   res.json(rows);
 });
 
-app.post("/api/supplier-invoices/:invoiceId/auto-match", requireAdmin, (req, res) => {
+app.post("/api/supplier-invoices/:invoiceId/auto-match", requireOwnerAdmin, (req, res) => {
   try {
     const rows = rematchCandidatesForInvoice(req.params.invoiceId).map((row) =>
       normalizeCandidate(row)
@@ -8199,7 +8348,7 @@ app.post("/api/supplier-invoices/:invoiceId/auto-match", requireAdmin, (req, res
   }
 });
 
-app.post("/api/invoice-candidates/:candidateId/accept", requireAdmin, (req, res) => {
+app.post("/api/invoice-candidates/:candidateId/accept", requireOwnerAdmin, (req, res) => {
   try {
     res.json(acceptInvoiceCandidate(req.params.candidateId, req, "accepted"));
   } catch (err) {
@@ -8207,7 +8356,7 @@ app.post("/api/invoice-candidates/:candidateId/accept", requireAdmin, (req, res)
   }
 });
 
-app.post("/api/invoice-candidates/:candidateId/edit-accept", requireAdmin, (req, res) => {
+app.post("/api/invoice-candidates/:candidateId/edit-accept", requireOwnerAdmin, (req, res) => {
   try {
     const nextReq = {
       ...req,
@@ -8222,7 +8371,7 @@ app.post("/api/invoice-candidates/:candidateId/edit-accept", requireAdmin, (req,
   }
 });
 
-app.patch("/api/invoice-candidates/:candidateId/edit-matched", requireAdmin, (req, res) => {
+app.patch("/api/invoice-candidates/:candidateId/edit-matched", requireOwnerAdmin, (req, res) => {
   try {
     res.json(editMatchedCandidate(req.params.candidateId, req));
   } catch (err) {
@@ -8230,7 +8379,7 @@ app.patch("/api/invoice-candidates/:candidateId/edit-matched", requireAdmin, (re
   }
 });
 
-app.post("/api/invoice-candidates/:candidateId/unmatch", requireAdmin, (req, res) => {
+app.post("/api/invoice-candidates/:candidateId/unmatch", requireOwnerAdmin, (req, res) => {
   try {
     res.json(unmatchInvoiceCandidate(req.params.candidateId, req));
   } catch (err) {
@@ -8238,7 +8387,7 @@ app.post("/api/invoice-candidates/:candidateId/unmatch", requireAdmin, (req, res
   }
 });
 
-app.post("/api/invoice-candidates/:candidateId/reject", requireAdmin, (req, res) => {
+app.post("/api/invoice-candidates/:candidateId/reject", requireOwnerAdmin, (req, res) => {
   const rows = readInvoiceCandidates();
   const index = rows.findIndex((row) => row.id === req.params.candidateId);
   if (index < 0) return res.status(404).json({ error: "Candidate not found" });
@@ -8261,7 +8410,7 @@ app.post("/api/invoice-candidates/:candidateId/reject", requireAdmin, (req, res)
   res.json({ candidate: next, supplierInvoice: invoice });
 });
 
-app.post("/api/invoice-candidates/:candidateId/consumable", requireAdmin, (req, res) => {
+app.post("/api/invoice-candidates/:candidateId/consumable", requireOwnerAdmin, (req, res) => {
   try {
     res.json(classifyShopCandidate(req.params.candidateId, req, "consumable"));
   } catch (err) {
@@ -8269,7 +8418,7 @@ app.post("/api/invoice-candidates/:candidateId/consumable", requireAdmin, (req, 
   }
 });
 
-app.post("/api/invoice-candidates/:candidateId/tool", requireAdmin, (req, res) => {
+app.post("/api/invoice-candidates/:candidateId/tool", requireOwnerAdmin, (req, res) => {
   try {
     res.json(classifyShopCandidate(req.params.candidateId, req, "tool"));
   } catch (err) {
@@ -8325,7 +8474,7 @@ function classifyShopCandidate(candidateId, req, decision) {
   return { candidate: next, supplierInvoice: invoice };
 }
 
-app.get("/api/match/part-suggestions", requireAdmin, (req, res) => {
+app.get("/api/match/part-suggestions", requireOwnerAdmin, (req, res) => {
   const invoiceId = String(req.query.invoiceId || "").trim();
   if (!invoiceId) return res.status(400).json({ error: "invoiceId is required" });
   const invoice = readSupplierInvoices().find((row) => row.id === invoiceId);
@@ -8348,7 +8497,7 @@ app.get("/api/match/part-suggestions", requireAdmin, (req, res) => {
   res.json(rows);
 });
 
-app.get("/api/validation/duplicate-invoice", requireAdmin, (req, res) => {
+app.get("/api/validation/duplicate-invoice", requireOwnerAdmin, (req, res) => {
   const supplier = normalizeSupplierName(req.query.supplier);
   const invoiceNo = normalizeInvoiceNo(req.query.invoiceNo);
   if (!supplier || !invoiceNo) {

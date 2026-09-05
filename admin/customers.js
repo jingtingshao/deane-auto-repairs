@@ -439,21 +439,21 @@ function renderCustomers() {
                     : ""
                 }
                 ${
-                  !editing && row.canDelete
+                  !editing && row.canDelete && !Admin.isTechnician?.()
                     ? `<button type="button" class="danger" data-delete-id="${Admin.escapeAttr(row.customerId)}">Delete</button>`
                     : ""
                 }
                 ${
-                  !editing && (row.canWofReminder || canSendWofReminder(row))
+                  !editing && !Admin.isTechnician?.() && (row.canWofReminder || canSendWofReminder(row))
                     ? `<button type="button" class="primary compact" data-remind-key="${Admin.escapeAttr(row.key)}">Email</button>`
-                    : !editing && row.wofReminderSentAt
+                    : !editing && !Admin.isTechnician?.() && row.wofReminderSentAt
                     ? `<span class="reminder-sent">Email ${Admin.escapeHtml(formatReminderSent(row.wofReminderSentAt))}</span>`
                     : ""
                 }
                 ${
-                  !editing && (row.canWofSmsReminder || canSendWofSmsReminder(row))
+                  !editing && !Admin.isTechnician?.() && (row.canWofSmsReminder || canSendWofSmsReminder(row))
                     ? `<button type="button" class="ghost compact" data-sms-remind-key="${Admin.escapeAttr(row.key)}">SMS</button>`
-                    : !editing && row.wofSmsReminderSentAt
+                    : !editing && !Admin.isTechnician?.() && row.wofSmsReminderSentAt
                     ? `<span class="reminder-sent">SMS ${Admin.escapeHtml(formatReminderSent(row.wofSmsReminderSentAt))}</span>`
                     : ""
                 }
@@ -746,7 +746,7 @@ function showCustomerForm(row = null) {
   if (vehicles.length > 1) vehicles = [vehicles[0]];
   renderVehicleRows(vehicles);
   if (customerDeleteBtn) {
-    customerDeleteBtn.hidden = !(editingCustomerId && row?.canDelete);
+    customerDeleteBtn.hidden = Admin.isTechnician?.() || !(editingCustomerId && row?.canDelete);
   }
   const invoicesBtn = document.getElementById("btn-customer-invoices");
   if (invoicesBtn) {
@@ -757,7 +757,7 @@ function showCustomerForm(row = null) {
   if (balanceEl) {
     balanceEl.hidden = true;
     balanceEl.textContent = "";
-    if (editingCustomerId) {
+    if (editingCustomerId && !Admin.isTechnician?.()) {
       Admin.api(`/api/referral-credits?customerId=${encodeURIComponent(editingCustomerId)}`)
         .then((summary) => {
           const bal = Number(summary?.balance) || 0;
@@ -1093,10 +1093,16 @@ async function showCustomers() {
     await loadCustomers();
     renderLetterBar();
     if (!customerForm || customerForm.hidden) customersSearch?.focus();
-    const info = await Admin.api("/api/admin/email-status");
-    const hint = document.getElementById("customer-storage-hint");
-    if (hint && info?.dataDir) {
-      hint.textContent = `Saving to ${info.dataDir} (${info.customersSaved || 0} saved).`;
+    if (!Admin.isTechnician?.()) {
+      try {
+        const info = await Admin.api("/api/admin/email-status");
+        const hint = document.getElementById("customer-storage-hint");
+        if (hint && info?.dataDir) {
+          hint.textContent = `Saving to ${info.dataDir} (${info.customersSaved || 0} saved).`;
+        }
+      } catch {
+        /* storage hint is admin-only */
+      }
     }
   } catch (err) {
     alert(err.message);

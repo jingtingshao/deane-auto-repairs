@@ -88,6 +88,7 @@ let current = null;
 let checklistMeta = null;
 let reportDocs = [];
 let reportCustomerDirectory = [];
+let staffSession = { role: "admin", username: "admin" };
 const reportCustomerSelect = document.getElementById("report-customer-id");
 const reportVehicleSelect = document.getElementById("report-vehicle-id");
 
@@ -114,6 +115,32 @@ function showStatus(msg) {
   }, 2500);
 }
 
+function avatarLabel(role, username) {
+  if (role === "technician") return String(username || "").slice(-2).toUpperCase() || "T";
+  return "DA";
+}
+
+function applyStaffSession(data = {}) {
+  staffSession = {
+    role: data.role === "technician" ? "technician" : "admin",
+    username: String(data.username || (data.role === "technician" ? "" : "admin")).trim() || "admin",
+  };
+  document.body.dataset.role = staffSession.role;
+  const logoutBtn = document.getElementById("btn-logout");
+  if (logoutBtn) {
+    logoutBtn.textContent = avatarLabel(staffSession.role, staffSession.username);
+    logoutBtn.title = `Signed in as ${staffSession.username}. Sign out`;
+  }
+}
+
+function homeSection() {
+  return staffSession.role === "technician" ? "calendar" : "dashboard";
+}
+
+function isTechnician() {
+  return staffSession.role === "technician";
+}
+
 function showApp() {
   loginView.hidden = true;
   app.hidden = false;
@@ -124,8 +151,12 @@ function showLogin() {
   window.DeaneBookingAlerts?.stop?.();
   loginView.hidden = false;
   app.hidden = true;
+  document.body.removeAttribute("data-role");
+  staffSession = { role: "admin", username: "admin" };
   const pinInput = document.getElementById("pin");
+  const userInput = document.getElementById("username");
   if (pinInput) pinInput.value = "";
+  if (userInput) userInput.value = "";
 }
 
 function todayOverline() {
@@ -146,6 +177,9 @@ function setOverline(text) {
 
 function setSection(name) {
   if (name === "billing") name = "quotes";
+  if (isTechnician() && (name === "dashboard" || name === "referrals" || name === "sms_inbox" || name === "supplier_invoices")) {
+    name = "calendar";
+  }
   const dashboardSection = document.getElementById("dashboard-section");
   const reportsSection = document.getElementById("reports-section");
   const billingSection = document.getElementById("billing-section");
@@ -535,11 +569,19 @@ window.DeaneAdmin = {
       el.hidden = true;
     }, 2500);
   },
+  isTechnician,
+  staffRole() {
+    return staffSession.role;
+  },
+  staffUsername() {
+    return staffSession.username;
+  },
 };
 
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   loginError.hidden = true;
+  const username = document.getElementById("username")?.value.trim() || "";
   const value = document.getElementById("pin").value.trim();
   const submitBtn = loginForm.querySelector('button[type="submit"]');
   if (submitBtn) {
@@ -551,21 +593,27 @@ loginForm.addEventListener("submit", async (e) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ pin: value }),
+      body: JSON.stringify({ username, password: value, pin: value }),
     });
     const data = await res.json().catch(() => ({}));
     if (res.status === 429) {
       throw new Error(data.error || "Too many sign-in attempts. Try again later.");
     }
     if (res.status === 401) {
-      throw new Error("Wrong PIN");
+      throw new Error(data.error || "Wrong username or password");
     }
     if (!res.ok) {
       throw new Error(data.error || `Server error (${res.status}). Is npm start running?`);
     }
+    applyStaffSession(data);
     showApp();
-    setSection("dashboard");
-    await window.DeaneDashboard?.load?.();
+    if (data.role === "technician") {
+      setSection("calendar");
+      window.DeaneCalendar?.showList?.();
+    } else {
+      setSection("dashboard");
+      await window.DeaneDashboard?.load?.();
+    }
   } catch (err) {
     loginError.hidden = false;
     const msg = err instanceof Error ? err.message : String(err);
@@ -590,7 +638,8 @@ document.getElementById("btn-logout").addEventListener("click", async () => {
 });
 
 document.getElementById("sidebar-brand")?.addEventListener("click", () => {
-  setSection("dashboard");
+  setSection(homeSection());
+  if (isTechnician()) window.DeaneCalendar?.showList?.();
 });
 
 document.getElementById("nav-dashboard")?.addEventListener("click", () => {
@@ -1256,10 +1305,16 @@ function escapeAttr(str) {
 
 (async function boot() {
   try {
-    await api("/api/admin/session");
+    const session = await api("/api/admin/session");
+    applyStaffSession(session);
     showApp();
-    setSection("dashboard");
-    await window.DeaneDashboard?.load?.();
+    if (isTechnician()) {
+      setSection("calendar");
+      window.DeaneCalendar?.showList?.();
+    } else {
+      setSection("dashboard");
+      await window.DeaneDashboard?.load?.();
+    }
   } catch {
     showLogin();
   }

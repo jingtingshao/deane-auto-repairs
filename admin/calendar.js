@@ -417,11 +417,15 @@
     if (createJobBtn) createJobBtn.hidden = !current || linked || current.status === "cancelled" || current.status === "no_show";
     if (openJobBtn) openJobBtn.hidden = !linked;
     if (smsBtn) {
-      const canSms = Boolean(current?.canBookingSms);
-      const sent = Boolean(current?.bookingSmsReminderSentAt);
-      smsBtn.hidden = !current || (!canSms && !sent);
-      smsBtn.disabled = !canSms;
-      smsBtn.textContent = sent && !canSms ? "Booking SMS sent" : "Send booking SMS";
+      if (Admin.isTechnician?.()) {
+        smsBtn.hidden = true;
+      } else {
+        const canSms = Boolean(current?.canBookingSms);
+        const sent = Boolean(current?.bookingSmsReminderSentAt);
+        smsBtn.hidden = !current || (!canSms && !sent);
+        smsBtn.disabled = !canSms;
+        smsBtn.textContent = sent && !canSms ? "Booking SMS sent" : "Send booking SMS";
+      }
     }
     if (jobLinkEl) {
       jobLinkEl.textContent = linked
@@ -443,6 +447,11 @@
   }
 
   async function refreshTomorrowSmsCount() {
+    if (Admin.isTechnician?.()) {
+      tomorrowSmsCount = 0;
+      updateRemindTomorrowButton();
+      return;
+    }
     try {
       const info = await Admin.api("/api/appointments/booking-sms-tomorrow");
       tomorrowSmsCount = Number(info.count) || 0;
@@ -559,7 +568,7 @@
                       }
                     </button>
                     ${
-                      row.canBookingSms
+                      row.canBookingSms && !Admin.isTechnician?.()
                         ? `<button type="button" class="ghost compact cal-slot-sms" data-sms-id="${Admin.escapeAttr(row.id)}">SMS</button>`
                         : ""
                     }

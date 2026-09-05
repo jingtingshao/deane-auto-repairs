@@ -95,11 +95,14 @@ function renderFilters() {
       `<button type="button" class="ghost" data-filter="waiting_parts">Waiting parts</button>`,
       `<button type="button" class="ghost" data-filter="in_progress">In progress</button>`,
       `<button type="button" class="ghost" data-filter="completed">Ready to collect</button>`,
-      `<button type="button" class="ghost" data-filter="collected_month">Collected this month</button>`,
-      `<button type="button" class="ghost" data-filter="collected">All history</button>`,
+      `<button type="button" class="ghost" data-filter="collected_month" data-admin-only>Collected this month</button>`,
+      `<button type="button" class="ghost" data-filter="collected" data-admin-only>All history</button>`,
     ].join("");
     jobsFilter.querySelectorAll("[data-filter]").forEach((btn) => {
       btn.addEventListener("click", () => {
+        if (Admin.isTechnician?.() && (btn.dataset.filter === "collected" || btn.dataset.filter === "collected_month")) {
+          return;
+        }
         jobFilter = btn.dataset.filter;
         if (jobFilter === "collected_month") jobMonth = Admin.todayIso().slice(0, 7);
         renderFilters();

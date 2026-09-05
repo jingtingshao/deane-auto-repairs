@@ -5,16 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="Cache-Control" content="no-store" />
     <title>Technician Uploads · Deane Auto Repairs</title>
-    <link rel="stylesheet" href="tech.css?v=20260827mobilephotos" />
+    <link rel="stylesheet" href="tech.css?v=20260905staffrole" />
   </head>
   <body>
     <main class="wrap">
       <section id="login-view" class="card">
         <h1>Technician uploads</h1>
-        <p class="muted">Deane Auto Repairs · Upload work photos and supplier invoices.</p>
+        <p class="muted">Sign in with <strong>dean01</strong> or <strong>dean02</strong>, or admin username <strong>admin</strong> and the admin PIN.</p>
         <form id="login-form" class="stack">
           <label>
-            Admin PIN
+            Username
+            <input id="username" name="username" type="text" autocomplete="username" placeholder="dean01, dean02, or admin" />
+          </label>
+          <label>
+            Password
             <input id="pin" type="password" autocomplete="current-password" required />
           </label>
           <button type="submit">Sign in</button>
@@ -62,6 +66,6 @@
       </section>
     </main>
 
-    <script src="tech.js?v=20260827mobilephotos"></script>
+    <script src="tech.js?v=20260905staffrole"></script>
   </body>
 </html>

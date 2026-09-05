@@ -151,15 +151,16 @@ async function uploadPhotos(type, files) {
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   loginError.hidden = true;
-  const pin = document.getElementById("pin").value.trim();
-  const submit = loginForm.querySelector('button[type="submit"]');
-  submit.disabled = true;
-  submit.textContent = "Signing in…";
-  try {
-    await api("/api/admin/login", {
-      method: "POST",
-      body: JSON.stringify({ pin }),
-    });
+    const username = document.getElementById("username")?.value.trim() || "";
+    const pin = document.getElementById("pin").value.trim();
+    const submit = loginForm.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    submit.textContent = "Signing in…";
+    try {
+      await api("/api/admin/login", {
+        method: "POST",
+        body: JSON.stringify({ username, password: pin, pin }),
+      });
     await loadJobs();
     showJobs();
   } catch (err) {

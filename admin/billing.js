@@ -944,10 +944,15 @@ function renderHistory(doc) {
         review_request: "Google review request emailed",
       };
       const summaryText = ev.summary || labels[ev.type] || ev.type || "Update";
+      const actor = String(ev.actor || "").trim();
+      const who = actor
+        ? `<p class="history-actor">${Admin.escapeHtml(actor)}</p>`
+        : "";
       return `<li class="history-item history-${Admin.escapeAttr(ev.type || "note")}">
         <div class="history-when">${Admin.escapeHtml(formatHistoryWhen(ev.at))}</div>
         <div class="history-body">
           <p class="history-summary">${Admin.escapeHtml(summaryText)}${amount}</p>
+          ${who}
           ${detail}
         </div>
       </li>`;
@@ -1271,7 +1276,12 @@ async function renderReferralCredits() {
   const summaryEl = document.getElementById("billing-referral-summary");
   const actionsEl = document.getElementById("billing-referral-actions");
   if (!box || !summaryEl || !actionsEl) return;
-  if (!currentBill || currentBill.kind !== "invoice" || currentBill.status === "void") {
+  if (
+    Admin.isTechnician?.() ||
+    !currentBill ||
+    currentBill.kind !== "invoice" ||
+    currentBill.status === "void"
+  ) {
     box.hidden = true;
     return;
   }
@@ -1280,7 +1290,7 @@ async function renderReferralCredits() {
   const customerId = String(currentBill.customerId || "").trim();
   let available = 0;
   let creditCount = 0;
-  if (customerId) {
+  if (customerId && !Admin.isTechnician?.()) {
     try {
       const bal = await Admin.api(
         `/api/referral-credits?customerId=${encodeURIComponent(customerId)}`
@@ -1550,7 +1560,11 @@ function updateActionButtons() {
   emailBtn.classList.toggle("primary", !linesEditable || doc.status === "sent");
   emailBtn.classList.toggle("ghost", linesEditable && doc.status === "draft");
   voidBtn.hidden =
-    unsaved || doc.status === "void" || doc.status === "invoiced" || doc.status === "draft";
+    Admin.isTechnician?.() ||
+    unsaved ||
+    doc.status === "void" ||
+    doc.status === "invoiced" ||
+    doc.status === "draft";
   deleteBtn.hidden = doc.status !== "draft" && !unsaved;
   addLineBtn.hidden = !linesEditable;
 }

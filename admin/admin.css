@@ -22,11 +22,14 @@
   display: none !important;
 }
 
-body {
-  margin: 0;
-  font-family: var(--font);
-  color: var(--ink);
-  background: var(--paper);
+body[data-role="technician"] [data-admin-only] {
+  display: none !important;
+}
+
+.history-actor {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
 }
 
 .script {

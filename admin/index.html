@@ -11,16 +11,18 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260904fromtoday" />
-    <link rel="stylesheet" href="admin-refresh.css?v=20260904bookadded" />
+    <link rel="stylesheet" href="admin.css?v=20260905staffrole" />
+    <link rel="stylesheet" href="admin-refresh.css?v=20260905staffrole" />
   </head>
   <body>
     <div id="login-view" class="login-view">
       <form id="login-form" class="login-card">
         <p class="brand"><span class="script">Deane</span> AUTO REPAIRS</p>
-        <h1>Workshop admin</h1>
-        <p class="muted">Enter PIN to create reports, job cards, quotes and invoices.</p>
-        <label for="pin">Admin PIN</label>
+        <h1>Workshop sign in</h1>
+        <p class="muted">Admin uses username <strong>admin</strong> and the admin PIN. Technicians use <strong>dean01</strong> or <strong>dean02</strong>.</p>
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" autocomplete="username" placeholder="admin, dean01, or dean02" />
+        <label for="pin">Password</label>
         <input id="pin" type="password" autocomplete="current-password" required />
         <button type="submit">Sign in</button>
         <p id="login-error" class="error" hidden></p>
@@ -35,15 +37,15 @@
           <small>WORKSHOP SYSTEM</small>
         </button>
         <nav>
-          <button type="button" id="nav-dashboard" class="active"><b>▦</b> Today</button>
+          <button type="button" id="nav-dashboard" class="active" data-admin-only><b>▦</b> Today</button>
           <button type="button" id="nav-calendar"><b>▣</b> Calendar <i id="nav-calendar-count" hidden>0</i></button>
           <button type="button" id="nav-jobs"><b>▤</b> Job board <i id="nav-jobs-count" hidden>0</i></button>
-          <button type="button" id="nav-supplier-invoices"><b>◫</b> Parts invoices</button>
+          <button type="button" id="nav-supplier-invoices" data-admin-only><b>◫</b> Parts invoices</button>
           <button type="button" id="nav-quotes"><b>$</b> Quotes <i id="nav-quotes-count" hidden>0</i></button>
           <button type="button" id="nav-invoices"><b>$</b> Invoices <i id="nav-invoices-count" hidden>0</i></button>
           <button type="button" id="nav-customers"><b>◉</b> Customers</button>
-          <button type="button" id="nav-referrals"><b>🎁</b> Referrals</button>
-          <button type="button" id="nav-sms-inbox"><b>✉</b> SMS Inbox</button>
+          <button type="button" id="nav-referrals" data-admin-only><b>🎁</b> Referrals</button>
+          <button type="button" id="nav-sms-inbox" data-admin-only><b>✉</b> SMS Inbox</button>
           <button type="button" id="nav-reports"><b>▧</b> Service reports</button>
         </nav>
         <div class="sidebar-foot">
@@ -207,7 +209,7 @@
                 <button type="button" class="ghost is-active" data-cal-view="fortnight">14 days</button>
                 <button type="button" class="ghost" data-cal-view="month">1 month</button>
               </div>
-              <button type="button" id="btn-cal-remind-tomorrow" class="ghost" hidden>Remind tomorrow</button>
+                <button type="button" id="btn-cal-remind-tomorrow" class="ghost" hidden data-admin-only>Remind tomorrow</button>
               <button type="button" id="btn-cal-new" class="primary">+ New appointment</button>
             </div>
             <div id="calendar-web-bookings" class="calendar-web-bookings" hidden></div>
@@ -219,7 +221,7 @@
               <button type="button" id="btn-cal-back" class="ghost">← Calendar</button>
               <div class="edit-actions">
                 <button type="button" id="btn-cal-save" class="primary">Save appointment</button>
-                <button type="button" id="btn-cal-sms" class="ghost" hidden>Send booking SMS</button>
+                <button type="button" id="btn-cal-sms" class="ghost" hidden data-admin-only>Send booking SMS</button>
                 <button type="button" id="btn-cal-create-job" class="ghost" hidden>Create job card</button>
                 <button type="button" id="btn-cal-open-job" class="ghost" hidden>Open job</button>
                 <button type="button" id="btn-cal-delete" class="danger">Delete</button>
@@ -533,8 +535,8 @@
               <button type="button" class="ghost" data-filter="overdue">Overdue</button>
               <button type="button" class="ghost" data-filter="due_soon">Due in 30 days</button>
               <button type="button" class="ghost" data-filter="missing">No WOF date</button>
-              <button type="button" id="btn-wof-remind-all" class="primary" hidden>Remind all due soon</button>
-              <button type="button" id="btn-wof-sms-remind-all" class="ghost" hidden>SMS all due soon</button>
+              <button type="button" id="btn-wof-remind-all" class="primary" hidden data-admin-only>Remind all due soon</button>
+              <button type="button" id="btn-wof-sms-remind-all" class="ghost" hidden data-admin-only>SMS all due soon</button>
             </div>
           </div>
           <p class="muted small">One row = one plate. Same name is OK for another car — create a new customer. Click <strong>Edit</strong> for contact details, <strong>Plate</strong> to change rego. <span id="customer-storage-hint"></span></p>
@@ -560,7 +562,7 @@
                 <button type="submit" id="btn-customer-save" class="primary">Save customer</button>
                 <button type="button" id="btn-customer-invoices" class="ghost" hidden>View invoices</button>
                 <button type="button" id="btn-customer-cancel" class="ghost">Close</button>
-                <button type="button" id="btn-customer-delete" class="danger" hidden>Delete</button>
+                <button type="button" id="btn-customer-delete" class="danger" hidden data-admin-only>Delete</button>
               </div>
             </fieldset>
           </form>
@@ -673,7 +675,7 @@
                 <button type="button" id="btn-billing-open-invoice" class="ghost" hidden>Open invoice</button>
                 <button type="button" id="btn-billing-job" class="primary" hidden>Create job card</button>
                 <button type="button" id="btn-billing-report" class="primary" hidden>Create report</button>
-                <button type="button" id="btn-billing-void" class="ghost">Void</button>
+                <button type="button" id="btn-billing-void" class="ghost" data-admin-only>Void</button>
                 <button type="button" id="btn-billing-delete" class="danger">Delete</button>
               </div>
             </div>
@@ -853,13 +855,13 @@
       </div>
     </div>
 
-    <script src="admin.js?v=20260905names"></script>
+    <script src="admin.js?v=20260905staffrole"></script>
     <script src="dashboard.js?v=20260902backupfoot"></script>
-    <script src="calendar.js?v=20260905names"></script>
-    <script src="jobs.js?v=20260905names"></script>
+    <script src="calendar.js?v=20260905staffrole"></script>
+    <script src="jobs.js?v=20260905staffrole"></script>
     <script src="supplier-invoices.js?v=20260829nopreview"></script>
-    <script src="billing.js?v=20260904nomax40"></script>
-    <script src="customers.js?v=20260905names"></script>
+    <script src="billing.js?v=20260906techcustomers"></script>
+    <script src="customers.js?v=20260906techcustomers"></script>
     <script src="referrals.js?v=20260904oneReward"></script>
     <script src="sms-inbox.js?v=20260830yesno"></script>
     <script src="booking-alerts.js?v=20260904bookadded"></script>
