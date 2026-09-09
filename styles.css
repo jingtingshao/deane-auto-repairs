@@ -405,59 +405,54 @@ p {
 }
 
 .service-card {
+  --service-card-bg: #f4f4f1;
+  --service-card-ink: #111827;
+  --service-card-accent: #f5b400;
   position: relative;
   display: flex;
   min-height: 374px;
-  padding: 23px;
+  padding: 26px 23px 23px;
   overflow: hidden;
-  background: #fbfaf6;
+  background: var(--service-card-bg);
+  color: var(--service-card-ink);
   flex-direction: column;
 }
 
-.service-card-dark {
-  background: var(--navy);
-  color: #fff;
-}
-
-.service-card-red {
-  background: var(--sign-yellow);
-  color: var(--sign-navy);
-}
-
-.service-card-photo {
-  color: #fff;
-  background: url("assets/hero-castrol-workshop.png") center / cover;
-}
-
-.photo-overlay {
+.service-card::before {
+  content: "";
   position: absolute;
-  inset: 0;
-  background: #021534b8;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  background: var(--service-card-accent);
 }
 
-.service-card > *:not(.photo-overlay):not(.tag):not(.icon) {
-  position: relative;
-  z-index: 1;
+.service-card-popular {
+  box-shadow: inset 0 0 0 1px rgba(245, 180, 0, 0.55);
 }
 
 .card-number {
-  font: 10px var(--mono);
+  color: var(--service-card-accent);
+  font: 700 10px var(--mono);
+  letter-spacing: 0.06em;
 }
 
 .service-card .icon {
   position: absolute;
-  top: 16px;
+  top: 22px;
   right: 22px;
   z-index: 2;
-  color: var(--lime);
+  color: var(--service-card-accent);
   font: 36px var(--display);
   line-height: 1;
 }
 
 .service-card h3 {
-  margin: 55px 0 14px;
+  margin: 42px 0 14px;
   font: 800 42px / 0.85 var(--display);
   text-transform: uppercase;
+  color: var(--service-card-ink);
 }
 
 .service-includes {
@@ -467,6 +462,7 @@ p {
   padding: 0;
   list-style: none;
   font-size: 13px;
+  color: var(--service-card-ink);
 }
 
 .service-includes li {
@@ -477,19 +473,8 @@ p {
 
 .service-includes li::before {
   content: "✓";
-  color: var(--lime);
+  color: var(--service-card-accent);
   font-weight: 800;
-}
-
-.service-card-red .icon,
-.service-card-red .service-includes li::before {
-  color: var(--sign-navy);
-}
-
-.service-card:not(.service-card-dark):not(.service-card-red)
-  .service-includes
-  li::before {
-  color: var(--sign-yellow);
 }
 
 .card-bottom {
@@ -497,14 +482,17 @@ p {
   gap: 6px;
   margin-top: auto;
   align-items: end;
+  color: var(--service-card-ink);
 }
 
 .card-bottom strong {
   font: 800 38px / 0.8 var(--display);
+  color: var(--service-card-ink);
 }
 
 .card-bottom small {
   font: 10px var(--mono);
+  color: #4b5563;
 }
 
 .card-bottom a {
@@ -518,23 +506,27 @@ p {
   text-decoration: none;
 }
 
-/* Must beat `.service-card > *:not(.photo-overlay)` so the ribbon stays absolute */
 .service-card .tag {
   position: absolute;
-  top: 18px;
-  right: -42px;
+  top: 16px;
+  right: 16px;
   z-index: 2;
-  width: 150px;
-  padding: 7px 0;
-  background: var(--sign-navy);
-  color: var(--sign-yellow);
-  font: 8px / 1.2 var(--mono);
-  letter-spacing: 0.08em;
+  width: auto;
+  padding: 5px 9px;
+  background: var(--service-card-accent);
+  color: var(--service-card-ink);
+  font: 700 9px / 1.2 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   text-align: center;
   white-space: nowrap;
-  transform: rotate(45deg);
-  transform-origin: center;
+  border-radius: 0;
+  transform: none;
   pointer-events: none;
+}
+
+.service-card-popular .card-number {
+  padding-right: 6.5rem;
 }
 
 .services-aside {
@@ -973,12 +965,12 @@ footer {
   }
 
   .service-card .tag {
-    top: 22px;
-    right: -48px;
-    width: 168px;
-    padding: 8px 0;
+    top: 14px;
+    right: 14px;
+    width: auto;
+    padding: 5px 9px;
     font-size: 9px;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.06em;
   }
 
   .form-row {
