@@ -433,23 +433,23 @@ p {
 }
 
 .card-number {
-  color: var(--service-card-accent);
-  font: 700 10px var(--mono);
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 9px;
+  background: var(--service-card-accent);
+  color: #fff;
+  font: 700 10px / 1.2 var(--mono);
   letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .service-card .icon {
-  position: absolute;
-  top: 22px;
-  right: 22px;
-  z-index: 2;
-  color: var(--service-card-accent);
-  font: 36px var(--display);
-  line-height: 1;
+  display: none;
 }
 
 .service-card h3 {
-  margin: 42px 0 14px;
+  margin: 28px 0 14px;
   font: 800 42px / 0.85 var(--display);
   text-transform: uppercase;
   color: var(--service-card-ink);
@@ -466,15 +466,12 @@ p {
 }
 
 .service-includes li {
-  display: flex;
-  gap: 7px;
-  align-items: baseline;
+  display: block;
+  padding-left: 0;
 }
 
 .service-includes li::before {
-  content: "✓";
-  color: var(--service-card-accent);
-  font-weight: 800;
+  content: none;
 }
 
 .card-bottom {
