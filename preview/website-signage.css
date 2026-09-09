@@ -472,7 +472,7 @@ p {
   color: var(--sign-navy);
 }
 
-.service-card:not(.service-card-dark):not(.service-card-red):not(.service-card-photo)
+.service-card:not(.service-card-dark):not(.service-card-red)
   .service-includes
   li::before {
   color: var(--sign-yellow);
