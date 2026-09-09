@@ -444,21 +444,11 @@ p {
 }
 
 .service-icon {
-  display: grid;
-  width: 54px;
-  height: 54px;
-  margin: 0 auto 18px;
-  color: var(--svc-ink);
-  place-items: center;
-}
-
-.service-icon svg {
-  width: 48px;
-  height: 48px;
+  display: none;
 }
 
 .service-card h3 {
-  margin: 0 0 16px;
+  margin: 4px 0 16px;
   font: 800 clamp(22px, 1.7vw, 28px) / 1.05 var(--display);
   text-transform: uppercase;
   letter-spacing: 0.02em;
