@@ -8,7 +8,7 @@ Not a substitute for a job-specific quote. Confirm extras before work starts.
 **Hours:** Mon–Sat 8:30am – 5:30pm · Sunday closed  
 GST included unless noted. GST 96-650-434.
 
-This list merges the shop wall flyer with the digital service-report checklist. Premium, Diesel and European share the same inspection; extra oils, filters or procedures are quoted first.
+This list matches the internal service price list (FINAL). Premium, Diesel / 4WD and European share the Premium inspection base; Diesel and European add specialist checks. Extra oils, filters or procedures are quoted first.
 
 ---
 
@@ -19,9 +19,13 @@ This list merges the shop wall flyer with the digital service-report checklist. 
 | WOF inspection | $79 | — | WOF items on the job |
 | WOF recheck (repairs done here) | Free | — | — |
 | Basic (petrol oil & filter) | $99 | — | Oil, filter, washer, service light, digital report |
-| Standard | $199 | ~1 hour | Standard |
-| Premium / Diesel / European | $279 | ~1.5 hours | Same Premium checklist; extras quoted |
+| Standard (petrol) | $199 | ~1 hour | Standard |
+| Premium (petrol) | $279 | ~1.5 hours | Premium |
+| Diesel / 4WD | $299 | ~1.5 hours | Premium + diesel / 4WD checks |
+| European | $299 | ~1.5 hours | Premium + European checks |
 | Pre-purchase inspection | $199 | — | Written report with photos |
+
+Oil & filter included up to **4L** (Standard / Premium) or **5L** (Diesel / 4WD) of standard oil.
 
 ---
 

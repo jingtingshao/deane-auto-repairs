@@ -95,7 +95,7 @@
       }
       .packs {
         display: grid;
-        grid-template-columns: 0.85fr 0.85fr 0.95fr 1.35fr 1.15fr;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
         gap: 6px;
         margin-bottom: 12px;
       }
@@ -253,7 +253,8 @@
         <h1>Complete service price list</h1>
         <p class="lead">
           GST included. Digital service report with photo-backed findings on every service package.
-          Premium, Diesel and European use the same inspection. Extra oils, filters or procedures are quoted first.
+          Diesel / 4WD and European build on the Premium inspection with specialist checks.
+          Extra oils, filters or procedures are quoted first.
         </p>
 
         <div class="packs">
@@ -270,12 +271,22 @@
           <div class="pack">
             <b>Standard</b>
             <span class="price">$199</span>
-            <p>Essential maintenance &amp; vehicle health check. Allow ~1 hour.</p>
+            <p>Essential petrol maintenance &amp; vehicle health check. Allow ~1 hour.</p>
           </div>
           <div class="pack">
-            <b>Premium / Diesel / European</b>
+            <b>Premium</b>
             <span class="price">$279</span>
-            <p>Same inspection, diagnostics &amp; road test. Allow ~1.5 hours.</p>
+            <p>Comprehensive petrol service, diagnostics &amp; road test. Allow ~1.5 hours.</p>
+          </div>
+          <div class="pack">
+            <b>Diesel / 4WD</b>
+            <span class="price">$299</span>
+            <p>Premium checks plus diesel / 4WD specialist items. Oil up to 5L. Allow ~1.5 hours.</p>
+          </div>
+          <div class="pack">
+            <b>European</b>
+            <span class="price">$299</span>
+            <p>Premium checks plus European specialist diagnostics. Allow ~1.5 hours.</p>
           </div>
           <div class="pack">
             <b>Pre-purchase inspection</b>
@@ -290,7 +301,7 @@
               <th>What’s included</th>
               <th>Basic<br />$99</th>
               <th>Standard<br />$199</th>
-              <th>Premium / Diesel / European<br />$279</th>
+              <th>Premium+<br />from $279</th>
             </tr>
           </thead>
           <tbody>
@@ -527,7 +538,7 @@
           <ul>
             <li>* Engine oil and filter included up to the applicable standard quantity / specification. Extra oil or specialised oil is quoted first.</li>
             <li>† Where fitted / applicable to the vehicle.</li>
-            <li>Premium, Diesel and European share the same checklist. Diesel-specific items (fuel filter, additives, DPF-related work) and European manufacturer oils, parts or procedures are quoted before we proceed.</li>
+            <li>Premium ($279), Diesel / 4WD ($299) and European ($299) share the Premium inspection base. Diesel / 4WD and European add specialist checks. Extra oils, filters, DPF-related work or manufacturer-specific procedures are quoted before we proceed.</li>
             <li>WOF $79. Recheck is free when the repairs are done at this workshop.</li>
             <li>Pre-purchase inspection (written report with photos): $199.</li>
           </ul>

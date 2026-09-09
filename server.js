@@ -506,12 +506,22 @@ function jobTypeFromInvoice(invoice) {
   if (id === "standard") return "standard_service";
   if (id === "standard_wof") return "standard_wof";
   if (id === "premium_wof") return "premium_wof";
+  if (id === "diesel_wof") return "diesel_wof";
+  if (id === "european_wof") return "european_wof";
   return "repair";
 }
 
 function packageFromInvoice(invoice) {
   const id = String(invoice?.preset || "");
-  if (id === "premium" || id === "diesel" || id === "european" || id === "ppi" || id === "premium_wof") {
+  if (
+    id === "premium" ||
+    id === "diesel" ||
+    id === "european" ||
+    id === "ppi" ||
+    id === "premium_wof" ||
+    id === "diesel_wof" ||
+    id === "european_wof"
+  ) {
     return "premium";
   }
   if (id === "basic") return "basic";

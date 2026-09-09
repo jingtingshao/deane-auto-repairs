@@ -1,4 +1,4 @@
-/** Checklist aligned to in-store price list — Basic $99 / Standard $199 / Premium $279 */
+/** Checklist aligned to in-store price list — Basic $99 / Standard $199 / Premium $279 / Diesel & European $299 */
 
 const STD = ["standard", "premium"];
 const PREMIUM = ["premium"];

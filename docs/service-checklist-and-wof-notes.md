@@ -6,6 +6,8 @@ Matches `index.html` `#prices` comparison table and `data/checklist.js`.
 |---------|---------------|----------------------|
 | Standard Service | $199 | `standard` |
 | Premium Service | $279 | `premium` |
+| Diesel / 4WD Service | $299 | `premium` checklist (+ diesel job type) |
+| European Service | $299 | `premium` checklist (+ european job type) |
 | WOF | $79 | job type `wof` (official result panel) |
 
 Legacy values `full` / `full_service` still load as **Premium**.

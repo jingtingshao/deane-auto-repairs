@@ -1,8 +1,8 @@
 /** Fixed-price packages aligned to the public website.
- * Advertised package prices ($79 / $99 / $199 / $279 / $125) are GST-inclusive.
+ * Advertised package prices ($79 / $99 / $199 / $279 / $299 / $125) are GST-inclusive.
  * Line unitPriceIncl fields are stored excl. GST.
  * GST on advertised packages uses IRD 3/23 of the inclusive amount so totals
- * match the website ($79, $99, $125, $199, $279, $278, $358).
+ * match the website ($79, $99, $125, $199, $279, $299, $278, $358, $378).
  */
 
 const GST_RATE = 0.15;
@@ -14,6 +14,8 @@ const ADVERTISED_INCL = {
   basic: 99,
   standard: 199,
   premium: 279,
+  diesel: 299,
+  european: 299,
   labourHour: 125,
 };
 
@@ -52,6 +54,8 @@ const PRICE = {
   basic: exclFromIncl(ADVERTISED_INCL.basic),
   standard: exclFromIncl(ADVERTISED_INCL.standard),
   premium: exclFromIncl(ADVERTISED_INCL.premium),
+  diesel: exclFromIncl(ADVERTISED_INCL.diesel),
+  european: exclFromIncl(ADVERTISED_INCL.european),
   labourHour: exclFromIncl(ADVERTISED_INCL.labourHour),
 };
 
@@ -148,19 +152,28 @@ const PRESETS = [
   {
     id: "premium",
     kind: "invoice",
-    label: "Premium / European $279",
+    label: "Premium $279",
     title: "Premium Service",
     lines: [
-      { description: "Premium Service (petrol / European)", qty: 1, unitPriceIncl: PRICE.premium },
+      { description: "Premium Service (petrol)", qty: 1, unitPriceIncl: PRICE.premium },
     ],
   },
   {
     id: "diesel",
     kind: "invoice",
-    label: "Diesel $279",
-    title: "Diesel Service",
+    label: "Diesel / 4WD $299",
+    title: "Diesel / 4WD Service",
     lines: [
-      { description: "Diesel Service", qty: 1, unitPriceIncl: PRICE.premium },
+      { description: "Diesel / 4WD Service", qty: 1, unitPriceIncl: PRICE.diesel },
+    ],
+  },
+  {
+    id: "european",
+    kind: "invoice",
+    label: "European $299",
+    title: "European Service",
+    lines: [
+      { description: "European Service", qty: 1, unitPriceIncl: PRICE.european },
     ],
   },
   {
@@ -189,6 +202,26 @@ const PRESETS = [
     title: "Premium Service + WOF",
     lines: [
       { description: "Premium Service (petrol)", qty: 1, unitPriceIncl: PRICE.premium },
+      { description: "WOF inspection", qty: 1, unitPriceIncl: PRICE.wof },
+    ],
+  },
+  {
+    id: "diesel_wof",
+    kind: "invoice",
+    label: "Diesel / 4WD + WOF $378",
+    title: "Diesel / 4WD Service + WOF",
+    lines: [
+      { description: "Diesel / 4WD Service", qty: 1, unitPriceIncl: PRICE.diesel },
+      { description: "WOF inspection", qty: 1, unitPriceIncl: PRICE.wof },
+    ],
+  },
+  {
+    id: "european_wof",
+    kind: "invoice",
+    label: "European + WOF $378",
+    title: "European Service + WOF",
+    lines: [
+      { description: "European Service", qty: 1, unitPriceIncl: PRICE.european },
       { description: "WOF inspection", qty: 1, unitPriceIncl: PRICE.wof },
     ],
   },
@@ -228,16 +261,22 @@ const QUICK_ADDS = [
     unitPriceIncl: PRICE.standard,
   },
   {
-    label: "+ Premium / European $279",
-    description: "Premium Service (petrol / European)",
+    label: "+ Premium $279",
+    description: "Premium Service (petrol)",
     qty: 1,
     unitPriceIncl: PRICE.premium,
   },
   {
-    label: "+ Diesel $279",
-    description: "Diesel Service",
+    label: "+ Diesel / 4WD $299",
+    description: "Diesel / 4WD Service",
     qty: 1,
-    unitPriceIncl: PRICE.premium,
+    unitPriceIncl: PRICE.diesel,
+  },
+  {
+    label: "+ European $299",
+    description: "European Service",
+    qty: 1,
+    unitPriceIncl: PRICE.european,
   },
   {
     label: "+ PPI $199",

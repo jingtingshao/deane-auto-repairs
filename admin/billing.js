@@ -108,6 +108,7 @@ const FIXED_WEBSITE_INVOICE_PRESETS = new Set([
   "standard",
   "premium",
   "diesel",
+  "european",
   "ppi",
 ]);
 
@@ -1150,7 +1151,7 @@ function updateConsumableQuickLabel() {
 function advertisedInclFromExcl(excl) {
   const n = Number(excl);
   if (!Number.isFinite(n) || n <= 0) return null;
-  for (const incl of [79, 99, 199, 279, 125]) {
+  for (const incl of [79, 99, 199, 279, 299, 125]) {
     const exact = incl / 1.15;
     if (Math.abs(n - exact) < 0.0005 || round2(n) === round2(exact)) return incl;
   }

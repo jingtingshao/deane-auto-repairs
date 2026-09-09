@@ -395,9 +395,13 @@ p {
 
 .service-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 2px;
   background: var(--line);
+}
+
+.service-grid .service-card h3 {
+  font-size: clamp(30px, 2.4vw, 42px);
 }
 
 .service-card {
@@ -934,6 +938,10 @@ footer {
 
   .service-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .service-grid .service-card h3 {
+    font-size: 36px;
   }
 
   .booking-form {
