@@ -33,7 +33,14 @@
 
   document.querySelectorAll("[data-booking-type]").forEach((link) => {
     link.addEventListener("click", () => {
-      if (helpSelect) helpSelect.value = link.dataset.bookingType;
+      if (!helpSelect) return;
+      const wanted = link.dataset.bookingType || "";
+      const match = [...helpSelect.options].find(
+        (opt) =>
+          opt.value === wanted ||
+          opt.value.toLowerCase() === wanted.toLowerCase()
+      );
+      if (match) helpSelect.value = match.value;
     });
   });
 
