@@ -993,7 +993,8 @@ footer {
 
 @media (max-width: 900px) {
   :root {
-    --shell: min(100% - 34px, 1180px);
+    /* Keep side gutters on phones; calc() so width never falls back to full bleed */
+    --shell: min(1180px, calc(100% - 48px));
     --header-h: 102px;
   }
 
@@ -1102,7 +1103,7 @@ footer {
   }
 
   .booking-form {
-    padding: 18px;
+    padding: 20px 18px;
   }
 
   .footer-inner {
