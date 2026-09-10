@@ -797,21 +797,21 @@ function labelJob(jobType, pkg) {
   const map = {
     basic_service: "Basic Service",
     standard_service: "Standard Service",
-    premium_service: "Premium Service",
+    premium_service: "Premium / European Service",
     diesel_service: "Diesel / 4WD Service",
     european_service: "European Service",
     ppi: "Pre-purchase inspection",
-    full_service: "Premium Service",
+    full_service: "Premium / European Service",
     wof: "WOF",
     standard_wof: "Standard + WOF",
-    premium_wof: "Premium + WOF",
+    premium_wof: "Premium / European + WOF",
     diesel_wof: "Diesel / 4WD + WOF",
     european_wof: "European + WOF",
-    full_wof: "Premium + WOF",
+    full_wof: "Premium / European + WOF",
     repair: "Repair",
   };
   if (map[jobType]) return map[jobType];
-  if (pkg === "premium" || pkg === "full") return "Premium Service";
+  if (pkg === "premium" || pkg === "full") return "Premium / European Service";
   if (pkg === "basic") return "Basic Service";
   if (pkg === "standard") return "Standard Service";
   return "Service";

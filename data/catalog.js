@@ -152,10 +152,10 @@ const PRESETS = [
   {
     id: "premium",
     kind: "invoice",
-    label: "Premium $279",
-    title: "Premium Service",
+    label: "Premium / European $279",
+    title: "Premium / European Service",
     lines: [
-      { description: "Premium Service (petrol)", qty: 1, unitPriceIncl: PRICE.premium },
+      { description: "Premium / European Service", qty: 1, unitPriceIncl: PRICE.premium },
     ],
   },
   {
@@ -198,10 +198,10 @@ const PRESETS = [
   {
     id: "premium_wof",
     kind: "invoice",
-    label: "Premium + WOF $358",
-    title: "Premium Service + WOF",
+    label: "Premium / European + WOF $358",
+    title: "Premium / European Service + WOF",
     lines: [
-      { description: "Premium Service (petrol)", qty: 1, unitPriceIncl: PRICE.premium },
+      { description: "Premium / European Service", qty: 1, unitPriceIncl: PRICE.premium },
       { description: "WOF inspection", qty: 1, unitPriceIncl: PRICE.wof },
     ],
   },
@@ -261,8 +261,8 @@ const QUICK_ADDS = [
     unitPriceIncl: PRICE.standard,
   },
   {
-    label: "+ Premium $279",
-    description: "Premium Service (petrol)",
+    label: "+ Premium / European $279",
+    description: "Premium / European Service",
     qty: 1,
     unitPriceIncl: PRICE.premium,
   },
