@@ -133,11 +133,18 @@
   const openChecklist = () => {
     if (!checklist) return;
     checklist.open = true;
+    checklist.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   document.querySelectorAll("[data-open-checklist], a[href='#full-checklist']").forEach((link) => {
-    link.addEventListener("click", () => {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
       openChecklist();
+      if (history.replaceState) {
+        history.replaceState(null, "", "#full-checklist");
+      } else {
+        location.hash = "full-checklist";
+      }
     });
   });
 

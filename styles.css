@@ -520,6 +520,155 @@ p {
   filter: brightness(1.06);
 }
 
+.see-details {
+  display: inline-flex;
+  align-items: center;
+  margin: 14px 0 0;
+  color: var(--svc-ink);
+  font: 700 0.92rem / 1.2 var(--body);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+  cursor: pointer;
+}
+
+.see-details:hover,
+.see-details:focus-visible {
+  opacity: 0.82;
+}
+
+.checklist-details {
+  margin-top: 1.5rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.checklist-details > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sign-navy, #0d2b5c);
+}
+
+.checklist-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.checklist-details > summary::after {
+  content: "＋";
+  font-size: 0.95rem;
+}
+
+.checklist-details[open] > summary::after {
+  content: "－";
+}
+
+.checklist-details[open] > summary {
+  margin-bottom: 0.85rem;
+}
+
+.checklist-lead {
+  margin: 0 0 0.85rem;
+  color: #687481;
+  font-size: 0.95rem;
+}
+
+.checklist-swipe-hint {
+  display: none;
+}
+
+.compare-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(13, 43, 92, 0.15);
+  background: #fff;
+  -webkit-overflow-scrolling: touch;
+}
+
+.compare-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.compare-table thead th {
+  background: #f4f7fb;
+  vertical-align: bottom;
+  padding: 0.9rem 0.55rem;
+  border-bottom: 2px solid rgba(13, 43, 92, 0.12);
+  text-align: center;
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+}
+
+.compare-table thead th:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #f4f7fb;
+  min-width: 11rem;
+}
+
+.compare-table thead th.is-featured {
+  background: #fff8e1;
+  box-shadow: inset 0 4px 0 var(--sign-yellow, #f5c518);
+}
+
+.compare-table tbody th {
+  text-align: left;
+  font-weight: 600;
+  padding: 0.7rem 0.75rem;
+  border-bottom: 1px solid rgba(13, 43, 92, 0.1);
+  position: sticky;
+  left: 0;
+  background: #fff;
+  z-index: 1;
+}
+
+.compare-table tbody td {
+  text-align: center;
+  padding: 0.7rem 0.45rem;
+  border-bottom: 1px solid rgba(13, 43, 92, 0.1);
+  color: #687481;
+}
+
+.compare-table tbody td.is-featured {
+  background: rgba(245, 197, 24, 0.08);
+}
+
+.compare-table tbody tr:last-child th,
+.compare-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tick {
+  color: var(--sign-navy, #0d2b5c);
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.dash {
+  color: #9aa5b1;
+}
+
+.compare-notes {
+  margin: 0.9rem 0 0;
+  padding-left: 1.1rem;
+  color: #687481;
+  font-size: 0.9rem;
+}
+
 .services-aside {
   margin: 1.25rem 0 0;
   color: #687481;
@@ -932,6 +1081,20 @@ footer {
 
   .service-card {
     min-height: 0;
+  }
+
+  .checklist-swipe-hint {
+    display: block;
+    margin: 0 0 0.75rem;
+    padding: 0.65rem 0.8rem;
+    background: rgba(13, 43, 92, 0.06);
+    color: var(--sign-navy, #0d2b5c);
+    font-size: 0.92rem;
+    font-weight: 600;
+  }
+
+  .checklist-details .compare-wrap {
+    box-shadow: inset -16px 0 14px -14px rgba(26, 35, 50, 0.2);
   }
 
   .service-card h3 {
