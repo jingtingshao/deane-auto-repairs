@@ -136,27 +136,19 @@
     checklist.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  document.querySelectorAll("[data-open-checklist], a[href='#full-checklist']").forEach((link) => {
+  // Only expand when the user clicks "See details" — never auto-open from
+  // a leftover #full-checklist hash on load or hashchange.
+  document.querySelectorAll("[data-open-checklist]").forEach((link) => {
     link.addEventListener("click", (event) => {
       event.preventDefault();
       openChecklist();
-      if (history.replaceState) {
-        history.replaceState(null, "", "#full-checklist");
-      } else {
-        location.hash = "full-checklist";
-      }
     });
   });
 
   if (location.hash === "#prices") {
     location.replace("#services");
   }
-  if (location.hash === "#full-checklist") {
-    openChecklist();
-  }
-  window.addEventListener("hashchange", () => {
-    if (location.hash === "#full-checklist") openChecklist();
-  });
+  if (checklist) checklist.open = false;
 
   const setStatus = (message, type, allowHtml = false) => {
     if (!status) return;
