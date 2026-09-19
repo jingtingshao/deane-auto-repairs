@@ -134,15 +134,32 @@
   }
 
   const checklist = document.querySelector("#full-checklist");
+  const checklistLinks = document.querySelectorAll("[data-open-checklist], a[href='#full-checklist']");
+  const setChecklistOpen = (open) => {
+    checklistLinks.forEach((link) => link.setAttribute("aria-expanded", open ? "true" : "false"));
+  };
   const openChecklist = () => {
     if (!checklist) return;
-    checklist.open = true;
+    checklist.hidden = false;
+    setChecklistOpen(true);
     checklist.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+  const closeChecklist = () => {
+    if (!checklist) return;
+    checklist.hidden = true;
+    setChecklistOpen(false);
+    if (location.hash === "#full-checklist" && history.replaceState) {
+      history.replaceState(null, "", `${location.pathname}${location.search}`);
+    }
+  };
 
-  document.querySelectorAll("[data-open-checklist], a[href='#full-checklist']").forEach((link) => {
+  checklistLinks.forEach((link) => {
     link.addEventListener("click", (event) => {
       event.preventDefault();
+      if (checklist && !checklist.hidden) {
+        closeChecklist();
+        return;
+      }
       openChecklist();
       if (history.replaceState) {
         history.replaceState(null, "", "#full-checklist");
@@ -150,6 +167,9 @@
         location.hash = "full-checklist";
       }
     });
+  });
+  document.querySelectorAll("[data-close-checklist]").forEach((btn) => {
+    btn.addEventListener("click", closeChecklist);
   });
 
   const tyreToggle = document.querySelector("[data-tyre-size-toggle]");

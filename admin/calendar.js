@@ -192,9 +192,9 @@
   function fillStartTimeSelect(selected) {
     if (!startTimeSelect) return;
     if (!startTimeSelect.dataset.ready) {
-      // Workshop hours Mon–Sat 8:30–17:30, 15-minute steps, 24-hour labels.
+      // Workshop hours Mon–Sat 8:30–17:00, 15-minute steps, 24-hour labels.
       const options = [];
-      for (let minutes = 8 * 60 + 30; minutes <= 17 * 60 + 30; minutes += 15) {
+      for (let minutes = 8 * 60 + 30; minutes <= 17 * 60; minutes += 15) {
         const h = Math.floor(minutes / 60);
         const m = minutes % 60;
         const value = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;

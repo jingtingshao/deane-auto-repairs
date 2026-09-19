@@ -387,6 +387,10 @@ p {
   align-items: end;
 }
 
+.section-heading:not(:has(> p)) {
+  grid-template-columns: 1fr;
+}
+
 .eyebrow {
   color: #687481;
 }
@@ -684,37 +688,31 @@ p {
   border: 0;
   padding: 0;
   background: transparent;
+  scroll-margin-top: calc(var(--header-h) + 0.75rem);
 }
 
-.checklist-details > summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  cursor: pointer;
-  list-style: none;
+.checklist-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.checklist-close {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sign-navy, #0d2b5c);
   font-family: var(--display);
   font-weight: 700;
   font-size: 1.05rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--sign-navy, #0d2b5c);
+  cursor: pointer;
 }
 
-.checklist-details > summary::-webkit-details-marker {
-  display: none;
-}
-
-.checklist-details > summary::after {
-  content: "＋";
-  font-size: 0.95rem;
-}
-
-.checklist-details[open] > summary::after {
-  content: "－";
-}
-
-.checklist-details[open] > summary {
-  margin-bottom: 0.85rem;
+.checklist-close:hover,
+.checklist-close:focus-visible {
+  opacity: 0.82;
 }
 
 .checklist-lead {
@@ -736,7 +734,7 @@ p {
 
 .compare-table {
   width: 100%;
-  min-width: 760px;
+  min-width: 520px;
   border-collapse: collapse;
   font-size: 0.95rem;
 }

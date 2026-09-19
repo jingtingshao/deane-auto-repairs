@@ -5,7 +5,7 @@ Not a substitute for a job-specific quote. Confirm extras before work starts.
 
 **Deane Auto Repairs** · (Next to BP Petrol Station) · 63 Hayr Road, Three Kings, Auckland  
 **Phone:** 0800 625 9827 · **Email:** deaneautonz@gmail.com  
-**Hours:** Mon–Sat 8:30am – 5:30pm · Sunday closed  
+**Hours:** Mon–Sat 8:30am – 5:00pm · Sunday closed  
 GST included unless noted. GST 96-650-434.
 
 This list matches the internal service price list (FINAL). Premium, Diesel / 4WD and European share the Premium inspection base; Diesel and European add specialist checks. Extra oils, filters or procedures are quoted first.
