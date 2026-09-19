@@ -833,6 +833,10 @@ button.see-details {
 
 .about-report .report-art {
   margin-top: 18px;
+  padding: 0;
+  background: #111;
+  transform: none;
+  overflow: hidden;
   box-shadow: 16px 18px var(--sign-yellow);
 }
 
