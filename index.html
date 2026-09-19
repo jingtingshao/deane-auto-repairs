@@ -6,7 +6,7 @@
     <title>Deane Auto Repairs | Car Servicing &amp; WOF in Three Kings</title>
     <meta
       name="description"
-      content="Deane Auto Repairs — trusted car servicing, WOF and pre-purchase inspections at 63 Hayr Road, Three Kings. Call 0800 625 9827."
+      content="Deane Auto Repairs — trusted car servicing, WOF, tyres and pre-purchase inspections at 63 Hayr Road, Three Kings. Call 0800 625 9827."
     />
     <link rel="canonical" href="https://www.deaneauto.co.nz/" />
     <meta property="og:url" content="https://www.deaneauto.co.nz/" />
@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20260911svcgrid" />
+    <link rel="stylesheet" href="styles.css?v=20260919tyres" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -118,7 +118,7 @@
       <section class="trust-bar">
         <div class="shell trust-grid">
           <p>YOUR CAR, <em>EXPLAINED CLEARLY.</em></p>
-          <p>Service · WOF · Pre-Purchase · Diagnostics</p>
+          <p>Service · WOF · Tyres · Diagnostics</p>
           <a href="#book">MAKE A BOOKING <span>↗</span></a>
         </div>
       </section>
@@ -130,8 +130,8 @@
               <h2>Simple service.<br />No surprises.</h2>
             </div>
             <p>
-              Start with one of our fixed-price services, or ask us about repairs
-              and diagnostics for your vehicle.
+              Start with one of our fixed-price services, or ask us about
+              tyres, repairs and diagnostics.
             </p>
           </div>
           <div class="service-grid">
@@ -142,7 +142,6 @@
                 <li>Clear pass or fail notes</li>
                 <li>Recheck free</li>
               </ul>
-              <a class="see-details" href="#full-checklist" data-open-checklist>See details</a>
               <div class="service-price">
                 <span class="from">From</span>
                 <strong>$79</strong>
@@ -225,6 +224,84 @@
               <a class="service-cta" href="#book" data-booking-type="Repairs / other">Book now <span aria-hidden="true">→</span></a>
             </article>
           </div>
+
+          <article class="tyres-banner" id="tyres">
+            <svg class="tyres-icon" viewBox="0 0 64 64" aria-hidden="true">
+              <circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="2" />
+              <circle cx="32" cy="32" r="20" fill="none" stroke="currentColor" stroke-width="8" />
+              <circle cx="32" cy="32" r="7" fill="currentColor" />
+            </svg>
+            <h3>Tyres from $119</h3>
+            <p class="tyres-range">Budget · Premium · Fitting</p>
+            <button
+              class="tyres-size-cta"
+              type="button"
+              data-tyre-size-toggle
+              aria-expanded="false"
+              aria-controls="tyre-size-panel"
+            >
+              Check your tyre size <span aria-hidden="true">→</span>
+            </button>
+            <div class="tyres-size-panel" id="tyre-size-panel" hidden data-tyre-size-panel>
+              <p>
+                It’s printed on the sidewall — like <strong>205/55R16</strong>.
+                We’ll quote Budget and Premium options for that size.
+              </p>
+              <div class="tyres-size-row">
+                <label
+                  >Width
+                  <select id="tyre-width" name="tyre_width">
+                    <option>165</option>
+                    <option>175</option>
+                    <option>185</option>
+                    <option>195</option>
+                    <option selected>205</option>
+                    <option>215</option>
+                    <option>225</option>
+                    <option>235</option>
+                    <option>245</option>
+                    <option>255</option>
+                    <option>265</option>
+                  </select>
+                </label>
+                <span class="tyres-size-sep" aria-hidden="true">/</span>
+                <label
+                  >Profile
+                  <select id="tyre-profile" name="tyre_profile">
+                    <option>40</option>
+                    <option>45</option>
+                    <option>50</option>
+                    <option selected>55</option>
+                    <option>60</option>
+                    <option>65</option>
+                    <option>70</option>
+                    <option>75</option>
+                  </select>
+                </label>
+                <span class="tyres-size-sep" aria-hidden="true">R</span>
+                <label
+                  >Rim
+                  <select id="tyre-rim" name="tyre_rim">
+                    <option>14</option>
+                    <option>15</option>
+                    <option selected>16</option>
+                    <option>17</option>
+                    <option>18</option>
+                    <option>19</option>
+                    <option>20</option>
+                  </select>
+                </label>
+              </div>
+              <a
+                class="service-cta tyres-book-cta"
+                href="#book"
+                data-booking-type="Tyres"
+                data-tyre-size-book
+              >
+                Book this size <span aria-hidden="true">→</span>
+              </a>
+            </div>
+          </article>
 
           <details class="checklist-details" id="full-checklist">
             <summary>See full inspection checklist</summary>
@@ -531,6 +608,7 @@
                 <option value="Pre-Purchase Inspection">Pre-Purchase Inspection</option>
                 <option value="WINZ quote">WINZ quote</option>
                 <option value="Brake inspection">Brake inspection</option>
+                <option value="Tyres">Tyres</option>
                 <option value="Repairs / other">Repairs / diagnostics / other</option>
               </select>
             </label>
@@ -564,6 +642,6 @@
       </div>
     </footer>
 
-    <script src="script.js?v=20260910booknow"></script>
+    <script src="script.js?v=20260919tyres"></script>
   </body>
 </html>

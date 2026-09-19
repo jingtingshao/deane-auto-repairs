@@ -65,6 +65,10 @@
     brakes: "Brake inspection",
     brake: "Brake inspection",
     "brake-inspection": "Brake inspection",
+    tyres: "Tyres",
+    tyre: "Tyres",
+    tires: "Tyres",
+    tire: "Tyres",
     repairs: "Repairs / other",
   };
 
@@ -148,14 +152,50 @@
     });
   });
 
+  const tyreToggle = document.querySelector("[data-tyre-size-toggle]");
+  const tyrePanel = document.querySelector("[data-tyre-size-panel]");
+  const notesField = document.querySelector("#notes");
+  const openTyreSize = () => {
+    if (!tyrePanel || !tyreToggle) return;
+    tyrePanel.hidden = false;
+    tyreToggle.setAttribute("aria-expanded", "true");
+  };
+  if (tyreToggle && tyrePanel) {
+    tyreToggle.addEventListener("click", () => {
+      const willOpen = tyrePanel.hidden;
+      tyrePanel.hidden = !willOpen;
+      tyreToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+    });
+  }
+
   if (location.hash === "#prices") {
     location.replace("#services");
   }
   if (location.hash === "#full-checklist") {
     openChecklist();
   }
+  if (location.hash === "#tyres") {
+    openTyreSize();
+  }
   window.addEventListener("hashchange", () => {
     if (location.hash === "#full-checklist") openChecklist();
+    if (location.hash === "#tyres") openTyreSize();
+  });
+
+  document.querySelectorAll("[data-tyre-size-book]").forEach((link) => {
+    link.addEventListener("click", () => {
+      const width = document.querySelector("#tyre-width")?.value || "";
+      const profile = document.querySelector("#tyre-profile")?.value || "";
+      const rim = document.querySelector("#tyre-rim")?.value || "";
+      if (!notesField || !width || !profile || !rim) return;
+      const line = `Tyre size: ${width}/${profile}R${rim}`;
+      const current = notesField.value.trim();
+      notesField.value = current.includes(line)
+        ? current
+        : current
+          ? `${current}\n${line}`
+          : line;
+    });
   });
 
   const setStatus = (message, type, allowHtml = false) => {
