@@ -49,6 +49,7 @@
     "service+wof": "Service + WOF",
     wof: "WOF",
     service: "Standard Service",
+    "car-service": "Standard Service",
     "standard-service": "Standard Service",
     "premium-service": "Premium / European Service",
     "premium-/-european-service": "Premium / European Service",
@@ -65,11 +66,14 @@
     brakes: "Brake inspection",
     brake: "Brake inspection",
     "brake-inspection": "Brake inspection",
+    "brakes-suspension": "Brake inspection",
     tyres: "Tyres",
     tyre: "Tyres",
     tires: "Tyres",
     tire: "Tyres",
     repairs: "Repairs / other",
+    diagnostics: "Repairs / other",
+    "diagnostics-repairs": "Repairs / other",
   };
 
   const applyHelpValue = (value) => {
@@ -179,12 +183,16 @@
     if (!tyrePanel || !tyreToggle) return;
     tyrePanel.hidden = false;
     tyreToggle.setAttribute("aria-expanded", "true");
+    tyrePanel.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   if (tyreToggle && tyrePanel) {
     tyreToggle.addEventListener("click", () => {
       const willOpen = tyrePanel.hidden;
       tyrePanel.hidden = !willOpen;
       tyreToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      if (willOpen) {
+        tyrePanel.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
     });
   }
 
