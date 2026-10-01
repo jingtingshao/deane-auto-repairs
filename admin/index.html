@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20260905staffrole" />
+    <link rel="stylesheet" href="admin.css?v=20261002stock" />
     <link rel="stylesheet" href="admin-refresh.css?v=20260905staffrole" />
   </head>
   <body>
@@ -41,6 +41,7 @@
           <button type="button" id="nav-calendar"><b>▣</b> Calendar <i id="nav-calendar-count" hidden>0</i></button>
           <button type="button" id="nav-jobs"><b>▤</b> Job board <i id="nav-jobs-count" hidden>0</i></button>
           <button type="button" id="nav-supplier-invoices" data-admin-only><b>◫</b> Parts invoices</button>
+          <button type="button" id="nav-stock" data-admin-only><b>◈</b> Stock</button>
           <button type="button" id="nav-quotes"><b>$</b> Quotes <i id="nav-quotes-count" hidden>0</i></button>
           <button type="button" id="nav-invoices"><b>$</b> Invoices <i id="nav-invoices-count" hidden>0</i></button>
           <button type="button" id="nav-customers"><b>◉</b> Customers</button>
@@ -376,7 +377,12 @@
 
               <fieldset>
                 <legend>Parts</legend>
-                <p class="muted small">Tick Ordered when you order. Tick Received when the part is in. Cost is the supplier price — customer sell price stays on the quote / invoice.</p>
+                <p class="muted small">Search stock to fill the cost and the sell price. Tick Ordered when you order, and Received when the part is in. Sell price is excl. GST.</p>
+                <label class="list-search" id="job-stock-search-label" data-admin-only>
+                  Search stock
+                  <input id="job-stock-search" type="search" placeholder="Part, number, car, or supplier" autocomplete="off" />
+                </label>
+                <div id="job-stock-results" class="stock-results" hidden></div>
                 <div class="line-table-wrap">
                   <table class="line-table parts-table job-parts-table">
                     <thead>
@@ -385,6 +391,7 @@
                         <th><span class="th-two-line">PART<br />NAME</span></th>
                         <th>Qty</th>
                         <th>Cost</th>
+                        <th>Sell</th>
                         <th>Ordered</th>
                         <th>Received</th>
                         <th>Supplier</th>
@@ -433,7 +440,7 @@
 
         <section id="supplier-invoices-section" hidden>
           <section id="supplier-invoices-list-view">
-            <p class="muted small">Import supplier invoices, confirm extracted parts, then link costs to the right job. Mark consumables and tools separately so they count as matched and roll into this month’s spend.</p>
+            <p class="muted small">Import a PDF or a photo of a handwritten invoice. Confirm the lines, then Save invoice — recognised parts are added to stock. Saving again does not add the same line twice. Ignored lines and tools stay off the shelf. If a line has no category, use Add to stock. Consumables and tools roll into this month’s spend.</p>
             <p id="supplier-month-consumables" class="supplier-month-summary" hidden></p>
             <label class="list-search">
               Search supplier invoices
@@ -523,6 +530,70 @@
               <div class="supplier-invoice-lightbox-body"></div>
             </div>
           </section>
+        </section>
+
+        <section id="stock-section" hidden>
+          <p class="muted small">Parts are priced each. Engine oil, coolant, brake fluid, ATF, power steering fluid, and AdBlue are priced per litre. Saving a parts invoice adds recognised lines to stock. If the writing will not read, type the part here.</p>
+          <details class="markup-details">
+            <summary>Suggested markup</summary>
+            <div class="line-table-wrap">
+              <table class="markup-guide">
+                <thead>
+                  <tr>
+                    <th>Your cost ex GST</th>
+                    <th>Suggested markup</th>
+                    <th>Example cost</th>
+                    <th>Sell ex GST</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>$0–$10</td><td>100–150%</td><td>$5</td><td>$10–$12.50</td></tr>
+                  <tr><td>$10–$25</td><td>100–120%</td><td>$20</td><td>$40–$44</td></tr>
+                  <tr><td>$25–$50</td><td>80–100%</td><td>$40</td><td>$72–$80</td></tr>
+                  <tr><td>$50–$100</td><td>60–80%</td><td>$75</td><td>$120–$135</td></tr>
+                  <tr><td>$100–$250</td><td>50–60%</td><td>$150</td><td>$225–$240</td></tr>
+                  <tr><td>$250–$500</td><td>40–50%</td><td>$350</td><td>$490–$525</td></tr>
+                  <tr><td>$500+</td><td>25–40%</td><td>$800</td><td>$1,000–$1,120</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="muted small">The sell price saved here is what goes on the quote, excl. GST. GST is added on the quote and invoice. A cost on the line between two bands uses the lower band.</p>
+          </details>
+          <label class="list-search">
+            Search stock
+            <input id="stock-search" type="search" placeholder="Part, number, car, brand, or supplier" autocomplete="off" />
+          </label>
+          <div id="stock-categories" class="stock-cat-row"></div>
+          <div class="line-actions">
+            <button type="button" id="btn-stock-add" class="primary">Add part</button>
+          </div>
+          <p id="stock-status" class="status-line" hidden></p>
+          <form id="stock-form" class="report-form stock-editor" hidden>
+            <fieldset>
+              <legend id="stock-form-legend">Add part</legend>
+              <div class="grid-3">
+                <label>Category
+                  <select name="category" required></select>
+                </label>
+                <label>Part name<input name="name" required placeholder="e.g. Oil filter" /></label>
+                <label>Part number<input name="partNumber" placeholder="e.g. Z386" /></label>
+                <label>Brand<input name="brand" placeholder="e.g. Ryco" /></label>
+                <label>Supplier<input name="supplier" list="stock-suppliers" placeholder="e.g. Repco" /></label>
+                <label><span data-qty-label>Qty on hand</span><input name="qtyOnHand" type="number" min="0" step="1" value="0" /></label>
+                <label><span data-cost-label>Cost ex GST</span><input name="costPrice" type="number" min="0" step="0.01" /></label>
+                <label><span data-sell-label>Sell price ex GST</span><input name="sellPrice" type="number" min="0" step="0.01" /></label>
+              </div>
+              <label>Fits — used when you search<input name="fitment" placeholder="e.g. Toyota Corolla 2014–2018" /></label>
+              <label>Notes<textarea name="notes" rows="2"></textarea></label>
+              <p id="stock-price-guide" class="stock-price-guide"></p>
+              <div class="line-actions">
+                <button type="submit" class="primary">Save</button>
+                <button type="button" id="btn-stock-cancel" class="ghost">Cancel</button>
+                <button type="button" id="btn-stock-delete" class="danger" hidden>Delete</button>
+              </div>
+            </fieldset>
+          </form>
+          <div id="stock-list" class="report-list"></div>
         </section>
 
         <section id="customers-section" hidden>
@@ -806,6 +877,11 @@
               <fieldset>
                 <legend>Line items (excl. GST)</legend>
                 <div id="quick-adds" class="preset-row"></div>
+                <label class="list-search" id="billing-stock-search-label" data-admin-only>
+                  Search stock
+                  <input id="billing-stock-search" type="search" placeholder="Part, number, car, or supplier" autocomplete="off" />
+                </label>
+                <div id="billing-stock-results" class="stock-results" hidden></div>
                 <div class="line-table-wrap">
                   <table class="line-table">
                     <thead>
@@ -848,6 +924,32 @@
       </main>
     </div>
 
+    <datalist id="stock-suppliers"></datalist>
+    <div id="stock-receive-dialog" class="stock-dialog" hidden>
+      <form id="stock-receive-form" class="stock-dialog-card">
+        <h2>Add to stock</h2>
+        <p id="stock-receive-summary" class="muted small"></p>
+        <div class="grid-3">
+          <label>Category<select name="category" required></select></label>
+          <label>Part name<input name="name" required /></label>
+          <label>Part number<input name="partNumber" /></label>
+          <label>Supplier<input name="supplier" list="stock-suppliers" /></label>
+          <label>Qty<input name="qty" type="number" min="0" step="0.1" value="1" /></label>
+          <label>Cost ex GST<input name="costPrice" type="number" min="0" step="0.01" /></label>
+          <label>Sell ex GST<input name="sellPrice" type="number" min="0" step="0.01" /></label>
+          <label>Fits<input name="fitment" placeholder="Car or model" /></label>
+        </div>
+        <input type="hidden" name="candidateId" />
+        <input type="hidden" name="supplierInvoiceId" />
+        <input type="hidden" name="invoiceNo" />
+        <p id="stock-receive-guide" class="stock-price-guide"></p>
+        <div class="line-actions">
+          <button type="submit" class="primary">Add to stock</button>
+          <button type="button" id="btn-stock-receive-cancel" class="ghost">Cancel</button>
+        </div>
+      </form>
+    </div>
+
     <div
       id="booking-alert"
       class="booking-alert"
@@ -866,12 +968,13 @@
       </div>
     </div>
 
-    <script src="admin.js?v=20260906basicna"></script>
+    <script src="admin.js?v=20261001stock"></script>
     <script src="dashboard.js?v=20260902backupfoot"></script>
     <script src="calendar.js?v=20260905staffrole"></script>
-    <script src="jobs.js?v=20260905staffrole"></script>
-    <script src="supplier-invoices.js?v=20260829nopreview"></script>
-    <script src="billing.js?v=20260906paycredits3"></script>
+    <script src="jobs.js?v=20261001stock"></script>
+    <script src="billing.js?v=20261001stock"></script>
+    <script src="inventory.js?v=20261001stock"></script>
+    <script src="supplier-invoices.js?v=20261002stock"></script>
     <script src="customers.js?v=20260906techcustomers"></script>
     <script src="referrals.js?v=20260906usedon"></script>
     <script src="sms-inbox.js?v=20260830yesno"></script>

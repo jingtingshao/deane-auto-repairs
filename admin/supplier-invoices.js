@@ -26,13 +26,16 @@ let editingCandidateIds = new Set();
 let duplicateCheckTimer = null;
 let duplicateCheckNonce = 0;
 
-function showStatus(msg) {
+let statusTimer = null;
+
+function showStatus(msg, ms) {
   if (!saveStatus) return;
   saveStatus.hidden = false;
   saveStatus.textContent = msg;
-  setTimeout(() => {
+  if (statusTimer) clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => {
     saveStatus.hidden = true;
-  }, 2500);
+  }, ms || 2500);
 }
 
 function money(value) {
@@ -509,7 +512,7 @@ async function importInvoiceFile(file) {
   editView.hidden = false;
   Admin.setSection("supplier_invoices");
   Admin.setViewTitle(current.invoiceNo || "Supplier invoice");
-  showStatus("Invoice imported and extracted");
+  showStatus("Invoice imported. Save invoice to add recognised lines to stock.", 5000);
 }
 
 function renderTracking() {
@@ -808,7 +811,10 @@ function smartMatchForRow(row, rowEl) {
 
 function renderStatusPill(row, selectedJobId) {
   const status = candidateRowStatus(row, selectedJobId);
-  return `<span class="supplier-status-pill ${Admin.escapeAttr(status.tone)}"><span class="dot" aria-hidden="true"></span>${Admin.escapeHtml(status.label)}</span>`;
+  const stocked = row.stocked
+    ? `<span class="supplier-status-pill stocked"><span class="dot" aria-hidden="true"></span>In stock</span>`
+    : "";
+  return `<span class="supplier-status-pill ${Admin.escapeAttr(status.tone)}"><span class="dot" aria-hidden="true"></span>${Admin.escapeHtml(status.label)}</span>${stocked}`;
 }
 
 function refreshRowPreview(rowEl) {
@@ -996,9 +1002,11 @@ function renderCandidates() {
                   : `${unmatchBtn}
                   <button type="button" class="ghost" data-action="start-edit">Edit</button>`
                 : ignored || consumable || tool
-                  ? `<button type="button" class="ghost" data-action="unmatch">Restore</button>`
+                  ? `<button type="button" class="ghost" data-action="unmatch">Restore</button>
+                  ${ignored ? "" : `<button type="button" class="ghost" data-action="stock">Add to stock</button>`}`
                 : `${selectedJobId ? unmatchBtn : ""}
                   <button type="button" class="ghost" data-action="smart-match"${pending ? "" : " disabled"}>Smart Match</button>
+                  <button type="button" class="ghost" data-action="stock">Add to stock</button>
                   <button type="button" class="ghost" data-action="accept"${pending ? "" : " disabled"}>Accept</button>
                   <button type="button" class="ghost" data-action="edit-accept"${pending ? "" : " disabled"}>Change Job</button>
                   <button type="button" class="ghost" data-action="consumable"${pending ? "" : " disabled"}>Consumable</button>
@@ -1080,6 +1088,23 @@ function renderCandidates() {
         return;
       }
       const id = rowEl.dataset.id;
+      if (btn.dataset.action === "stock") {
+        const row = candidates.find((item) => item.id === id);
+        if (!row) return;
+        const qty = Number(rowEl.querySelector('[data-field="qty"]')?.value) || Number(row.qtyCandidate) || 1;
+        const cost = Number(rowEl.querySelector('[data-field="costPrice"]')?.value);
+        window.DeaneInventory?.openReceive?.({
+          name: rowEl.querySelector('[data-field="description"]')?.value || row.descriptionCandidate || "",
+          partNumber: rowEl.querySelector('[data-field="partNumber"]')?.value || row.partNumberCandidate || "",
+          qty,
+          costPrice: Number.isFinite(cost) ? cost : Number(row.costPriceCandidate) || 0,
+          supplier: form?.elements?.supplier?.value || current.supplier || "",
+          invoiceNo: form?.elements?.invoiceNo?.value || current.invoiceNo || "",
+          supplierInvoiceId: current.id,
+          candidateId: row.id,
+        });
+        return;
+      }
       if (btn.dataset.action === "smart-match") {
         const row = candidates.find((item) => item.id === id);
         if (!row) return;
@@ -1205,6 +1230,40 @@ function openNew() {
   Admin.setViewTitle("New supplier invoice");
 }
 
+function collectStockLines() {
+  if (!candidatesEl) return [];
+  return [...candidatesEl.querySelectorAll("tr[data-id]")].map((rowEl) => ({
+    id: rowEl.dataset.id || "",
+    name: rowEl.querySelector('[data-field="description"]')?.value || "",
+    partNumber: rowEl.querySelector('[data-field="partNumber"]')?.value || "",
+    qty: Number(rowEl.querySelector('[data-field="qty"]')?.value || 0),
+    costPrice: Number(rowEl.querySelector('[data-field="costPrice"]')?.value || 0),
+  }));
+}
+
+function stockSaveMessage(stock) {
+  if (!stock) return "";
+  const bits = [];
+  if (stock.added) {
+    bits.push(`Stock increased on ${stock.added} line${stock.added === 1 ? "" : "s"}`);
+  }
+  if (stock.already) {
+    bits.push(`${stock.already} already in stock`);
+  }
+  if (stock.skipped?.length) {
+    const names = stock.skipped
+      .slice(0, 3)
+      .map((row) => row.name)
+      .filter(Boolean)
+      .join(", ");
+    const more = stock.skipped.length > 3 ? "…" : "";
+    bits.push(
+      `${stock.skipped.length} not added (${names}${more}). Use Add to stock and pick a category`
+    );
+  }
+  return bits.length ? `. ${bits.join(". ")}.` : "";
+}
+
 async function saveInvoice() {
   const payload = collectForm();
   if (!payload.supplier || !payload.invoiceNo) {
@@ -1217,11 +1276,12 @@ async function saveInvoice() {
     });
     showStatus("Supplier invoice created");
   } else {
+    payload.lines = collectStockLines();
     current = await Admin.api(`/api/supplier-invoices/${current.id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     });
-    showStatus("Supplier invoice saved");
+    showStatus(`Supplier invoice saved${stockSaveMessage(current.stock)}`, 6000);
   }
   await loadInvoice(current.id);
   await loadList();
@@ -1241,7 +1301,7 @@ async function parseRawText() {
     method: "POST",
     body: JSON.stringify({ rawText }),
   });
-  showStatus("OCR text re-parsed");
+  showStatus("OCR text re-parsed. Save invoice to add recognised lines to stock.", 5000);
   await loadInvoice(current.id);
   await loadList();
 }

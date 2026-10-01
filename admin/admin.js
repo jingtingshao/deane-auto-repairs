@@ -177,7 +177,7 @@ function setOverline(text) {
 
 function setSection(name) {
   if (name === "billing") name = "quotes";
-  if (isTechnician() && (name === "dashboard" || name === "referrals" || name === "sms_inbox" || name === "supplier_invoices")) {
+  if (isTechnician() && (name === "dashboard" || name === "referrals" || name === "sms_inbox" || name === "supplier_invoices" || name === "stock")) {
     name = "calendar";
   }
   const dashboardSection = document.getElementById("dashboard-section");
@@ -189,6 +189,7 @@ function setSection(name) {
   const jobsSection = document.getElementById("jobs-section");
   const calendarSection = document.getElementById("calendar-section");
   const supplierInvoicesSection = document.getElementById("supplier-invoices-section");
+  const stockSection = document.getElementById("stock-section");
   const btnNew = document.getElementById("btn-new");
   const billingOpen = name === "quotes" || name === "invoices";
   if (app) app.dataset.section = name;
@@ -201,9 +202,11 @@ function setSection(name) {
   if (jobsSection) jobsSection.hidden = name !== "jobs";
   if (calendarSection) calendarSection.hidden = name !== "calendar";
   if (supplierInvoicesSection) supplierInvoicesSection.hidden = name !== "supplier_invoices";
+  if (stockSection) stockSection.hidden = name !== "stock";
   if (btnNew) {
     if (
       name === "supplier_invoices" ||
+      name === "stock" ||
       name === "calendar" ||
       name === "sms_inbox" ||
       name === "referrals"
@@ -225,6 +228,7 @@ function setSection(name) {
     jobs: "nav-jobs",
     calendar: "nav-calendar",
     supplier_invoices: "nav-supplier-invoices",
+    stock: "nav-stock",
   };
   Object.entries(navMap).forEach(([section, id]) => {
     document.getElementById(id)?.classList.toggle("active", name === section);
@@ -254,6 +258,11 @@ function setSection(name) {
   if (name === "supplier_invoices") {
     setOverline("PARTS INVOICES");
     viewTitle.textContent = "Supplier invoices";
+  }
+  if (name === "stock") {
+    setOverline("STOCK");
+    viewTitle.textContent = "Workshop stock";
+    window.DeaneInventory?.show?.();
   }
   if (name === "customers") {
     setOverline("CUSTOMERS");
@@ -676,6 +685,10 @@ document.getElementById("nav-calendar")?.addEventListener("click", () => {
 document.getElementById("nav-supplier-invoices")?.addEventListener("click", () => {
   setSection("supplier_invoices");
   window.DeaneSupplierInvoices?.showList?.();
+});
+
+document.getElementById("nav-stock")?.addEventListener("click", () => {
+  setSection("stock");
 });
 
 document.getElementById("nav-quotes")?.addEventListener("click", () => {

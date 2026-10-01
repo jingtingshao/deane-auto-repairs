@@ -1916,5 +1916,24 @@ window.addEventListener("beforeunload", () => {
 billingForm?.addEventListener("input", scheduleBillAutosave);
 billingForm?.addEventListener("change", scheduleBillAutosave);
 
-window.DeaneBilling = { showList, openDoc, createFromJob };
+function addLineFromStock(item) {
+  if (!canEditLines(currentBill)) return;
+  const description = [item?.name, item?.partNumber].filter(Boolean).join(" ");
+  const line = newLine({
+    description,
+    qty: 1,
+    unitPriceIncl: Number(item?.sellPrice) || 0,
+  });
+  const last = lineRows[lineRows.length - 1];
+  if (last && !String(last.description || "").trim() && !(Number(last.unitPriceIncl) > 0)) {
+    lineRows[lineRows.length - 1] = line;
+  } else {
+    lineRows.push(line);
+  }
+  renderLines();
+  renderTotals();
+  scheduleBillAutosave();
+}
+
+window.DeaneBilling = { showList, openDoc, createFromJob, addLineFromStock };
 })();

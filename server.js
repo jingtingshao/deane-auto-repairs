@@ -25,6 +25,7 @@ const business = require("./data/business");
 const catalog = require("./data/catalog");
 const namesLib = require("./data/names");
 const jobsLib = require("./data/jobs");
+const inventoryLib = require("./data/inventory");
 const appointmentsLib = require("./data/appointments");
 const bookingRequestsLib = require("./data/booking-requests");
 const { buildBillingPdf, safeFilename } = require("./data/billing-pdf");
@@ -171,6 +172,8 @@ const APPOINTMENTS_FILE = path.join(DATA_DIR, "appointments.json");
 const BOOKING_REQUESTS_FILE = path.join(DATA_DIR, "booking-requests.json");
 const BOOKING_REQUESTS_MAX = 200;
 const SUPPLIER_INVOICES_FILE = path.join(DATA_DIR, "supplier-invoices.json");
+const INVENTORY_FILE = path.join(DATA_DIR, "inventory.json");
+const INVENTORY_MOVEMENTS_FILE = path.join(DATA_DIR, "inventory-movements.json");
 const INVOICE_CANDIDATES_FILE = path.join(DATA_DIR, "invoice-candidates.json");
 const PART_AUDIT_FILE = path.join(DATA_DIR, "part-audit-log.json");
 const SMS_INBOUND_FILE = path.join(DATA_DIR, "sms-inbound.json");
@@ -8283,7 +8286,8 @@ app.put("/api/supplier-invoices/:invoiceId", requireOwnerAdmin, (req, res) => {
     rows[index] = next;
     writeSupplierInvoices(rows);
     writePartAudit("supplierInvoice", next.id, "update", before, next, req, "invoice updated");
-    res.json(next);
+    const stock = applyInvoiceStock(next, req.body?.lines);
+    res.json({ ...next, stock });
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
   }
@@ -8373,9 +8377,10 @@ app.post("/api/supplier-invoices/:invoiceId/parse", requireOwnerAdmin, (req, res
 app.get("/api/supplier-invoices/:invoiceId/candidates", requireOwnerAdmin, (req, res) => {
   const invoice = readSupplierInvoices().find((row) => row.id === req.params.invoiceId);
   if (!invoice) return res.status(404).json({ error: "Supplier invoice not found" });
+  const stocked = stockedCandidateIds();
   const rows = readInvoiceCandidates()
     .filter((row) => row.supplierInvoiceId === req.params.invoiceId)
-    .map((row) => normalizeCandidate(row))
+    .map((row) => ({ ...normalizeCandidate(row), stocked: stocked.has(row.id) }))
     .sort((a, b) => Number(a.lineNo) - Number(b.lineNo));
   res.json(rows);
 });
@@ -8569,6 +8574,243 @@ app.get("/r/:id", (req, res) => {
 
 app.get("/b/:id", (_req, res) => {
   res.sendFile(path.join(ROOT, "billing", "index.html"));
+});
+
+function readInventoryItems() {
+  return readJsonArray(INVENTORY_FILE, "inventory")
+    .map((row) => inventoryLib.normalizeItem(row))
+    .filter((row) => row.id && row.category && row.name);
+}
+
+function writeInventoryItems(rows) {
+  writeJsonArray(INVENTORY_FILE, rows);
+}
+
+function readInventoryMovements() {
+  return readJsonArray(INVENTORY_MOVEMENTS_FILE, "inventory movements");
+}
+
+function writeInventoryMovements(rows) {
+  const trimmed = rows.slice(-2000);
+  writeJsonArray(INVENTORY_MOVEMENTS_FILE, trimmed);
+}
+
+function stockedCandidateIds() {
+  const ids = new Set();
+  for (const row of readInventoryMovements()) {
+    const id = String(row?.candidateId || "").trim();
+    if (id) ids.add(id);
+  }
+  return ids;
+}
+
+function applyInvoiceStock(invoice, lineOverrides) {
+  const candidates = readInvoiceCandidates().filter(
+    (row) => row.supplierInvoiceId === invoice.id
+  );
+  if (!candidates.length) return { added: 0, already: 0, skipped: [] };
+  const items = readInventoryItems();
+  const movements = readInventoryMovements();
+  const stock = inventoryLib.receiveSupplierInvoice(
+    items,
+    movements,
+    {
+      ...invoice,
+      lines: Array.isArray(lineOverrides) ? lineOverrides : [],
+    },
+    candidates,
+    nowIso(),
+    () => randomUUID()
+  );
+  if (stock.added.length) {
+    writeInventoryItems(items);
+    writeInventoryMovements(movements);
+  }
+  return {
+    added: stock.added.length,
+    already: stock.already.length,
+    skipped: stock.skipped,
+  };
+}
+
+app.get("/api/inventory/meta", requireOwnerAdmin, (_req, res) => {
+  res.json({
+    categories: inventoryLib.CATEGORIES,
+    bands: inventoryLib.BANDS,
+    gstRate: inventoryLib.GST_RATE,
+  });
+});
+
+app.get("/api/inventory/suggest", requireOwnerAdmin, (req, res) => {
+  res.json(inventoryLib.suggestPrice(req.query.cost));
+});
+
+app.get("/api/inventory/suppliers", requireOwnerAdmin, (_req, res) => {
+  const names = new Set();
+  for (const item of readInventoryItems()) {
+    if (item.supplier) names.add(item.supplier);
+  }
+  for (const invoice of readSupplierInvoices()) {
+    const name = String(invoice?.supplier || "").trim();
+    if (name) names.add(name);
+  }
+  res.json([...names].sort((a, b) => a.localeCompare(b)));
+});
+
+app.get("/api/inventory", requireOwnerAdmin, (req, res) => {
+  const items = inventoryLib.searchItems(
+    readInventoryItems(),
+    req.query.q,
+    req.query.category
+  );
+  res.json(items.map((row) => inventoryLib.presentItem(row)));
+});
+
+app.get("/api/inventory/:id", requireOwnerAdmin, (req, res) => {
+  const item = readInventoryItems().find((row) => row.id === req.params.id);
+  if (!item) return res.status(404).json({ error: "Stock item not found" });
+  const movements = readInventoryMovements()
+    .filter((row) => row.itemId === item.id)
+    .slice(-15)
+    .reverse();
+  res.json({ ...inventoryLib.presentItem(item), movements });
+});
+
+app.post("/api/inventory", requireOwnerAdmin, (req, res) => {
+  try {
+    const now = nowIso();
+    const item = inventoryLib.normalizeItem({
+      ...(req.body || {}),
+      id: randomUUID(),
+      createdAt: now,
+      updatedAt: now,
+    });
+    if (!inventoryLib.categoryById(item.category)) {
+      return res.status(400).json({ error: "Choose a category." });
+    }
+    if (!item.name) return res.status(400).json({ error: "Enter a part name." });
+    const rows = readInventoryItems();
+    rows.push(item);
+    writeInventoryItems(rows);
+    if (item.qtyOnHand > 0) {
+      const movements = readInventoryMovements();
+      movements.push({
+        id: randomUUID(),
+        itemId: item.id,
+        qtyDelta: item.qtyOnHand,
+        qtyAfter: item.qtyOnHand,
+        costPrice: item.costPrice,
+        supplier: item.supplier,
+        invoiceNo: "",
+        supplierInvoiceId: "",
+        candidateId: "",
+        note: "Opening stock",
+        createdAt: now,
+      });
+      writeInventoryMovements(movements);
+    }
+    res.status(201).json(inventoryLib.presentItem(item));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.put("/api/inventory/:id", requireOwnerAdmin, (req, res) => {
+  try {
+    const rows = readInventoryItems();
+    const index = rows.findIndex((row) => row.id === req.params.id);
+    if (index < 0) return res.status(404).json({ error: "Stock item not found" });
+    const previous = rows[index];
+    const now = nowIso();
+    const item = inventoryLib.normalizeItem({
+      ...(req.body || {}),
+      id: previous.id,
+      createdAt: previous.createdAt || now,
+      updatedAt: now,
+    });
+    if (!inventoryLib.categoryById(item.category)) {
+      return res.status(400).json({ error: "Choose a category." });
+    }
+    if (!item.name) return res.status(400).json({ error: "Enter a part name." });
+    rows[index] = item;
+    writeInventoryItems(rows);
+    const delta = Math.round((item.qtyOnHand - previous.qtyOnHand) * 1000) / 1000;
+    if (delta) {
+      const movements = readInventoryMovements();
+      movements.push({
+        id: randomUUID(),
+        itemId: item.id,
+        qtyDelta: delta,
+        qtyAfter: item.qtyOnHand,
+        costPrice: item.costPrice,
+        supplier: item.supplier,
+        invoiceNo: "",
+        supplierInvoiceId: "",
+        candidateId: "",
+        note: "Stock count",
+        createdAt: now,
+      });
+      writeInventoryMovements(movements);
+    }
+    res.json(inventoryLib.presentItem(item));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.delete("/api/inventory/:id", requireOwnerAdmin, (req, res) => {
+  const rows = readInventoryItems();
+  const next = rows.filter((row) => row.id !== req.params.id);
+  if (next.length === rows.length) return res.status(404).json({ error: "Stock item not found" });
+  writeInventoryItems(next);
+  res.json({ ok: true });
+});
+
+app.post("/api/inventory/receive", requireOwnerAdmin, (req, res) => {
+  try {
+    const items = readInventoryItems();
+    const movements = readInventoryMovements();
+    const result = inventoryLib.applyReceive(
+      items,
+      movements,
+      { ...(req.body || {}), id: randomUUID(), movementId: randomUUID() },
+      nowIso()
+    );
+    if (!result.already) {
+      if (!result.movement.id) result.movement.id = randomUUID();
+      if (result.created && !result.item.createdAt) result.item.createdAt = result.movement.createdAt;
+      writeInventoryItems(items);
+      movements.push(result.movement);
+      writeInventoryMovements(movements);
+    }
+    res.status(result.created ? 201 : 200).json({
+      item: result.item ? inventoryLib.presentItem(result.item) : null,
+      created: result.created,
+      already: result.already,
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post("/api/inventory/:id/adjust", requireOwnerAdmin, (req, res) => {
+  try {
+    const rows = readInventoryItems();
+    const item = rows.find((row) => row.id === req.params.id);
+    if (!item) return res.status(404).json({ error: "Stock item not found" });
+    const movement = inventoryLib.applyAdjust(
+      item,
+      { ...(req.body || {}), movementId: randomUUID() },
+      nowIso()
+    );
+    writeInventoryItems(rows);
+    const movements = readInventoryMovements();
+    movements.push(movement);
+    writeInventoryMovements(movements);
+    res.json(inventoryLib.presentItem(item));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
 });
 
 app.use((err, req, res, next) => {

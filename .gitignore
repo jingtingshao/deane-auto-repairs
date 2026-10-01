@@ -8,6 +8,8 @@ data/jobs.json
 data/appointments.json
 data/booking-requests.json
 data/supplier-invoices.json
+data/inventory.json
+data/inventory-movements.json
 data/invoice-candidates.json
 data/part-audit-log.json
 data/sms-inbound.json

@@ -116,7 +116,8 @@ function normalizePart(part = {}, idFallback = "") {
   const supplier = String(part.supplier || "").trim();
   const note = String(part.note || part.notes || "").trim();
   const status = isPartLineStatus(part.status) ? String(part.status).trim() : "draft";
-  const source = String(part.source || "").trim().toLowerCase() === "ocr" ? "ocr" : "manual";
+  const sourceRaw = String(part.source || "").trim().toLowerCase();
+  const source = sourceRaw === "ocr" || sourceRaw === "stock" ? sourceRaw : "manual";
 
   return {
     id: part.id || idFallback,

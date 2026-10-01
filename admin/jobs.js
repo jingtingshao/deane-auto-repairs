@@ -53,28 +53,49 @@ function statusLabel(id) {
   return JOB_STATUSES.find((s) => s.id === id)?.label || id || "";
 }
 
+function priceGuide(cost) {
+  if (window.DeaneInventory?.suggestPrice) return window.DeaneInventory.suggestPrice(cost);
+  return null;
+}
+
+function sellTitle(cost) {
+  const guide = priceGuide(cost);
+  if (!guide || !(guide.cost > 0)) return "Sell price excl. GST";
+  return `Suggested ${guide.markupMin}–${guide.markupMax}% · $${guide.sellMin.toFixed(2)}–$${guide.sellMax.toFixed(2)} ex GST`;
+}
+
 function newPart(partial = {}) {
   const qty = Number(partial.qty);
   const costPrice = Number(partial.costPrice);
   const markupPercent = Number(partial.markupPercent);
+  const guide = priceGuide(Number.isFinite(costPrice) ? costPrice : 0);
   const sellPrice =
     partial.sellPrice != null && partial.sellPrice !== ""
       ? Number(partial.sellPrice)
-      : (Number.isFinite(costPrice) ? costPrice : 0) *
-        (1 + (Number.isFinite(markupPercent) ? markupPercent : 25) / 100);
+      : guide
+        ? guide.sell
+        : (Number.isFinite(costPrice) ? costPrice : 0) *
+          (1 + (Number.isFinite(markupPercent) ? markupPercent : 25) / 100);
+  const markup = Number.isFinite(markupPercent)
+    ? markupPercent
+    : guide
+      ? guide.markupMin
+      : 25;
   return {
     id: partial.id || crypto.randomUUID(),
     partNumber: partial.partNumber || "",
     description: partial.description || "",
     qty: Number.isFinite(qty) ? qty : 1,
+    uom: partial.uom || "ea",
     costPrice: Number.isFinite(costPrice) ? costPrice : 0,
-    markupPercent: Number.isFinite(markupPercent) ? markupPercent : 25,
+    markupPercent: Number.isFinite(markup) ? markup : 25,
     sellPrice: Number.isFinite(sellPrice) ? sellPrice : 0,
     ordered: Boolean(partial.ordered) || Boolean(partial.received),
     received: Boolean(partial.received),
     supplier: partial.supplier || "",
     supplierInvoiceNo: partial.supplierInvoiceNo || "",
     status: partial.status || "draft",
+    source: partial.source || "manual",
     note: partial.note || "",
   };
 }
@@ -310,6 +331,7 @@ function renderParts() {
         <td class="part-name-cell"><input data-field="description" value="${Admin.escapeAttr(part.description)}" placeholder="e.g. Front pads" /></td>
         <td><input class="qty" data-field="qty" type="number" min="0" step="1" value="${Admin.escapeAttr(String(part.qty))}" /></td>
         <td><input class="price" data-field="costPrice" type="number" min="0" step="0.01" value="${Admin.escapeAttr(String(part.costPrice || 0))}" /></td>
+        <td><input class="price" data-field="sellPrice" type="number" min="0" step="0.01" value="${Admin.escapeAttr(String(part.sellPrice || 0))}" title="${Admin.escapeAttr(sellTitle(part.costPrice))}" /></td>
         <td class="check-cell"><input data-field="ordered" type="checkbox" ${part.ordered ? "checked" : ""} /></td>
         <td class="check-cell"><input data-field="received" type="checkbox" ${part.received ? "checked" : ""} /></td>
         <td><input class="part-supplier" data-field="supplier" value="${Admin.escapeAttr(part.supplier)}" placeholder="e.g. Repco" /></td>
@@ -344,12 +366,30 @@ function renderParts() {
         scheduleJobAutosave();
         return;
       }
-      if (field === "qty" || field === "costPrice") {
+      if (field === "qty" || field === "costPrice" || field === "sellPrice") {
         partRows[index][field] = Number(control.value) || 0;
         if (field === "costPrice") {
           const cost = Number(partRows[index].costPrice) || 0;
-          const markup = Number(partRows[index].markupPercent) || 25;
-          partRows[index].sellPrice = Number((cost * (1 + markup / 100)).toFixed(2));
+          const guide = priceGuide(cost);
+          if (guide && guide.cost > 0) {
+            partRows[index].markupPercent = guide.markupMin;
+            partRows[index].sellPrice = guide.sell;
+          } else {
+            const markup = Number(partRows[index].markupPercent) || 25;
+            partRows[index].sellPrice = Number((cost * (1 + markup / 100)).toFixed(2));
+          }
+          const sellInput = row.querySelector('[data-field="sellPrice"]');
+          if (sellInput) {
+            sellInput.value = String(partRows[index].sellPrice);
+            sellInput.title = sellTitle(cost);
+          }
+        }
+        if (field === "sellPrice") {
+          const cost = Number(partRows[index].costPrice) || 0;
+          partRows[index].markupPercent =
+            cost > 0
+              ? Math.round((partRows[index].sellPrice / cost - 1) * 10000) / 100
+              : 0;
         }
       } else {
         partRows[index][field] = control.value;
@@ -574,7 +614,8 @@ function collectJob() {
     parts: partRows.map((part) => ({
       ...part,
       description:
-        String(part.source || "").toLowerCase() === "ocr"
+        String(part.source || "").toLowerCase() === "ocr" ||
+        String(part.source || "").toLowerCase() === "stock"
           ? part.description
           : sentenceCase(part.description),
       note: sentenceCase(part.note),
@@ -622,10 +663,36 @@ const jobAutosave = Admin?.createAutosave
     })
   : { schedule() {}, cancel() {}, async flush() {} };
 
+function addPartFromStock(item) {
+  const cost = Number(item?.costPrice) || 0;
+  const sell = Number(item?.sellPrice) || 0;
+  const part = newPart({
+    partNumber: item?.partNumber || "",
+    description: item?.name || "",
+    qty: 1,
+    costPrice: cost,
+    sellPrice: sell,
+    markupPercent: cost > 0 ? (sell / cost - 1) * 100 : 0,
+    supplier: item?.supplier || "",
+    uom: item?.unit === "litre" ? "L" : "ea",
+    source: "stock",
+  });
+  const last = partRows[partRows.length - 1];
+  if (last && !String(last.description || "").trim() && !String(last.partNumber || "").trim()) {
+    partRows[partRows.length - 1] = { ...part, id: last.id || part.id };
+  } else {
+    partRows.push(part);
+  }
+  renderParts();
+  syncStatusFromParts();
+  scheduleJobAutosave();
+}
+
 window.DeaneJobs = {
   showList,
   openJob,
   createJob,
+  addPartFromStock,
   filterBy(status) {
     jobFilter = status || "active";
     const filter = document.getElementById("jobs-filter");

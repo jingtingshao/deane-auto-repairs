@@ -1540,6 +1540,15 @@ label.check input {
   background: #8e24aa;
 }
 
+.supplier-status-pill.stocked {
+  background: #e8f5e9;
+  color: #1b5e20;
+}
+
+.supplier-status-pill.stocked .dot {
+  background: #2e7d32;
+}
+
 .supplier-month-summary {
   margin: 0 0 0.75rem;
   padding: 0.65rem 0.85rem;
@@ -2600,4 +2609,127 @@ label.check input {
 }
 .referral-credit-box .preset-row {
   margin-top: 0.5rem;
+}
+
+.stock-cat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.35rem 0 0.75rem;
+}
+
+.markup-details {
+  margin: 0.4rem 0 0.9rem;
+  background: #fff;
+  border: 1px solid var(--line);
+  padding: 0.65rem 0.85rem;
+}
+
+.markup-details summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.markup-guide {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.55rem;
+  font-size: 0.92rem;
+}
+
+.markup-guide th,
+.markup-guide td {
+  text-align: left;
+  padding: 0.35rem 0.45rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.stock-editor {
+  background: #fff;
+  border: 1px solid var(--line);
+  padding: 0.2rem 0.85rem 0.4rem;
+  margin-bottom: 0.9rem;
+}
+
+.stock-price-guide {
+  margin: 0.35rem 0 0.6rem;
+  padding: 0.55rem 0.7rem;
+  background: #f4f8e8;
+  border: 1px solid #d5e29a;
+  font-weight: 600;
+}
+
+.stock-results {
+  border: 1px solid var(--line);
+  background: #fff;
+  margin: 0.35rem 0 0.75rem;
+}
+
+.stock-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.stock-result:hover {
+  background: #f7faf4;
+}
+
+.stock-result strong {
+  display: block;
+}
+
+.stock-sell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.stock-sell strong {
+  font-size: 1.05rem;
+}
+
+.stock-result-empty {
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+}
+
+.stock-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(21, 33, 45, 0.45);
+}
+
+.stock-dialog[hidden] {
+  display: none;
+}
+
+.stock-dialog-card {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  background: #fff;
+  padding: 1rem 1.1rem 1.15rem;
+  border: 1px solid var(--line);
+}
+
+.stock-dialog-card h2 {
+  margin: 0 0 0.35rem;
+  font-family: var(--display);
+  font-size: 1.8rem;
+  letter-spacing: 0.02em;
 }
