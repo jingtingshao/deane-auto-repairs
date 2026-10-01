@@ -1272,7 +1272,66 @@ function insertRemainderCandidate(candidateRows, sourceIndex, remainderQty, now)
   return leftover;
 }
 
+/** Company, address, email, and phone lines are not parts. */
+function isSupplierHeaderLine(line) {
+  const text = String(line || "").trim();
+  if (!text || text.length < 3) return true;
+  if (/@/.test(text)) return true;
+  if (/\b(www\.|https?:\/\/)/i.test(text)) return true;
+  if (
+    /\b(tax\s*invoice|credit\s*note|invoice\s*(date|no|number|#)?|bill\s*to|ship\s*to|deliver\s*to|sold\s*to|customer|account\s*(no|number|name)?|gst\s*(no|number|#)|nzbn|abn|phone|telephone|mobile|tel\b|fax|e-?mail|po\s*box|p\.?o\.?\s*box|page\s+\d+|terms\b|bank\b|payment|due\s*date|order\s*(no|number)|your\s*ref|our\s*ref)\b/i.test(
+      text
+    ) &&
+    !/\b\d+\.\d{2}\b/.test(text)
+  ) {
+    return true;
+  }
+  if (
+    /\b(road|street|avenue|drive|place|crescent|highway|lane|terrace|close|boulevard|auckland|wellington|christchurch|hamilton|tauranga|dunedin|new\s+zealand)\b/i.test(
+      text
+    ) &&
+    !/\b\d+\.\d{2}\b/.test(text)
+  ) {
+    return true;
+  }
+  if (
+    /\d+\s+[A-Za-z].*\b(rd|st|ave|dr|pl|cres|hwy|ln)\b(?![\w-])/i.test(text) &&
+    !/\b\d+\.\d{2}\b/.test(text)
+  ) {
+    return true;
+  }
+  if (
+    /(\+64|0800|0508|09\d{7}|0\d[\s-]?\d{3}[\s-]?\d{3,4})/.test(text) &&
+    !/\b\d+\.\d{2}\b/.test(text)
+  ) {
+    return true;
+  }
+  if (/^\d{4}$/.test(text)) return true;
+  if (
+    /^(qty|quantity|description|part(\s*(no|number|#))?|product|item|unit|price|amount|total|code|ex\s*gst|incl?\s*gst)$/i.test(
+      text
+    )
+  ) {
+    return true;
+  }
+  if (/^(-{2,}|page\s+\d+\s+of\s+\d+|\d+\s+of\s+\d+)$/i.test(text)) return true;
+  return false;
+}
+
+function looksLikePartLine(line) {
+  const text = String(line || "").trim();
+  if (isSupplierHeaderLine(text)) return false;
+  if (/^(sub\s*total|subtotal|gst|tax|total|amount\s+due|balance(\s+due)?|rounding|freight|shipping)\b/i.test(text)) {
+    return false;
+  }
+  const hasMoney = /\$\s*\d|\b\d+\.\d{2}\b/.test(text);
+  const hasPartNo = /\b(?=[A-Z0-9-]*[A-Z])(?=[A-Z0-9-]*\d)[A-Z0-9-]{4,}\b/i.test(text);
+  const hasQtyPrefix = /^\d{1,3}(?:\.\d+)?\s+[A-Za-z]/.test(text);
+  return hasMoney || hasPartNo || hasQtyPrefix;
+}
+
 function parseCandidatesFromRawText(rawText, supplier) {
+  const supplierKey = String(supplier || "").trim().toLowerCase().replace(/\s+/g, " ");
   const rows = String(rawText || "")
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -1281,22 +1340,30 @@ function parseCandidatesFromRawText(rawText, supplier) {
   const items = [];
   for (let i = 0; i < rows.length; i += 1) {
     const line = rows[i];
-    if (line.length < 3) continue;
+    if (!looksLikePartLine(line)) continue;
+    const lineKey = line.toLowerCase().replace(/\s+/g, " ");
+    if (supplierKey && lineKey === supplierKey) continue;
     const tokens = line.split(/\s+/).filter(Boolean);
     const partNumberCandidate =
-      tokens.find((t) => /^[A-Za-z0-9-]{4,}$/.test(t) && /[A-Za-z]/.test(t)) || "";
-    const qtyMatch = line.match(/(?:^|\s)(\d+(?:\.\d+)?)\s*(?:x|qty\b)/i);
+      tokens.find((t) => /^[A-Za-z0-9-]{4,}$/.test(t) && /[A-Za-z]/.test(t) && /\d/.test(t)) || "";
+    const qtyMatch =
+      line.match(/^(\d{1,3}(?:\.\d+)?)\s+(?![.\d])/) ||
+      line.match(/(?:^|\s)(\d+(?:\.\d+)?)\s*(?:x|qty\b)/i);
     const qtyCandidate = qtyMatch ? Math.max(0, Number(qtyMatch[1]) || 0) : 1;
-    const moneyMatches = [...line.matchAll(/\$?\s*(\d+(?:\.\d{1,2})?)/g)];
+    const moneyMatches = [
+      ...line.matchAll(/\$\s*(\d+(?:\.\d{1,2})?)|\b(\d+\.\d{2})\b/g),
+    ].map((match) => match[1] || match[2]);
     const costPriceCandidate = moneyMatches.length
-      ? toMoney(moneyMatches[moneyMatches.length - 1][1])
+      ? toMoney(moneyMatches[moneyMatches.length - 1])
       : 0;
     const descriptionCandidate = line
       .replace(partNumberCandidate, "")
+      .replace(/^\d{1,3}(?:\.\d+)?\s+/, " ")
       .replace(/(?:^|\s)\d+(?:\.\d+)?\s*(?:x|qty\b)/gi, " ")
-      .replace(/\$?\s*\d+(?:\.\d{1,2})?/g, " ")
+      .replace(/\$\s*\d+(?:\.\d{1,2})?|\b\d+\.\d{2}\b/g, " ")
       .replace(/\s+/g, " ")
       .trim();
+    if (!descriptionCandidate && !partNumberCandidate) continue;
     let confidence = 0.3;
     if (partNumberCandidate) confidence += 0.2;
     if (descriptionCandidate) confidence += 0.2;
