@@ -8353,8 +8353,7 @@ app.put("/api/supplier-invoices/:invoiceId", requireOwnerAdmin, (req, res) => {
     rows[index] = next;
     writeSupplierInvoices(rows);
     writePartAudit("supplierInvoice", next.id, "update", before, next, req, "invoice updated");
-    const stock = applyInvoiceStock(next, req.body?.lines);
-    res.json({ ...next, stock });
+    res.json(next);
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
   }
@@ -8669,35 +8668,6 @@ function stockedCandidateIds() {
     if (id) ids.add(id);
   }
   return ids;
-}
-
-function applyInvoiceStock(invoice, lineOverrides) {
-  const candidates = readInvoiceCandidates().filter(
-    (row) => row.supplierInvoiceId === invoice.id
-  );
-  if (!candidates.length) return { added: 0, already: 0, skipped: [] };
-  const items = readInventoryItems();
-  const movements = readInventoryMovements();
-  const stock = inventoryLib.receiveSupplierInvoice(
-    items,
-    movements,
-    {
-      ...invoice,
-      lines: Array.isArray(lineOverrides) ? lineOverrides : [],
-    },
-    candidates,
-    nowIso(),
-    () => randomUUID()
-  );
-  if (stock.added.length) {
-    writeInventoryItems(items);
-    writeInventoryMovements(movements);
-  }
-  return {
-    added: stock.added.length,
-    already: stock.already.length,
-    skipped: stock.skipped,
-  };
 }
 
 app.get("/api/inventory/meta", requireOwnerAdmin, (_req, res) => {

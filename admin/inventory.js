@@ -438,7 +438,9 @@
     const summary = document.getElementById("stock-receive-summary");
     if (summary) {
       const bits = [prefill.supplier, prefill.invoiceNo ? `Invoice ${prefill.invoiceNo}` : ""].filter(Boolean);
-      summary.textContent = bits.join(" · ") || "Add this line into workshop stock.";
+      summary.textContent = prefill.already
+        ? "This invoice line is already in stock. Adding it again will not increase the quantity."
+        : `${bits.join(" · ")}${bits.length ? ". " : ""}Qty is what goes on the shelf. If this line is a whole box, type how many pieces are in the box.`;
     }
     receiveDialog.hidden = false;
     renderReceiveGuide();

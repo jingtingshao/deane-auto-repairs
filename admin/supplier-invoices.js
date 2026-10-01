@@ -512,7 +512,7 @@ async function importInvoiceFile(file) {
   editView.hidden = false;
   Admin.setSection("supplier_invoices");
   Admin.setViewTitle(current.invoiceNo || "Supplier invoice");
-  showStatus("Invoice imported. Save invoice to add recognised lines to stock.", 5000);
+  showStatus("Invoice imported. Use Add to stock on each line you want on the shelf.", 5000);
 }
 
 function renderTracking() {
@@ -1102,6 +1102,7 @@ function renderCandidates() {
           invoiceNo: form?.elements?.invoiceNo?.value || current.invoiceNo || "",
           supplierInvoiceId: current.id,
           candidateId: row.id,
+          already: Boolean(row.stocked),
         });
         return;
       }
@@ -1230,40 +1231,6 @@ function openNew() {
   Admin.setViewTitle("New supplier invoice");
 }
 
-function collectStockLines() {
-  if (!candidatesEl) return [];
-  return [...candidatesEl.querySelectorAll("tr[data-id]")].map((rowEl) => ({
-    id: rowEl.dataset.id || "",
-    name: rowEl.querySelector('[data-field="description"]')?.value || "",
-    partNumber: rowEl.querySelector('[data-field="partNumber"]')?.value || "",
-    qty: Number(rowEl.querySelector('[data-field="qty"]')?.value || 0),
-    costPrice: Number(rowEl.querySelector('[data-field="costPrice"]')?.value || 0),
-  }));
-}
-
-function stockSaveMessage(stock) {
-  if (!stock) return "";
-  const bits = [];
-  if (stock.added) {
-    bits.push(`Stock increased on ${stock.added} line${stock.added === 1 ? "" : "s"}`);
-  }
-  if (stock.already) {
-    bits.push(`${stock.already} already in stock`);
-  }
-  if (stock.skipped?.length) {
-    const names = stock.skipped
-      .slice(0, 3)
-      .map((row) => row.name)
-      .filter(Boolean)
-      .join(", ");
-    const more = stock.skipped.length > 3 ? "…" : "";
-    bits.push(
-      `${stock.skipped.length} not added (${names}${more}). Use Add to stock and pick a category`
-    );
-  }
-  return bits.length ? `. ${bits.join(". ")}.` : "";
-}
-
 async function saveInvoice() {
   const payload = collectForm();
   if (!payload.supplier || !payload.invoiceNo) {
@@ -1276,12 +1243,11 @@ async function saveInvoice() {
     });
     showStatus("Supplier invoice created");
   } else {
-    payload.lines = collectStockLines();
     current = await Admin.api(`/api/supplier-invoices/${current.id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     });
-    showStatus(`Supplier invoice saved${stockSaveMessage(current.stock)}`, 6000);
+    showStatus("Supplier invoice saved. Stock changes only when you use Add to stock.");
   }
   await loadInvoice(current.id);
   await loadList();
@@ -1301,7 +1267,7 @@ async function parseRawText() {
     method: "POST",
     body: JSON.stringify({ rawText }),
   });
-  showStatus("OCR text re-parsed. Save invoice to add recognised lines to stock.", 5000);
+  showStatus("OCR text re-parsed. Use Add to stock on each line you want on the shelf.", 5000);
   await loadInvoice(current.id);
   await loadList();
 }

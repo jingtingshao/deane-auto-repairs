@@ -440,7 +440,7 @@
 
         <section id="supplier-invoices-section" hidden>
           <section id="supplier-invoices-list-view">
-            <p class="muted small">Import a PDF or a photo of a handwritten invoice. Company name, address, and email are not parts. Confirm the lines, then Save invoice — recognised parts are added to stock. Saving again does not add the same line twice. Ignored lines and tools stay off the shelf. If a line has no category, use Add to stock. Consumables and tools roll into this month’s spend.</p>
+            <p class="muted small">Import a PDF or a photo of a handwritten invoice. Company name, address, and email are not parts. Saving the invoice does not change stock. Use Add to stock on a line and type the shelf quantity — a whole box is not the same as one piece. The same line is only added once. Consumables and tools roll into this month’s spend.</p>
             <p id="supplier-month-consumables" class="supplier-month-summary" hidden></p>
             <label class="list-search">
               Search supplier invoices
@@ -533,7 +533,7 @@
         </section>
 
         <section id="stock-section" hidden>
-          <p class="muted small">Parts are priced each. Engine oil, coolant, brake fluid, ATF, power steering fluid, and AdBlue are priced per litre. Saving a parts invoice adds recognised lines to stock. If the writing will not read, type the part here.</p>
+          <p class="muted small">Parts are priced each. Engine oil, coolant, brake fluid, ATF, power steering fluid, and AdBlue are priced per litre. Stock goes up only when you choose Add to stock on a parts invoice, and you set the quantity. If the writing will not read, type the part here.</p>
           <details class="markup-details">
             <summary>Suggested markup</summary>
             <div class="line-table-wrap">
@@ -973,8 +973,8 @@
     <script src="calendar.js?v=20260905staffrole"></script>
     <script src="jobs.js?v=20261001stock"></script>
     <script src="billing.js?v=20261001stock"></script>
-    <script src="inventory.js?v=20261001stock"></script>
-    <script src="supplier-invoices.js?v=20261002stock"></script>
+    <script src="inventory.js?v=20261002manual"></script>
+    <script src="supplier-invoices.js?v=20261002manual"></script>
     <script src="customers.js?v=20260906techcustomers"></script>
     <script src="referrals.js?v=20260906usedon"></script>
     <script src="sms-inbox.js?v=20260830yesno"></script>
