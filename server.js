@@ -8359,6 +8359,30 @@ app.put("/api/supplier-invoices/:invoiceId", requireOwnerAdmin, (req, res) => {
   }
 });
 
+app.delete("/api/supplier-invoices/:invoiceId", requireOwnerAdmin, (req, res) => {
+  const rows = readSupplierInvoices();
+  const index = rows.findIndex((row) => row.id === req.params.invoiceId);
+  if (index < 0) return res.status(404).json({ error: "Supplier invoice not found" });
+  const invoice = normalizeSupplierInvoice(rows[index]);
+  const remaining = rows.filter((row) => row.id !== invoice.id);
+  writeSupplierInvoices(remaining);
+  const candidates = readInvoiceCandidates();
+  writeInvoiceCandidates(candidates.filter((row) => row.supplierInvoiceId !== invoice.id));
+  const stillUsed = new Set(
+    remaining.flatMap((row) => (Array.isArray(row.imageRefs) ? row.imageRefs : []))
+  );
+  for (const ref of invoice.imageRefs || []) {
+    if (stillUsed.has(ref)) continue;
+    const name = path.basename(String(ref || ""));
+    if (!name || name === "." || name === "..") continue;
+    const filePath = path.join(UPLOADS_DIR, name);
+    if (path.dirname(filePath) !== UPLOADS_DIR) continue;
+    fs.unlink(filePath, () => {});
+  }
+  writePartAudit("supplierInvoice", invoice.id, "delete", invoice, null, req, "invoice deleted");
+  res.json({ ok: true });
+});
+
 app.post(
   "/api/supplier-invoices/:invoiceId/images",
   requireOwnerAdmin,

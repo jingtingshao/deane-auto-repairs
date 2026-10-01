@@ -572,6 +572,8 @@ function fillForm(invoice) {
   renderOcrStatus();
   ensureDuplicateHint();
   scheduleDuplicateCheck();
+  const deleteBtn = document.getElementById("btn-supplier-invoice-delete");
+  if (deleteBtn) deleteBtn.hidden = !invoice?.id;
 }
 
 function collectForm() {
@@ -1289,6 +1291,19 @@ form?.elements.namedItem("invoiceNo")?.addEventListener("input", scheduleDuplica
 form?.elements.namedItem("supplier")?.addEventListener("change", scheduleDuplicateCheck);
 form?.elements.namedItem("invoiceNo")?.addEventListener("change", scheduleDuplicateCheck);
 
+async function deleteInvoice() {
+  if (!current?.id) return;
+  const label = [current.supplier, current.invoiceNo].filter(Boolean).join(" ");
+  const ok = window.confirm(
+    `Delete ${label || "this supplier invoice"} and its lines? Stock already added stays on the shelf. Parts already accepted onto a job stay on that job.`
+  );
+  if (!ok) return;
+  await Admin.api(`/api/supplier-invoices/${current.id}`, { method: "DELETE" });
+  current = null;
+  candidates = [];
+  await showList();
+}
+
 document.getElementById("btn-supplier-invoice-refresh")?.addEventListener("click", async () => {
   try {
     await showList();
@@ -1313,6 +1328,13 @@ document.getElementById("btn-supplier-invoice-back")?.addEventListener("click", 
 document.getElementById("btn-supplier-invoice-save")?.addEventListener("click", async () => {
   try {
     await saveInvoice();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+document.getElementById("btn-supplier-invoice-delete")?.addEventListener("click", async () => {
+  try {
+    await deleteInvoice();
   } catch (err) {
     alert(err.message);
   }
