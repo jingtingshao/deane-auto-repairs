@@ -8364,7 +8364,7 @@ app.post(
           costPriceCandidate: line.costPriceCandidate,
           supplierCandidate: line.supplierCandidate || created.supplier,
           confidence: line.confidence ?? 0.7,
-          decision: row.decision === "consumable" ? "consumable" : "pending",
+          decision: line.decision === "consumable" ? "consumable" : "pending",
           createdAt: now,
           updatedAt: now,
         })
