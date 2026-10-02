@@ -683,15 +683,19 @@ function renderList() {
           : "";
       const toolNote =
         money(row.toolCost) > 0 ? ` · Tools ${formatMoney(row.toolCost)}` : "";
-      const lineHits = q
-        ? matchingLines(row, q)
-            .map((line) => {
-              const name = [line.description, line.partNumber].filter(Boolean).join(" · ") || "Part";
-              const qty = line.qty ? ` × ${line.qty}` : "";
-              return `<li>${Admin.escapeHtml(name)}${Admin.escapeHtml(qty)} · ${Admin.escapeHtml(formatMoney(line.cost))}</li>`;
-            })
-            .join("")
-        : "";
+      const previewLines = (q ? matchingLines(row, q) : row.searchLines || []).slice(0, 8);
+      const lineHits = previewLines
+        .map((line) => {
+          const name = [line.description, line.partNumber].filter(Boolean).join(" · ") || "Part";
+          const qty = line.qty ? ` × ${line.qty}` : "";
+          const decision = line.decision && line.decision !== "pending" ? ` · ${line.decision}` : "";
+          return `<li>${Admin.escapeHtml(name)}${Admin.escapeHtml(qty)} · ${Admin.escapeHtml(formatMoney(line.cost))}${Admin.escapeHtml(decision)}</li>`;
+        })
+        .join("");
+      const lineMore =
+        !q && totalLines > previewLines.length
+          ? `<li class="muted">+ ${totalLines - previewLines.length} more lines</li>`
+          : "";
       return `<article class="report-card billing-card supplier-invoice-card" data-id="${Admin.escapeAttr(row.id)}">
         <div class="billing-number">${Admin.escapeHtml(row.invoiceNo || "No invoice #")}</div>
         <div>
@@ -699,7 +703,7 @@ function renderList() {
           <p class="muted">${Admin.escapeHtml(Admin.formatDateShort(row.invoiceDate) || "No date")} · ${Admin.escapeHtml(totals)} · ${Admin.escapeHtml(match)}${Admin.escapeHtml(consumableNote)}${Admin.escapeHtml(toolNote)}</p>
         </div>
         <span class="badge ${Admin.escapeAttr(row.status)}">${Admin.escapeHtml(statusBadge(row.status))}</span>
-        ${lineHits ? `<ul class="supplier-line-hits">${lineHits}</ul>` : ""}
+        ${lineHits || lineMore ? `<ul class="supplier-line-hits">${lineHits}${lineMore}</ul>` : ""}
       </article>`;
     })
     .join("");

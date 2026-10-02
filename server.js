@@ -8287,6 +8287,12 @@ app.post(
       const parsedInvoice = parseSupplierInvoiceText(rawText);
       const supplier = String(req.body?.supplier || parsedInvoice.supplier || "").trim();
       const invoiceNo = String(req.body?.invoiceNo || parsedInvoice.invoiceNo || "").trim();
+      if (!parsedInvoice.candidates?.length) {
+        return res.status(400).json({
+          error:
+            "Invoice header was detected, but no parts lines were read. Please send the file/photo again, or paste OCR text under Advanced OCR text.",
+        });
+      }
       if (!supplier) {
         return res.status(400).json({ error: "Could not detect supplier. Enter supplier manually." });
       }
