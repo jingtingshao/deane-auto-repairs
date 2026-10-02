@@ -1405,6 +1405,19 @@ function normalizeInvoiceDateInput(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const named = raw.match(/^(\d{1,2})[/-]([A-Za-z]{3,9})[/-](\d{2,4})$/);
+  if (named) {
+    const monthName = {
+      jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+      jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+    }[named[2].slice(0, 3).toLowerCase()];
+    const namedDay = Number(named[1]);
+    let namedYear = Number(named[3]);
+    if (namedYear < 100) namedYear += 2000;
+    if (namedDay && monthName && namedYear) {
+      return `${String(namedYear).padStart(4, "0")}-${String(monthName).padStart(2, "0")}-${String(namedDay).padStart(2, "0")}`;
+    }
+  }
   const m = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (!m) return raw;
   const day = Number(m[1]);
@@ -1418,6 +1431,139 @@ function normalizeInvoiceDateInput(value) {
   )}`;
 }
 
+function topstarTokens(text) {
+  return String(text || "")
+    .replace(/[“”"]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+}
+
+function topstarSameToken(a, b) {
+  return String(a || "").toLowerCase() === String(b || "").toLowerCase();
+}
+
+function topstarIsSubsequence(needle, hay) {
+  let index = 0;
+  for (const token of hay) {
+    if (index < needle.length && topstarSameToken(token, needle[index])) index += 1;
+  }
+  return needle.length > 0 && index === needle.length;
+}
+
+function splitTopstarDescriptionAndCode(body) {
+  const tokens = topstarTokens(body);
+  if (tokens.length < 2) return { description: tokens.join(" "), code: "" };
+  for (let len = Math.min(6, tokens.length - 1); len >= 1; len -= 1) {
+    const suffix = tokens.slice(-len);
+    const head = tokens.slice(0, -len);
+    if (topstarIsSubsequence(suffix, head)) {
+      return { description: head.join(" "), code: suffix.join(" ") };
+    }
+  }
+  const last = tokens[tokens.length - 1];
+  const first = tokens[0];
+  if (
+    tokens.length >= 3 &&
+    first.toLowerCase().startsWith(last.toLowerCase()) &&
+    first.length > last.length
+  ) {
+    return { description: tokens.slice(1, -1).join(" "), code: last };
+  }
+  return { description: tokens.join(" "), code: "" };
+}
+
+function classifyTopstarLine(item) {
+  const code = String(item.partNumberCandidate || "").trim();
+  const desc = String(item.descriptionCandidate || "").trim();
+  const blob = `${desc} ${code}`;
+  if (/coolant/i.test(blob) && /\b(green|red)\b/i.test(blob)) {
+    const colour = /\bred\b/i.test(blob) ? "red" : "green";
+    const drums = Number(item.qtyCandidate) || 1;
+    const drumPrice = Number(item.costPriceCandidate) || 0;
+    return {
+      ...item,
+      descriptionCandidate: `Coolant ${colour}`,
+      partNumberCandidate: code || `COOLANT-${colour.toUpperCase()}`,
+      qtyCandidate: drums * 20,
+      costPriceCandidate: toMoney(drumPrice / 20),
+      decision: "pending",
+      confidence: 0.96,
+    };
+  }
+  if (/\bUJ-\w+/i.test(blob)) {
+    const zMatch = blob.match(/\(([^)]+)\)/);
+    const zText = zMatch ? zMatch[1].replace(/\s+/g, " ").trim() : "";
+    return {
+      ...item,
+      descriptionCandidate: zText ? `Oil filter ${zText}` : desc || code,
+      partNumberCandidate: (code.match(/UJ-\w+/i) || [code])[0],
+      decision: "pending",
+      confidence: 0.95,
+    };
+  }
+  if (/\bD\d[A-Z]\b/i.test(blob)) {
+    const name = /bulb/i.test(desc) ? desc : `Bulb ${desc || code}`;
+    return { ...item, descriptionCandidate: name, decision: "pending", confidence: 0.95 };
+  }
+  if (/\bPBM[SA]/i.test(blob)) {
+    const name = desc || code;
+    return {
+      ...item,
+      descriptionCandidate: /puncture|tyre repair/i.test(name) ? name : `${name} puncture repair`,
+      decision: "pending",
+      confidence: 0.94,
+    };
+  }
+  if (/\bT-?\d{1,2}\b/i.test(code) || /\bT-?\d{1,2}\b/i.test(desc)) {
+    const name = /wiper/i.test(desc) ? desc : `Wiper ${desc || code}`;
+    return { ...item, descriptionCandidate: name, decision: "pending", confidence: 0.95 };
+  }
+  return { ...item, decision: "consumable", confidence: 0.9 };
+}
+
+function parseTopstarRows(lines) {
+  const headerIndex = lines.findIndex(
+    (line) => /description/i.test(line) && /\bcode\b/i.test(line) && /qty/i.test(line)
+  );
+  if (headerIndex < 0) return [];
+  const items = [];
+  let buffer = [];
+  const flush = (joined) => {
+    const text = joined.replace(/\s+/g, " ").trim();
+    const priced = text.match(/^(.*?)(\d+\.\d{2})\s+(\d+\.\d{2})\s+(\d+\.\d{2})\s*$/);
+    const qtyOnly = text.match(/^(.*?)(\d+\.\d{2})\s*$/);
+    const match = priced || qtyOnly;
+    if (!match) return false;
+    const split = splitTopstarDescriptionAndCode(match[1]);
+    if (!split.description && !split.code) return false;
+    const row = classifyTopstarLine({
+      lineNo: items.length + 1,
+      rawLineText: text,
+      descriptionCandidate: split.description,
+      partNumberCandidate: split.code,
+      qtyCandidate: Number(match[2]) || 1,
+      costPriceCandidate: priced ? toMoney(match[3]) : 0,
+      confidence: 0.9,
+    });
+    items.push(row);
+    return true;
+  };
+  for (let i = headerIndex + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (/^--|^page\b|\d+\s+of\s+\d+/i.test(line)) continue;
+    if (/^(subtotal|freight|total|amount\s+due|payment|reference:|goods remain|overdue|any claims)/i.test(line)) {
+      break;
+    }
+    if (/^(notes|shipping address|bill to)\b/i.test(line)) continue;
+    buffer.push(line);
+    const joined = buffer.join(" ");
+    if (flush(joined)) buffer = [];
+  }
+  return items;
+}
+
 function parseSupplierInvoiceText(rawText) {
   const text = String(rawText || "");
   const lines = text
@@ -1425,24 +1571,44 @@ function parseSupplierInvoiceText(rawText) {
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const supplierLine =
-    lines.find((line) => /repco|bnt|supercheap|napa|partsmaster|autoparts/i.test(line)) ||
-    lines.find((line) => /^[A-Z][A-Z\s&.'-]{2,}$/.test(line) && !/invoice|bill to|date/i.test(line)) ||
-    "";
-  const supplier = supplierLine.replace(/\s+sample.*$/i, "").trim();
+  const topstar = /top\s*star/i.test(text);
+  const supplierLine = topstar
+    ? "Topstar New Zealand"
+    : lines.find((line) => /repco|bnt|supercheap|napa|partsmaster|autoparts/i.test(line)) ||
+      lines.find((line) => /^[A-Z][A-Z\s&.'-]{2,}$/.test(line) && !/invoice|bill to|date/i.test(line)) ||
+      "";
+  const supplier = topstar ? "Topstar New Zealand" : supplierLine.replace(/\s+sample.*$/i, "").trim();
 
+  const invoiceNoLine = lines.findIndex((line) => /^invoice\s*number$/i.test(line));
   const invoiceNo =
+    (invoiceNoLine >= 0 ? lines[invoiceNoLine + 1] : "") ||
     (text.match(
       /(?:sample\s*no|invoice\s*(?:number|no|#)|tax\s*invoice\s*(?:number|no|#)|inv\s*#)\s*[:\-]?\s*([A-Z0-9-]+)/i
-    ) || [])[1] || "";
-  const dateRaw = (text.match(/(?:invoice\s*)?date\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i) || [])[1] || "";
+    ) || [])[1] ||
+    "";
+  const invoiceDateLine = lines.findIndex((line) => /^invoice\s*date$/i.test(line));
+  const dateRaw =
+    (invoiceDateLine >= 0 ? lines[invoiceDateLine + 1] : "") ||
+    (text.match(/invoice\s*date\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i) || [])[1] ||
+    "";
   const invoiceDate = normalizeInvoiceDateInput(dateRaw);
-  const subtotal = Number((text.match(/subtotal[^\d$]*\$?\s*(\d+(?:\.\d{1,2})?)/i) || [])[1] || 0);
-  const tax = Number((text.match(/(?:gst|tax)[^\d$]*\$?\s*(\d+(?:\.\d{1,2})?)/i) || [])[1] || 0);
-  const total = Number((text.match(/(?:^|\n)\s*total[^\d$]*\$?\s*(\d+(?:\.\d{1,2})?)/im) || [])[1] || 0);
+  const subtotal = Number(
+    (text.match(/subtotal\s*([\d,]+(?:\.\d{1,2})?)/i) || [])[1]?.replace(/,/g, "") || 0
+  );
+  const tax = Number(
+    (text.match(/total\s*gst\s*\d+%\s*([\d,]+(?:\.\d{1,2})?)/i) || [])[1]?.replace(/,/g, "") || 0
+  );
+  const total = Number(
+    (text.match(/total\(nzd\)\s*([\d,]+(?:\.\d{1,2})?)/i) ||
+      text.match(/\btotal\s+([\d,]+(?:\.\d{1,2})?)/i) ||
+      [])[1]?.replace(/,/g, "") || 0
+  );
 
   let candidates = [];
-  const headerIndex = lines.findIndex((line) =>
+  if (topstar) candidates = parseTopstarRows(lines);
+  const headerIndex = topstar
+    ? -1
+    : lines.findIndex((line) =>
     /qty.*description.*(?:part\s*no|part\s*number).*unit.*total/i.test(line)
   );
   if (headerIndex >= 0) {
@@ -1468,6 +1634,10 @@ function parseSupplierInvoiceText(rawText) {
   if (!candidates.length) {
     candidates = parseCandidatesFromRawText(text, supplier);
   }
+  candidates = candidates.map((row) => ({
+    ...row,
+    supplierCandidate: row.supplierCandidate || supplier,
+  }));
   return {
     supplier,
     invoiceNo: String(invoiceNo || "").trim(),
@@ -8188,7 +8358,7 @@ app.post(
           costPriceCandidate: line.costPriceCandidate,
           supplierCandidate: line.supplierCandidate || created.supplier,
           confidence: line.confidence ?? 0.7,
-          decision: "pending",
+          decision: row.decision === "consumable" ? "consumable" : "pending",
           createdAt: now,
           updatedAt: now,
         })
@@ -8434,7 +8604,7 @@ app.post("/api/supplier-invoices/:invoiceId/parse", requireOwnerAdmin, (req, res
       costPriceCandidate: row.costPriceCandidate,
       supplierCandidate: row.supplierCandidate || invoice.supplier,
       confidence: row.confidence,
-      decision: "pending",
+      decision: row.decision === "consumable" ? "consumable" : "pending",
       createdAt: now,
       updatedAt: now,
     })
