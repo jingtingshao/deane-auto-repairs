@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20261002stock" />
+    <link rel="stylesheet" href="admin.css?v=20261004supplierclean" />
     <link rel="stylesheet" href="admin-refresh.css?v=20261002yellow" />
   </head>
   <body>
@@ -440,7 +440,7 @@
 
         <section id="supplier-invoices-section" hidden>
           <section id="supplier-invoices-list-view">
-            <p class="muted small">Import a PDF or a photo of a handwritten invoice. Company name, address, and email are not parts. Saving the invoice does not change stock. Use Add to stock on a line and type the shelf quantity — a whole box is not the same as one piece. The same line is only added once. Consumables and tools roll into this month’s spend.</p>
+            <p class="muted small">Import supplier invoices, check the extracted parts, then use Add to stock only for the lines you want on the shelf. Saving an invoice does not change stock.</p>
             <p id="supplier-month-consumables" class="supplier-month-summary" hidden></p>
             <label class="list-search">
               Search supplier invoices
@@ -465,7 +465,6 @@
               <button type="button" id="btn-supplier-invoice-back" class="ghost">← All supplier invoices</button>
               <div class="edit-actions">
                 <button type="button" id="btn-supplier-invoice-save" class="primary">Save invoice</button>
-                <button type="button" id="btn-supplier-invoice-auto-match" class="ghost">Auto match</button>
                 <button type="button" id="btn-supplier-invoice-delete" class="danger" hidden>Delete</button>
               </div>
             </div>
@@ -474,7 +473,7 @@
             <form id="supplier-invoice-form" class="report-form">
               <fieldset>
                 <legend>① Upload Supplier Invoice</legend>
-                <p class="muted small">Upload your Repco / BNT / PartMaster invoice. We'll extract invoice details automatically. The uploaded file is kept with this record.</p>
+                <p class="muted small">Upload PDF or photo. We read the supplier, invoice number, total, and part lines. Company name, address, and email are ignored.</p>
                 <div class="photo-row">
                   <label class="file-label">
                     Choose files
@@ -493,21 +492,26 @@
                   <label>Supplier<input name="supplier" required /></label>
                   <label>Invoice #<input name="invoiceNo" required /></label>
                   <label>Invoice date<input name="invoiceDate" type="date" /></label>
-                  <label>Subtotal<input name="subtotal" type="number" min="0" step="0.01" /></label>
-                  <label>Tax<input name="tax" type="number" min="0" step="0.01" /></label>
                   <label>Total<input name="total" type="number" min="0" step="0.01" /></label>
                 </div>
-                <label>Notes<textarea name="notes" rows="2"></textarea></label>
+                <details class="supplier-compact-details">
+                  <summary>More invoice fields</summary>
+                  <div class="grid-3">
+                    <label>Subtotal<input name="subtotal" type="number" min="0" step="0.01" /></label>
+                    <label>Tax<input name="tax" type="number" min="0" step="0.01" /></label>
+                  </div>
+                  <label>Notes<textarea name="notes" rows="2"></textarea></label>
+                </details>
               </fieldset>
 
               <fieldset>
                 <legend>③ Extracted Items (Parts / Lines)</legend>
-                <p class="muted small">Review extracted lines: Accept onto a job, mark as Consumable or Tool (not for one car), or Ignore. Those lines count as matched and are tracked for monthly spend.</p>
+                <p class="muted small">Check part name, part number, qty, and cost. Add to stock is manual, so boxes and litres can be entered correctly.</p>
                 <div id="supplier-candidates-list" class="supplier-candidates"></div>
               </fieldset>
 
-              <fieldset>
-                <legend>④ Matched supplier cost</legend>
+              <details class="supplier-compact-details">
+                <summary>Cost tracking</summary>
                 <div id="supplier-cost-tracking" class="supplier-cost-tracking">
                   <div><span>Matched to jobs</span><strong id="track-supplier-cost">$0.00</strong></div>
                   <div><span>Consumables</span><strong id="track-consumable-cost">$0.00</strong></div>
@@ -516,10 +520,13 @@
                   <div><span>Ignored</span><strong id="track-ignored-cost">$0.00</strong></div>
                 </div>
                 <p class="muted small">Matched = job parts. Consumables / Tools = workshop purchases not charged to a vehicle. Ignored = discarded lines.</p>
-              </fieldset>
+              </details>
 
               <details class="supplier-ocr-advanced">
-                <summary>Advanced OCR text (admin)</summary>
+                <summary>Advanced tools</summary>
+                <div class="line-actions">
+                  <button type="button" id="btn-supplier-invoice-auto-match" class="ghost">Auto match to jobs</button>
+                </div>
                 <label>OCR raw text<textarea id="supplier-invoice-raw-text" rows="6" placeholder="Paste OCR text here only if automatic extraction needs help"></textarea></label>
                 <div class="line-actions">
                   <button type="button" id="btn-supplier-invoice-parse" class="ghost">Re-parse OCR text</button>
@@ -975,7 +982,7 @@
     <script src="jobs.js?v=20261001stock"></script>
     <script src="billing.js?v=20261001stock"></script>
     <script src="inventory.js?v=20261002manual"></script>
-    <script src="supplier-invoices.js?v=20261002topstar"></script>
+    <script src="supplier-invoices.js?v=20261004supplierclean"></script>
     <script src="customers.js?v=20260906techcustomers"></script>
     <script src="referrals.js?v=20260906usedon"></script>
     <script src="sms-inbox.js?v=20260830yesno"></script>

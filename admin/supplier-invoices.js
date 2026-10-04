@@ -512,7 +512,13 @@ async function importInvoiceFile(file) {
   editView.hidden = false;
   Admin.setSection("supplier_invoices");
   Admin.setViewTitle(current.invoiceNo || "Supplier invoice");
-  showStatus("Invoice imported. Use Add to stock on each line you want on the shelf.", 5000);
+  const lineCount = Number(result.candidates?.length) || candidates.length || 0;
+  const supplier = current.supplier || result.parsed?.supplier || "Supplier";
+  const topstarNote = /topstar/i.test(supplier) ? " Topstar lines are parts from the Description column." : "";
+  showStatus(
+    `${supplier} imported: ${lineCount} part line${lineCount === 1 ? "" : "s"} read.${topstarNote} Use Add to stock only for shelf quantity.`,
+    7000
+  );
 }
 
 function renderTracking() {
@@ -959,18 +965,20 @@ function renderCandidates() {
   ).length;
 
   candidatesEl.innerHTML = `
-    <div class="supplier-candidate-bulk">
-      <label class="check">
-        <input type="checkbox" id="supplier-candidates-select-all" ${allPendingSelected ? "checked" : ""} />
-        Select all pending
-      </label>
-      <span class="muted small">${selectedCount} selected</span>
-      <button type="button" class="ghost" id="btn-candidates-bulk-accept"${selectedCount ? "" : " disabled"}>Accept</button>
-      <button type="button" class="ghost" id="btn-candidates-bulk-edit-accept"${selectedCount ? "" : " disabled"}>Change Job + Accept</button>
-      <button type="button" class="ghost" id="btn-candidates-bulk-consumable"${selectedCount ? "" : " disabled"}>Consumable</button>
-      <button type="button" class="ghost" id="btn-candidates-bulk-tool"${selectedCount ? "" : " disabled"}>Tool</button>
-      <button type="button" class="danger" id="btn-candidates-bulk-reject"${selectedCount ? "" : " disabled"}>Ignore</button>
-    </div>
+    <details class="supplier-batch-tools">
+      <summary>Batch tools (${selectedCount} selected)</summary>
+      <div class="supplier-candidate-bulk">
+        <label class="check">
+          <input type="checkbox" id="supplier-candidates-select-all" ${allPendingSelected ? "checked" : ""} />
+          Select all pending
+        </label>
+        <button type="button" class="ghost" id="btn-candidates-bulk-consumable"${selectedCount ? "" : " disabled"}>Consumable</button>
+        <button type="button" class="danger" id="btn-candidates-bulk-reject"${selectedCount ? "" : " disabled"}>Ignore</button>
+        <button type="button" class="ghost" id="btn-candidates-bulk-accept"${selectedCount ? "" : " disabled"}>Accept to job</button>
+        <button type="button" class="ghost" id="btn-candidates-bulk-edit-accept"${selectedCount ? "" : " disabled"}>Change job + accept</button>
+        <button type="button" class="ghost" id="btn-candidates-bulk-tool"${selectedCount ? "" : " disabled"}>Tool</button>
+      </div>
+    </details>
     <div class="line-table-wrap">
       <table class="line-table supplier-lines-table">
         <thead>
@@ -980,8 +988,6 @@ function renderCandidates() {
             <th><span class="th-two-line">PART<br />NAME</span></th>
             <th><span class="th-two-line">PART<br />NUMBER</span></th>
             <th>Cost ex GST</th>
-            <th>Job</th>
-            <th>Rego</th>
             <th>Status</th>
             <th>Action</th>
           </tr>
@@ -998,42 +1004,46 @@ function renderCandidates() {
               const tool = row.decision === "tool";
               const fieldsLocked = !pending && !editing;
               const disabled = fieldsLocked ? " disabled" : "";
-              const rego = findJob(selectedJobId)?.registration || "—";
               const statusHtml = renderStatusPill(row, selectedJobId);
               const unmatchBtn = `<button type="button" class="danger" data-action="unmatch">Unmatch</button>`;
+              const jobTools = `<details class="supplier-row-more">
+                <summary>More</summary>
+                <div class="job-picker">
+                  <input type="hidden" data-field="jobId" value="${Admin.escapeAttr(selectedJobId)}" />
+                  <button type="button" class="job-picker-toggle" data-job-picker-toggle${fieldsLocked ? " disabled" : ""}>
+                    ${Admin.escapeHtml(jobPickerLabel(findJob(selectedJobId)))}
+                  </button>
+                </div>
+                <div class="muted small supplier-suggestion">${Admin.escapeHtml(rowJobCell(row, selectedJobId))}</div>
+                <button type="button" class="ghost" data-action="smart-match"${pending ? "" : " disabled"}>Smart Match</button>
+                <button type="button" class="ghost" data-action="accept"${pending ? "" : " disabled"}>Accept to job</button>
+                <button type="button" class="ghost" data-action="edit-accept"${pending ? "" : " disabled"}>Change Job</button>
+                <button type="button" class="ghost" data-action="tool"${pending ? "" : " disabled"}>Tool</button>
+              </details>`;
               const actions = matched
                 ? editing
                   ? `<button type="button" class="primary" data-action="save-matched">Save</button>
-                  <button type="button" class="ghost" data-action="cancel-edit">Cancel</button>`
+                  <button type="button" class="ghost" data-action="cancel-edit">Cancel</button>
+                  ${jobTools}`
                   : `${unmatchBtn}
-                  <button type="button" class="ghost" data-action="start-edit">Edit</button>`
+                  <details class="supplier-row-more">
+                    <summary>More</summary>
+                    <button type="button" class="ghost" data-action="start-edit">Edit matched line</button>
+                  </details>`
                 : ignored || consumable || tool
                   ? `<button type="button" class="ghost" data-action="unmatch">Restore</button>
                   ${ignored ? "" : `<button type="button" class="ghost" data-action="stock">Add to stock</button>`}`
                 : `${selectedJobId ? unmatchBtn : ""}
-                  <button type="button" class="ghost" data-action="smart-match"${pending ? "" : " disabled"}>Smart Match</button>
                   <button type="button" class="ghost" data-action="stock">Add to stock</button>
-                  <button type="button" class="ghost" data-action="accept"${pending ? "" : " disabled"}>Accept</button>
-                  <button type="button" class="ghost" data-action="edit-accept"${pending ? "" : " disabled"}>Change Job</button>
                   <button type="button" class="ghost" data-action="consumable"${pending ? "" : " disabled"}>Consumable</button>
-                  <button type="button" class="ghost" data-action="tool"${pending ? "" : " disabled"}>Tool</button>
-                  <button type="button" class="danger" data-action="reject"${pending ? "" : " disabled"}>Ignore</button>`;
+                  <button type="button" class="danger" data-action="reject"${pending ? "" : " disabled"}>Ignore</button>
+                  ${jobTools}`;
               return `<tr data-id="${Admin.escapeAttr(row.id)}" class="${matched ? "is-matched" : ""} ${editing ? "is-editing" : ""}">
                 <td><input type="checkbox" data-select-candidate ${selectedCandidateIds.has(row.id) ? "checked" : ""}${pending ? "" : " disabled"} /></td>
                 <td><input data-field="qty" type="number" min="1" step="1" inputmode="numeric" value="${Admin.escapeAttr(String(Math.max(1, Math.round(Number(row.qtyCandidate) || 1))))}"${disabled} /></td>
                 <td><input data-field="description" value="${Admin.escapeAttr(row.descriptionCandidate || "")}"${disabled} /></td>
                 <td><input data-field="partNumber" value="${Admin.escapeAttr(row.partNumberCandidate || "")}"${disabled} /></td>
                 <td><input data-field="costPrice" type="number" min="0" step="0.01" value="${Admin.escapeAttr(String(row.costPriceCandidate ?? 0))}"${disabled} /></td>
-                <td class="supplier-job-cell">
-                  <div class="job-picker">
-                    <input type="hidden" data-field="jobId" value="${Admin.escapeAttr(selectedJobId)}" />
-                    <button type="button" class="job-picker-toggle" data-job-picker-toggle${fieldsLocked ? " disabled" : ""}>
-                      ${Admin.escapeHtml(jobPickerLabel(findJob(selectedJobId)))}
-                    </button>
-                  </div>
-                  <div class="muted small supplier-suggestion">${Admin.escapeHtml(rowJobCell(row, selectedJobId))}</div>
-                </td>
-                <td class="supplier-rego">${Admin.escapeHtml(rego)}</td>
                 <td class="supplier-line-status">${statusHtml}</td>
                 <td class="supplier-line-actions">
                   ${actions}
