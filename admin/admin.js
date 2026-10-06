@@ -177,7 +177,7 @@ function setOverline(text) {
 
 function setSection(name) {
   if (name === "billing") name = "quotes";
-  if (isTechnician() && (name === "dashboard" || name === "referrals" || name === "sms_inbox" || name === "supplier_invoices" || name === "stock")) {
+  if (isTechnician() && (name === "dashboard" || name === "referrals" || name === "sms_inbox" || name === "supplier_invoices" || name === "suppliers" || name === "stock")) {
     name = "calendar";
   }
   const dashboardSection = document.getElementById("dashboard-section");
@@ -189,6 +189,7 @@ function setSection(name) {
   const jobsSection = document.getElementById("jobs-section");
   const calendarSection = document.getElementById("calendar-section");
   const supplierInvoicesSection = document.getElementById("supplier-invoices-section");
+  const suppliersSection = document.getElementById("suppliers-section");
   const stockSection = document.getElementById("stock-section");
   const btnNew = document.getElementById("btn-new");
   const billingOpen = name === "quotes" || name === "invoices";
@@ -202,10 +203,12 @@ function setSection(name) {
   if (jobsSection) jobsSection.hidden = name !== "jobs";
   if (calendarSection) calendarSection.hidden = name !== "calendar";
   if (supplierInvoicesSection) supplierInvoicesSection.hidden = name !== "supplier_invoices";
+  if (suppliersSection) suppliersSection.hidden = name !== "suppliers";
   if (stockSection) stockSection.hidden = name !== "stock";
   if (btnNew) {
     if (
       name === "supplier_invoices" ||
+      name === "suppliers" ||
       name === "stock" ||
       name === "calendar" ||
       name === "sms_inbox" ||
@@ -228,6 +231,7 @@ function setSection(name) {
     jobs: "nav-jobs",
     calendar: "nav-calendar",
     supplier_invoices: "nav-supplier-invoices",
+    suppliers: "nav-suppliers",
     stock: "nav-stock",
   };
   Object.entries(navMap).forEach(([section, id]) => {
@@ -258,6 +262,10 @@ function setSection(name) {
   if (name === "supplier_invoices") {
     setOverline("PARTS INVOICES");
     viewTitle.textContent = "Supplier invoices";
+  }
+  if (name === "suppliers") {
+    setOverline("SUPPLIERS");
+    viewTitle.textContent = "Suppliers";
   }
   if (name === "stock") {
     setOverline("STOCK");
@@ -685,6 +693,11 @@ document.getElementById("nav-calendar")?.addEventListener("click", () => {
 document.getElementById("nav-supplier-invoices")?.addEventListener("click", () => {
   setSection("supplier_invoices");
   window.DeaneSupplierInvoices?.showList?.();
+});
+
+document.getElementById("nav-suppliers")?.addEventListener("click", () => {
+  setSection("suppliers");
+  window.DeaneSuppliers?.showList?.();
 });
 
 document.getElementById("nav-stock")?.addEventListener("click", () => {

@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20261004supplierclean" />
+    <link rel="stylesheet" href="admin.css?v=20261006suppliers" />
     <link rel="stylesheet" href="admin-refresh.css?v=20261002yellow" />
   </head>
   <body>
@@ -41,6 +41,7 @@
           <button type="button" id="nav-calendar"><b>▣</b> Calendar <i id="nav-calendar-count" hidden>0</i></button>
           <button type="button" id="nav-jobs"><b>▤</b> Job board <i id="nav-jobs-count" hidden>0</i></button>
           <button type="button" id="nav-supplier-invoices" data-admin-only><b>◫</b> Parts invoices</button>
+          <button type="button" id="nav-suppliers" data-admin-only><b>◇</b> Suppliers</button>
           <button type="button" id="nav-stock" data-admin-only><b>◈</b> Stock</button>
           <button type="button" id="nav-quotes"><b>$</b> Quotes <i id="nav-quotes-count" hidden>0</i></button>
           <button type="button" id="nav-invoices"><b>$</b> Invoices <i id="nav-invoices-count" hidden>0</i></button>
@@ -540,6 +541,24 @@
           </section>
         </section>
 
+        <section id="suppliers-section" hidden>
+          <p id="suppliers-status" class="status-line" hidden></p>
+          <section id="suppliers-list-view">
+            <p class="muted small">Suppliers come from saved parts invoices. Open one to see the last delivery and the parts on that invoice.</p>
+            <label class="list-search">
+              Search suppliers
+              <input id="suppliers-search" type="search" placeholder="Supplier name" autocomplete="off" />
+            </label>
+            <div id="suppliers-list" class="report-list"></div>
+          </section>
+          <section id="suppliers-detail-view" hidden>
+            <div class="edit-toolbar">
+              <button type="button" id="btn-suppliers-back" class="ghost">← All suppliers</button>
+            </div>
+            <div id="suppliers-detail"></div>
+          </section>
+        </section>
+
         <section id="stock-section" hidden>
           <p class="muted small">Parts are priced each. Engine oil, coolant, brake fluid, ATF, power steering fluid, and AdBlue are priced per litre. Stock goes up only when you choose Add to stock on a parts invoice, and you set the quantity. If the writing will not read, type the part here.</p>
           <details class="markup-details">
@@ -976,13 +995,14 @@
       </div>
     </div>
 
-    <script src="admin.js?v=20261001stock"></script>
+    <script src="admin.js?v=20261006suppliers"></script>
     <script src="dashboard.js?v=20260902backupfoot"></script>
     <script src="calendar.js?v=20260905staffrole"></script>
     <script src="jobs.js?v=20261001stock"></script>
     <script src="billing.js?v=20261001stock"></script>
     <script src="inventory.js?v=20261002manual"></script>
     <script src="supplier-invoices.js?v=20261004supplierclean"></script>
+    <script src="suppliers.js?v=20261006suppliers"></script>
     <script src="customers.js?v=20260906techcustomers"></script>
     <script src="referrals.js?v=20260906usedon"></script>
     <script src="sms-inbox.js?v=20260830yesno"></script>

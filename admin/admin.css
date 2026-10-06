@@ -903,6 +903,23 @@ label.check input {
   color: var(--blue);
 }
 
+.supplier-detail-block {
+  margin: 0 0 1.4rem;
+}
+
+.supplier-detail-block h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+}
+
+.supplier-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin: 0 0 0.85rem;
+}
+
 .supplier-line-hits {
   grid-column: 1 / -1;
   list-style: none;
