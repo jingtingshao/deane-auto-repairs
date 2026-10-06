@@ -2720,6 +2720,20 @@ label.check input {
   font-weight: 600;
 }
 
+#stock-receive-summary.is-cost-changed {
+  color: #8a4b00;
+  background: #fff8e1;
+  border: 1px solid #f0c36d;
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  font-weight: 700;
+}
+
+#stock-receive-form input.is-cost-changed {
+  border-color: #e6a100;
+  background: #fff8e1;
+}
+
 .stock-results {
   border: 1px solid var(--line);
   background: #fff;

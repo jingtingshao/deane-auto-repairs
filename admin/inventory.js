@@ -54,6 +54,8 @@
   let editingId = "";
   let sellTouched = false;
   let receiveSellTouched = false;
+  let receiveKeptSell = false;
+  let receiveLineAlready = false;
 
   const searchEl = document.getElementById("stock-search");
   const listEl = document.getElementById("stock-list");
@@ -95,6 +97,38 @@
       sellMaxIncl: incl(sellMax),
       sellIncl: incl(sellMin),
     };
+  }
+
+  function partKey(value) {
+    return String(value || "").replace(/\s+/g, "").toUpperCase();
+  }
+
+  function nameKey(value) {
+    return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  }
+
+  function findStockMatch(input) {
+    const category = String(input?.category || "");
+    const key = partKey(input?.partNumber);
+    if (key) {
+      const hits = items.filter((row) => row.category === category && partKey(row.partNumber) === key);
+      if (hits.length === 1) return hits[0];
+      if (hits.length > 1) {
+        const supplier = nameKey(input?.supplier);
+        return hits.find((row) => nameKey(row.supplier) === supplier) || hits[0];
+      }
+    }
+    const name = nameKey(input?.name);
+    const supplier = nameKey(input?.supplier);
+    if (!name || !category) return null;
+    return (
+      items.find(
+        (row) =>
+          row.category === category &&
+          nameKey(row.name) === name &&
+          nameKey(row.supplier) === supplier
+      ) || null
+    );
   }
 
   function guessCategory(text) {
@@ -410,6 +444,67 @@
     });
   }
 
+  function receiveMatchInput() {
+    if (!receiveForm) return {};
+    return {
+      category: receiveForm.elements.category.value,
+      name: receiveForm.elements.name.value,
+      partNumber: receiveForm.elements.partNumber.value,
+      supplier: receiveForm.elements.supplier.value,
+    };
+  }
+
+  function applySavedSell() {
+    if (!receiveForm || receiveSellTouched) return;
+    const match = findStockMatch(receiveMatchInput());
+    const saved = Number(match?.sellPrice);
+    if (match && saved > 0) {
+      receiveForm.elements.sellPrice.value = saved.toFixed(2);
+      receiveKeptSell = true;
+      return;
+    }
+    receiveKeptSell = false;
+    const guide = suggestPrice(receiveForm.elements.costPrice.value);
+    receiveForm.elements.sellPrice.value = guide.sell ? guide.sell.toFixed(2) : "";
+  }
+
+  function costsDiffer(match) {
+    if (!match || !receiveForm) return false;
+    const saved = Math.round((Number(match.costPrice) || 0) * 100);
+    const next = Math.round((Number(receiveForm.elements.costPrice.value) || 0) * 100);
+    return saved !== next;
+  }
+
+  function receiveSummary(prefill) {
+    const summary = document.getElementById("stock-receive-summary");
+    if (!summary || !receiveForm) return;
+    if (prefill && Object.prototype.hasOwnProperty.call(prefill, "already")) {
+      receiveLineAlready = Boolean(prefill.already);
+    }
+    const match = findStockMatch(receiveMatchInput());
+    const changed = Boolean(match) && receiveKeptSell && costsDiffer(match) && !receiveLineAlready;
+    summary.classList.toggle("is-cost-changed", changed);
+    receiveForm.elements.costPrice.classList.toggle("is-cost-changed", changed);
+    if (receiveLineAlready) {
+      summary.textContent = "This invoice line is already in stock. Adding it again will not increase the quantity.";
+      return;
+    }
+    if (changed) {
+      const sell = money(Number(receiveForm.elements.sellPrice.value) || 0);
+      const from = money(match.costPrice);
+      const to = money(Number(receiveForm.elements.costPrice.value) || 0);
+      summary.textContent = receiveSellTouched
+        ? `Cost changed from ${from} to ${to}. Sell price is now ${sell}.`
+        : `Cost changed from ${from} to ${to}. Sell price stays at the last retail price, ${sell}. Check it before saving.`;
+      return;
+    }
+    const bits = [prefill?.supplier, prefill?.invoiceNo ? `Invoice ${prefill.invoiceNo}` : ""].filter(Boolean);
+    const shelf = `${bits.join(" · ")}${bits.length ? ". " : ""}Qty is what goes on the shelf. If this line is a whole box, type how many pieces are in the box.`;
+    summary.textContent = receiveKeptSell
+      ? `${shelf} Sell price is the last retail price, ${money(Number(receiveForm.elements.sellPrice.value) || 0)}.`
+      : shelf;
+  }
+
   async function openReceive(prefill = {}) {
     if (!receiveDialog || !receiveForm) return;
     if (!categories.length) {
@@ -420,7 +515,14 @@
         return;
       }
     }
+    try {
+      items = await Admin.api("/api/inventory");
+      if (!Array.isArray(items)) items = [];
+    } catch {
+      if (!Array.isArray(items)) items = [];
+    }
     receiveSellTouched = false;
+    receiveKeptSell = false;
     const name = String(prefill.name || "").trim();
     const guessed = prefill.category || guessCategory(`${name} ${prefill.partNumber || ""}`);
     fillCategorySelect(receiveForm.elements.category, guessed);
@@ -433,15 +535,8 @@
     receiveForm.elements.candidateId.value = prefill.candidateId || "";
     receiveForm.elements.supplierInvoiceId.value = prefill.supplierInvoiceId || "";
     receiveForm.elements.invoiceNo.value = prefill.invoiceNo || "";
-    const guide = suggestPrice(prefill.costPrice);
-    receiveForm.elements.sellPrice.value = guide.sell ? guide.sell.toFixed(2) : "";
-    const summary = document.getElementById("stock-receive-summary");
-    if (summary) {
-      const bits = [prefill.supplier, prefill.invoiceNo ? `Invoice ${prefill.invoiceNo}` : ""].filter(Boolean);
-      summary.textContent = prefill.already
-        ? "This invoice line is already in stock. Adding it again will not increase the quantity."
-        : `${bits.join(" · ")}${bits.length ? ". " : ""}Qty is what goes on the shelf. If this line is a whole box, type how many pieces are in the box.`;
-    }
+    applySavedSell();
+    receiveSummary(prefill);
     receiveDialog.hidden = false;
     renderReceiveGuide();
     if (!guessed) receiveForm.elements.category.focus();
@@ -519,15 +614,42 @@
 
   searchEl?.addEventListener("input", renderList);
 
-  receiveForm?.elements?.category?.addEventListener("change", renderReceiveGuide);
-  receiveForm?.elements?.costPrice?.addEventListener("input", () => {
-    const guide = suggestPrice(receiveForm.elements.costPrice.value);
-    if (!receiveSellTouched) receiveForm.elements.sellPrice.value = guide.sell ? guide.sell.toFixed(2) : "";
+  receiveForm?.elements?.category?.addEventListener("change", () => {
+    applySavedSell();
+    receiveSummary({
+      supplier: receiveForm.elements.supplier.value,
+      invoiceNo: receiveForm.elements.invoiceNo.value,
+    });
     renderReceiveGuide();
+  });
+  ["name", "partNumber", "supplier"].forEach((field) => {
+    receiveForm?.elements?.[field]?.addEventListener("input", () => {
+      applySavedSell();
+      receiveSummary({
+        supplier: receiveForm.elements.supplier.value,
+        invoiceNo: receiveForm.elements.invoiceNo.value,
+      });
+      renderReceiveGuide();
+    });
+  });
+  receiveForm?.elements?.costPrice?.addEventListener("input", () => {
+    if (!receiveSellTouched && !receiveKeptSell) {
+      const guide = suggestPrice(receiveForm.elements.costPrice.value);
+      receiveForm.elements.sellPrice.value = guide.sell ? guide.sell.toFixed(2) : "";
+    }
+    renderReceiveGuide();
+    receiveSummary({
+      supplier: receiveForm.elements.supplier.value,
+      invoiceNo: receiveForm.elements.invoiceNo.value,
+    });
   });
   receiveForm?.elements?.sellPrice?.addEventListener("input", () => {
     receiveSellTouched = true;
     renderReceiveGuide();
+    receiveSummary({
+      supplier: receiveForm.elements.supplier.value,
+      invoiceNo: receiveForm.elements.invoiceNo.value,
+    });
   });
   document.getElementById("btn-stock-receive-cancel")?.addEventListener("click", closeReceive);
   receiveDialog?.addEventListener("click", (event) => {
@@ -554,6 +676,13 @@
     if (!body.category) {
       alert("Choose a category. Handwritten lines need a category before they go into stock.");
       return;
+    }
+    const match = findStockMatch(receiveMatchInput());
+    if (!receiveLineAlready && match && receiveKeptSell && costsDiffer(match) && !receiveSellTouched) {
+      const keep = confirm(
+        `Cost changed from ${money(match.costPrice)} to ${money(body.costPrice)}. Keep the last retail price ${money(body.sellPrice)}?`
+      );
+      if (!keep) return;
     }
     try {
       const result = await Admin.api("/api/inventory/receive", {
