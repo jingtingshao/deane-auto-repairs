@@ -961,9 +961,9 @@
           <label>Part name<input name="name" required /></label>
           <label>Part number<input name="partNumber" /></label>
           <label>Supplier<input name="supplier" list="stock-suppliers" /></label>
-          <label>Qty<input name="qty" type="number" min="0" step="0.1" value="1" /></label>
-          <label>Cost ex GST<input name="costPrice" type="number" min="0" step="0.01" /></label>
-          <label>Sell ex GST<input name="sellPrice" type="number" min="0" step="0.01" /></label>
+          <label><span data-receive-qty-label>Qty</span><input name="qty" type="number" min="0" step="0.1" value="1" /></label>
+          <label><span data-receive-cost-label>Cost ex GST</span><input name="costPrice" type="number" min="0" step="0.01" /></label>
+          <label><span data-receive-sell-label>Sell ex GST</span><input name="sellPrice" type="number" min="0" step="0.01" /></label>
           <label>Fits<input name="fitment" placeholder="Car or model" /></label>
         </div>
         <input type="hidden" name="candidateId" />
@@ -1000,7 +1000,7 @@
     <script src="calendar.js?v=20260905staffrole"></script>
     <script src="jobs.js?v=20261006jobstock"></script>
     <script src="billing.js?v=20261006jobstock"></script>
-    <script src="inventory.js?v=20261006costwarn"></script>
+    <script src="inventory.js?v=20261007oildrum"></script>
     <script src="supplier-invoices.js?v=20261006instock"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>
     <script src="customers.js?v=20260906techcustomers"></script>

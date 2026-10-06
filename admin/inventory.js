@@ -159,14 +159,36 @@
     }
   }
 
-  function guideText(cost, sell) {
+  function guideText(cost, sell, unitKind) {
     const guide = suggestPrice(cost);
     const chosen = Number(sell);
     const sellPrice = Number.isFinite(chosen) ? Math.round(chosen * 100) / 100 : guide.sell;
     const incl = Math.round(sellPrice * 1.15 * 100) / 100;
-    if (!(guide.cost > 0)) return "Enter the supplier cost to see the suggested sell price.";
-    const unit = currentUnit() === "litre" ? " per litre" : "";
-    return `Markup ${guide.markupMin}–${guide.markupMax}% (${guide.band}). Suggested sell ${money(guide.sellMin)}–${money(guide.sellMax)} ex GST${unit} (${money(guide.sellMinIncl)}–${money(guide.sellMaxIncl)} incl). This sell price is ${money(sellPrice)} ex GST, ${money(incl)} incl.`;
+    const per = unitKind === "litre" ? " per litre" : "";
+    if (!(guide.cost > 0)) {
+      return unitKind === "litre"
+        ? "Enter the drum cost and how many litres are in it. The sell price is per litre."
+        : "Enter the supplier cost to see the suggested sell price.";
+    }
+    return `Markup ${guide.markupMin}–${guide.markupMax}% (${guide.band}). Suggested sell ${money(guide.sellMin)}–${money(guide.sellMax)}${per} ex GST (${money(guide.sellMinIncl)}–${money(guide.sellMaxIncl)} incl). This sell price is ${money(sellPrice)}${per} ex GST, ${money(incl)} incl.`;
+  }
+
+  function receiveUnitKind() {
+    if (!receiveForm) return "each";
+    return categoryById(receiveForm.elements.category.value)?.unit || "each";
+  }
+
+  function roundMoney(value) {
+    return Math.round((Number(value) || 0) * 100) / 100;
+  }
+
+  /** Fluids are bought by the drum. The cost field is that drum price; stock cost is per litre. */
+  function receiveShelfCost() {
+    const cost = Number(receiveForm?.elements?.costPrice?.value) || 0;
+    if (receiveUnitKind() !== "litre") return roundMoney(cost);
+    const litres = Number(receiveForm.elements.qty.value) || 0;
+    if (!(litres > 0)) return 0;
+    return roundMoney(cost / litres);
   }
 
   function currentUnit() {
@@ -197,7 +219,7 @@
 
   function renderGuide() {
     if (!guideEl || !form) return;
-    guideEl.textContent = guideText(form.elements.costPrice.value, form.elements.sellPrice.value);
+    guideEl.textContent = guideText(form.elements.costPrice.value, form.elements.sellPrice.value, currentUnit());
     const unit = currentUnit();
     const qtyLabel = form.querySelector("[data-qty-label]");
     const costLabel = form.querySelector("[data-cost-label]");
@@ -211,9 +233,23 @@
 
   function renderReceiveGuide() {
     if (!receiveGuide || !receiveForm) return;
-    const unit = categoryById(receiveForm.elements.category.value)?.unit || "each";
-    const text = guideText(receiveForm.elements.costPrice.value, receiveForm.elements.sellPrice.value);
-    receiveGuide.textContent = unit === "litre" ? text.replace(" ex GST", " per litre ex GST") : text;
+    const unit = receiveUnitKind();
+    const shelfCost = unit === "litre" ? receiveShelfCost() : Number(receiveForm.elements.costPrice.value) || 0;
+    let text = guideText(shelfCost, receiveForm.elements.sellPrice.value, unit);
+    if (unit === "litre") {
+      const litres = Number(receiveForm.elements.qty.value) || 0;
+      const drum = Number(receiveForm.elements.costPrice.value) || 0;
+      if (litres > 0 && drum > 0) {
+        text = `${formatQty(litres, "litre")} at ${money(drum)} for the drum is ${money(shelfCost)} per litre. ${text}`;
+      }
+    }
+    receiveGuide.textContent = text;
+    const qtyLabel = receiveForm.querySelector("[data-receive-qty-label]");
+    const costLabel = receiveForm.querySelector("[data-receive-cost-label]");
+    const sellLabel = receiveForm.querySelector("[data-receive-sell-label]");
+    if (qtyLabel) qtyLabel.textContent = unit === "litre" ? "Litres" : "Qty";
+    if (costLabel) costLabel.textContent = unit === "litre" ? "Drum cost ex GST" : "Cost ex GST";
+    if (sellLabel) sellLabel.textContent = unit === "litre" ? "Sell per litre ex GST" : "Sell ex GST";
   }
 
   async function loadMeta() {
@@ -464,14 +500,14 @@
       return;
     }
     receiveKeptSell = false;
-    const guide = suggestPrice(receiveForm.elements.costPrice.value);
+    const guide = suggestPrice(receiveShelfCost());
     receiveForm.elements.sellPrice.value = guide.sell ? guide.sell.toFixed(2) : "";
   }
 
   function costsDiffer(match) {
     if (!match || !receiveForm) return false;
     const saved = Math.round((Number(match.costPrice) || 0) * 100);
-    const next = Math.round((Number(receiveForm.elements.costPrice.value) || 0) * 100);
+    const next = Math.round(receiveShelfCost() * 100);
     return saved !== next;
   }
 
@@ -492,14 +528,19 @@
     if (changed) {
       const sell = money(Number(receiveForm.elements.sellPrice.value) || 0);
       const from = money(match.costPrice);
-      const to = money(Number(receiveForm.elements.costPrice.value) || 0);
+      const to = money(receiveShelfCost());
+      const per = receiveUnitKind() === "litre" ? " per litre" : "";
       summary.textContent = receiveSellTouched
-        ? `Cost changed from ${from} to ${to}. Sell price is now ${sell}.`
-        : `Cost changed from ${from} to ${to}. Sell price stays at the last retail price, ${sell}. Check it before saving.`;
+        ? `Cost changed from ${from} to ${to}${per}. Sell price is now ${sell}${per}.`
+        : `Cost changed from ${from} to ${to}${per}. Sell price stays at the last retail price, ${sell}${per}. Check it before saving.`;
       return;
     }
     const bits = [prefill?.supplier, prefill?.invoiceNo ? `Invoice ${prefill.invoiceNo}` : ""].filter(Boolean);
-    const shelf = `${bits.join(" · ")}${bits.length ? ". " : ""}Qty is what goes on the shelf. If this line is a whole box, type how many pieces are in the box.`;
+    const lead = bits.length ? `${bits.join(" · ")}. ` : "";
+    const shelf =
+      receiveUnitKind() === "litre"
+        ? `${lead}Bought by the drum, sold by the litre. Qty is the litres in the drum. Cost is the price of the whole drum.`
+        : `${lead}Qty is what goes on the shelf. If this line is a whole box, type how many pieces are in the box.`;
     summary.textContent = receiveKeptSell
       ? `${shelf} Sell price is the last retail price, ${money(Number(receiveForm.elements.sellPrice.value) || 0)}.`
       : shelf;
@@ -632,9 +673,10 @@
       renderReceiveGuide();
     });
   });
-  receiveForm?.elements?.costPrice?.addEventListener("input", () => {
+  function refreshReceivePrice() {
+    if (!receiveForm) return;
     if (!receiveSellTouched && !receiveKeptSell) {
-      const guide = suggestPrice(receiveForm.elements.costPrice.value);
+      const guide = suggestPrice(receiveShelfCost());
       receiveForm.elements.sellPrice.value = guide.sell ? guide.sell.toFixed(2) : "";
     }
     renderReceiveGuide();
@@ -642,7 +684,10 @@
       supplier: receiveForm.elements.supplier.value,
       invoiceNo: receiveForm.elements.invoiceNo.value,
     });
-  });
+  }
+
+  receiveForm?.elements?.qty?.addEventListener("input", refreshReceivePrice);
+  receiveForm?.elements?.costPrice?.addEventListener("input", refreshReceivePrice);
   receiveForm?.elements?.sellPrice?.addEventListener("input", () => {
     receiveSellTouched = true;
     renderReceiveGuide();
@@ -664,7 +709,7 @@
       supplier: receiveForm.elements.supplier.value.trim(),
       fitment: receiveForm.elements.fitment.value.trim(),
       qty: Number(receiveForm.elements.qty.value) || 0,
-      costPrice: Number(receiveForm.elements.costPrice.value) || 0,
+      costPrice: receiveShelfCost(),
       sellPrice: Number(receiveForm.elements.sellPrice.value) || 0,
       candidateId: receiveForm.elements.candidateId.value,
       supplierInvoiceId: receiveForm.elements.supplierInvoiceId.value,
@@ -680,7 +725,7 @@
     const match = findStockMatch(receiveMatchInput());
     if (!receiveLineAlready && match && receiveKeptSell && costsDiffer(match) && !receiveSellTouched) {
       const keep = confirm(
-        `Cost changed from ${money(match.costPrice)} to ${money(body.costPrice)}. Keep the last retail price ${money(body.sellPrice)}?`
+        `Cost changed from ${money(match.costPrice)} to ${money(body.costPrice)}${receiveUnitKind() === "litre" ? " per litre" : ""}. Keep the last retail price ${money(body.sellPrice)}?`
       );
       if (!keep) return;
     }
@@ -695,7 +740,7 @@
       flash(
         result.already
           ? "That invoice line is already in stock."
-          : `${result.item?.name || "Part"} added to stock at ${money(result.item?.sellPrice)} ex GST.`
+          : `${result.item?.name || "Part"} added to stock at ${money(result.item?.sellPrice)}${result.item?.unit === "litre" ? " per litre" : ""} ex GST.`
       );
     } catch (err) {
       alert(err.message);
