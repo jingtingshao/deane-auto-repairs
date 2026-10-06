@@ -821,12 +821,27 @@ function smartMatchForRow(row, rowEl) {
   return best;
 }
 
+function statusPill(tone, label) {
+  return `<span class="supplier-status-pill ${Admin.escapeAttr(tone)}"><span class="dot" aria-hidden="true"></span>${Admin.escapeHtml(label)}</span>`;
+}
+
 function renderStatusPill(row, selectedJobId) {
-  const status = candidateRowStatus(row, selectedJobId);
-  const stocked = row.stocked
-    ? `<span class="supplier-status-pill stocked"><span class="dot" aria-hidden="true"></span>In stock</span>`
-    : "";
-  return `<span class="supplier-status-pill ${Admin.escapeAttr(status.tone)}"><span class="dot" aria-hidden="true"></span>${Admin.escapeHtml(status.label)}</span>${stocked}`;
+  const pills = [];
+  if (row.decision === "consumable") pills.push(statusPill("consumable", "Consumable"));
+  else if (row.decision === "tool") pills.push(statusPill("tool", "Tool"));
+  else if (row.decision === "rejected") pills.push(statusPill("ignored", "Ignored"));
+  else if (isMatchedDecision(row.decision)) pills.push(statusPill("matched", "Matched"));
+  if (row.stocked) pills.push(statusPill("stocked", "In stock"));
+  if (!pills.length) {
+    const status = candidateRowStatus(row, selectedJobId);
+    pills.push(statusPill(status.tone, status.label));
+  }
+  return pills.join("");
+}
+
+function stockActionButton(row) {
+  const label = row.stocked ? "In stock" : "Add to stock";
+  return `<button type="button" class="ghost${row.stocked ? " is-done" : ""}" data-action="stock">${label}</button>`;
 }
 
 function refreshRowPreview(rowEl) {
@@ -1032,9 +1047,9 @@ function renderCandidates() {
                   </details>`
                 : ignored || consumable || tool
                   ? `<button type="button" class="ghost" data-action="unmatch">Restore</button>
-                  ${ignored ? "" : `<button type="button" class="ghost" data-action="stock">Add to stock</button>`}`
+                  ${ignored ? "" : stockActionButton(row)}`
                 : `${selectedJobId ? unmatchBtn : ""}
-                  <button type="button" class="ghost" data-action="stock">Add to stock</button>
+                  ${stockActionButton(row)}
                   <button type="button" class="ghost" data-action="consumable"${pending ? "" : " disabled"}>Consumable</button>
                   <button type="button" class="danger" data-action="reject"${pending ? "" : " disabled"}>Ignore</button>
                   ${jobTools}`;

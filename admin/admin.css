@@ -1510,6 +1510,20 @@ label.check input {
   padding-top: 0.7rem;
 }
 
+.supplier-lines-table .supplier-line-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  white-space: normal;
+}
+
+.supplier-line-actions .ghost.is-done {
+  background: #e8f5e9;
+  color: #1b5e20;
+  border-color: #a5d6a7;
+}
+
 .supplier-status-pill {
   display: inline-flex;
   align-items: center;
