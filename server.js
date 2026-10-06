@@ -867,6 +867,115 @@ function applyCustomerFieldsToJob(job, fields, overwrite = false) {
   return changed;
 }
 
+function stockPartKey(value) {
+  return String(value || "").replace(/\s+/g, "").toUpperCase();
+}
+
+function stockNameKey(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function resolveJobStockItem(items, part) {
+  const id = String(part?.stockItemId || "").trim();
+  if (id) {
+    const linked = items.find((row) => row.id === id);
+    if (linked) return linked;
+  }
+  const description = String(part?.description || "").trim();
+  if (!description || jobsLib.isNonPartInvoiceLine(description)) return null;
+  const wanted = stockPartKey(part?.partNumber);
+  const descKey = stockPartKey(description);
+  if (wanted.length >= 3 || descKey.length >= 3) {
+    const hits = items.filter((row) => {
+      const key = stockPartKey(row.partNumber);
+      if (key.length < 3) return false;
+      if (wanted && key === wanted) return true;
+      return descKey.includes(key);
+    });
+    if (hits.length === 1) return hits[0];
+  }
+  const name = stockNameKey(description);
+  if (name.length < 4) return null;
+  const named = items.filter((row) => {
+    const itemName = stockNameKey(row.name);
+    if (itemName.length < 4) return false;
+    return name === itemName || name.startsWith(`${itemName} `) || itemName.startsWith(`${name} `);
+  });
+  return named.length === 1 ? named[0] : null;
+}
+
+/** Take job parts off the shelf, or put them back when the qty drops or the line is removed. */
+function issueJobStock(job, previousParts) {
+  if (!job) return false;
+  const nextParts = Array.isArray(job.parts) ? job.parts : [];
+  const prevList = Array.isArray(previousParts) ? previousParts : nextParts;
+  const prevById = new Map(prevList.map((part) => [part.id, part]));
+  const nextIds = new Set(nextParts.map((part) => part.id));
+  const items = readInventoryItems();
+  const movements = readInventoryMovements();
+  const now = nowIso();
+  let changed = false;
+  const note = `Job ${job.number || ""}`.trim();
+
+  const adjust = (item, qtyDelta, movementNote) => {
+    const movement = inventoryLib.applyAdjust(
+      item,
+      { movementId: randomUUID(), qtyDelta, note: movementNote },
+      now
+    );
+    if (!movement.id) movement.id = randomUUID();
+    movements.push(movement);
+  };
+
+  for (const part of nextParts) {
+    const prev = prevById.get(part.id);
+    const issued = Math.max(0, Number(prev?.stockIssuedQty) || 0);
+    const item = resolveJobStockItem(items, { ...part, stockItemId: part.stockItemId || prev?.stockItemId || "" });
+    if (!item) {
+      part.stockIssuedQty = issued;
+      if (prev?.stockItemId) part.stockItemId = prev.stockItemId;
+      continue;
+    }
+    const qty = Math.max(0, Number(part.qty) || 0);
+    const delta = Math.round((qty - issued) * 1000) / 1000;
+    if (delta !== 0) {
+      try {
+        adjust(item, -delta, delta > 0 ? note : `${note} qty reduced`);
+        part.stockIssuedQty = qty;
+        changed = true;
+      } catch {
+        part.stockIssuedQty = issued;
+      }
+    } else {
+      part.stockIssuedQty = issued;
+    }
+    if (part.stockItemId !== item.id) {
+      part.stockItemId = item.id;
+      changed = true;
+    }
+  }
+
+  for (const prev of prevList) {
+    if (!prev?.id || nextIds.has(prev.id)) continue;
+    const issued = Math.max(0, Number(prev.stockIssuedQty) || 0);
+    if (!(issued > 0)) continue;
+    const item = items.find((row) => row.id === prev.stockItemId) || resolveJobStockItem(items, prev);
+    if (!item) continue;
+    try {
+      adjust(item, issued, `${note} part removed`);
+      changed = true;
+    } catch {
+      /* leave the shelf unchanged if the return cannot be recorded */
+    }
+  }
+
+  if (changed) {
+    writeInventoryItems(items);
+    writeInventoryMovements(movements);
+  }
+  return changed;
+}
+
 /** Create a job card from an accepted quote (or return the existing one). */
 function ensureJobFromAcceptedQuote(docs, quote, invoice) {
   if (!quote && !invoice) return null;
@@ -921,6 +1030,7 @@ function ensureJobFromAcceptedQuote(docs, quote, invoice) {
         if (existing.workRequested) changed = true;
       }
       existing.status = jobsLib.normalizeJobStatus(existing.status, existing.parts);
+      if (issueJobStock(existing)) changed = true;
       if (changed) {
         existing.updatedAt = nowIso();
         jobs[index] = existing;
@@ -947,6 +1057,7 @@ function ensureJobFromAcceptedQuote(docs, quote, invoice) {
     status: jobsLib.normalizeJobStatus("in_progress", parts),
   };
   linkJobToBilling(docs, job, quote || null, invoice || null);
+  issueJobStock(job);
   jobs.push(job);
   writeJobs(jobs);
   return { job, created: true };
@@ -966,7 +1077,9 @@ function syncJobFromInvoiceExtras(docs, invoice) {
   const jobs = readJobs();
   const index = jobs.findIndex((j) => j.id === ensured.job.id);
   if (index < 0) return ensured;
-  if (jobsLib.mergeNewParts(jobs[index], extras)) {
+  const merged = jobsLib.mergeNewParts(jobs[index], extras);
+  const issued = issueJobStock(jobs[index]);
+  if (merged || issued) {
     jobs[index].updatedAt = nowIso();
     writeJobs(jobs);
     ensured.job = jobs[index];
@@ -3328,6 +3441,7 @@ function normalizeLines(lines) {
     description: catalog.capitalizeLineDescription(line.description),
     qty: Math.max(0, Number(line.qty) || 0),
     unitPriceIncl: Math.max(0, Number(line.unitPriceIncl) || 0),
+    stockItemId: String(line.stockItemId || "").trim(),
   }));
 }
 
@@ -7903,17 +8017,25 @@ app.get("/api/jobs/:id", requireAdmin, (req, res) => {
     if (invoice && invoice.kind === "invoice") {
       try {
         syncJobFromInvoiceExtras(docs, invoice);
-        const latest = readJobs().find((j) => j.id === job.id);
-        if (latest) return res.json(latest);
       } catch (err) {
         console.error("Could not sync invoice parts onto job card:", err);
       }
     }
   }
+  const latestJobs = readJobs();
+  const latestIndex = latestJobs.findIndex((row) => row.id === req.params.id);
+  const latest = latestIndex >= 0 ? latestJobs[latestIndex] : job;
+  if (issueJobStock(latest)) {
+    latest.updatedAt = nowIso();
+    if (latestIndex >= 0) {
+      latestJobs[latestIndex] = latest;
+      writeJobs(latestJobs);
+    }
+  }
   res.json({
-    ...job,
-    workPhotos: sanitizePhotoRefs(job.workPhotos),
-    supplierInvoicePhotos: sanitizePhotoRefs(job.supplierInvoicePhotos),
+    ...latest,
+    workPhotos: sanitizePhotoRefs(latest.workPhotos),
+    supplierInvoicePhotos: sanitizePhotoRefs(latest.supplierInvoicePhotos),
   });
 });
 
@@ -7984,6 +8106,7 @@ app.put("/api/jobs/:id", requireAdmin, (req, res) => {
     const index = jobs.findIndex((j) => j.id === req.params.id);
     if (index < 0) return res.status(404).json({ error: "Job not found" });
     const current = jobs[index];
+    const previousParts = Array.isArray(current.parts) ? current.parts.map((part) => ({ ...part })) : [];
     jobs[index] = applyJobFields(current, req.body || {});
     jobs[index].id = current.id;
     jobs[index].number = current.number;
@@ -7992,6 +8115,7 @@ app.put("/api/jobs/:id", requireAdmin, (req, res) => {
     jobs[index].quoteNumber = current.quoteNumber;
     jobs[index].invoiceId = current.invoiceId;
     jobs[index].invoiceNumber = current.invoiceNumber;
+    issueJobStock(jobs[index], previousParts);
     writeJobs(jobs);
     res.json(jobs[index]);
   } catch (err) {
@@ -8001,11 +8125,13 @@ app.put("/api/jobs/:id", requireAdmin, (req, res) => {
 
 app.delete("/api/jobs/:id", requireAdmin, (req, res) => {
   const jobs = readJobs();
+  const removed = jobs.find((j) => j.id === req.params.id);
   const next = jobs.filter((j) => j.id !== req.params.id);
   if (next.length === jobs.length) {
     return res.status(404).json({ error: "Job not found" });
   }
   try {
+    if (removed) issueJobStock({ ...removed, parts: [] }, removed.parts);
     writeJobs(next);
     unlinkJobFromBilling(req.params.id);
     res.json({ ok: true });

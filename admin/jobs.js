@@ -676,6 +676,7 @@ function addPartFromStock(item) {
     supplier: item?.supplier || "",
     uom: item?.unit === "litre" ? "L" : "ea",
     source: "stock",
+    stockItemId: item?.id || "",
   });
   const last = partRows[partRows.length - 1];
   if (last && !String(last.description || "").trim() && !String(last.partNumber || "").trim()) {

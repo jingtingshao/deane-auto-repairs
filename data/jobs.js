@@ -137,6 +137,8 @@ function normalizePart(part = {}, idFallback = "") {
     supplierInvoiceDate: String(part.supplierInvoiceDate || "").trim(),
     status,
     source,
+    stockItemId: String(part.stockItemId || "").trim(),
+    stockIssuedQty: Math.max(0, Math.round((Number(part.stockIssuedQty) || 0) * 1000) / 1000),
     ocrConfidence: clampRatio(part.ocrConfidence),
     matchScore: clampRatio(part.matchScore),
     linkedInvoiceId: String(part.linkedInvoiceId || "").trim(),
@@ -177,6 +179,7 @@ function partsFromQuoteLines(lines, newId) {
         {
           description: lineDescription(line),
           qty: line.qty,
+          stockItemId: String(line.stockItemId || "").trim(),
           ordered: false,
           received: false,
           supplier: "",

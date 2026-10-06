@@ -63,6 +63,7 @@ function newLine(partial = {}) {
     description: partial.description || "",
     qty: partial.qty != null ? partial.qty : 1,
     unitPriceIncl: partial.unitPriceIncl != null ? partial.unitPriceIncl : 0,
+    stockItemId: String(partial.stockItemId || "").trim(),
   };
 }
 
@@ -1923,6 +1924,7 @@ function addLineFromStock(item) {
     description,
     qty: 1,
     unitPriceIncl: Number(item?.sellPrice) || 0,
+    stockItemId: item?.id || "",
   });
   const last = lineRows[lineRows.length - 1];
   if (last && !String(last.description || "").trim() && !(Number(last.unitPriceIncl) > 0)) {
