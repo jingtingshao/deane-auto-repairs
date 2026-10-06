@@ -844,6 +844,24 @@ function stockActionButton(row) {
   return `<button type="button" class="ghost${row.stocked ? " is-done" : ""}" data-action="stock">${label}</button>`;
 }
 
+function markLineStocked(candidateId) {
+  const id = String(candidateId || "").trim();
+  if (!id) return;
+  const row = candidates.find((item) => item.id === id);
+  if (!row || row.stocked) return;
+  row.stocked = true;
+  const rowEl = candidatesEl?.querySelector(`tr[data-id="${CSS.escape(id)}"]`);
+  if (!rowEl) return;
+  const selectedJobId = row.appliedJobId || row.suggestedJobId || "";
+  const statusCell = rowEl.querySelector(".supplier-line-status");
+  if (statusCell) statusCell.innerHTML = renderStatusPill(row, selectedJobId);
+  const stockBtn = rowEl.querySelector('[data-action="stock"]');
+  if (stockBtn) {
+    stockBtn.textContent = "In stock";
+    stockBtn.classList.add("is-done");
+  }
+}
+
 function refreshRowPreview(rowEl) {
   const rowId = rowEl?.dataset?.id || "";
   const row = candidates.find((item) => item.id === rowId);
@@ -1428,5 +1446,6 @@ window.DeaneSupplierInvoices = {
   showList,
   openInvoice,
   openNew,
+  markLineStocked,
 };
 })();

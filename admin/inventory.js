@@ -562,6 +562,7 @@
       });
       closeReceive();
       if (!document.getElementById("stock-section")?.hidden) await show();
+      if (body.candidateId) window.DeaneSupplierInvoices?.markLineStocked?.(body.candidateId);
       flash(
         result.already
           ? "That invoice line is already in stock."
