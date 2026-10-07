@@ -113,6 +113,21 @@ function cleanEnvSecret(value) {
   return s;
 }
 
+function isValidTechUsername(name) {
+  return /^[a-z][a-z0-9]{2,20}$/.test(String(name || ""));
+}
+
+function extraTechUsernamesFromEnv() {
+  const names = [];
+  for (const key of Object.keys(process.env)) {
+    const match = /^TECH_([A-Z][A-Z0-9]{2,20})_PASSWORD$/.exec(key);
+    if (!match) continue;
+    const username = match[1].toLowerCase();
+    if (isValidTechUsername(username)) names.push(username);
+  }
+  return names;
+}
+
 function techPasswordFromEnv(username) {
   const u = String(username || "").toUpperCase();
   const short = u.replace(/^DEANE/, "DEAN");
@@ -126,7 +141,8 @@ function techPasswordFromEnv(username) {
 
 function resolveTechUsers() {
   const users = {};
-  for (const username of TECH_USERNAMES) {
+  const names = [...new Set([...TECH_USERNAMES, ...extraTechUsernamesFromEnv()])];
+  for (const username of names) {
     const { key, password } = techPasswordFromEnv(username);
     if (!password) continue;
     if (KNOWN_WEAK_PINS.has(password.toLowerCase()) || password.length < 8) {
@@ -1463,10 +1479,18 @@ function isSupplierHeaderLine(line) {
   return false;
 }
 
+function isNoiseInvoiceLine(line) {
+  const text = String(line || "");
+  if (/carrier\s*release/i.test(text)) return true;
+  if (/\brnz\s*tax\d*\b/i.test(text) || /\bRNZTAX\d*\b/i.test(text)) return true;
+  return false;
+}
+
 function looksLikePartLine(line) {
   const text = String(line || "")
     .trim()
     .replace(/^[^A-Za-z0-9$]+/, "");
+  if (isNoiseInvoiceLine(text)) return false;
   if (isSupplierHeaderLine(text)) return false;
   if (/^(sub\s*total|subtotal|gst|tax|total|amount\s+due|balance(\s+due)?|rounding|freight|shipping)\b/i.test(text)) {
     return false;
@@ -1736,6 +1760,7 @@ function parseStatementPartLines(lines) {
   const items = [];
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
+    if (isNoiseInvoiceLine(line)) continue;
     if (
       /^(sub\s*total|tax\b|total\b|signed|from\b|to\b|gst\b|bank\b|date\b|order\b|description\b|qty\b|each\b|invoice\b)/i.test(
         line
@@ -1824,6 +1849,7 @@ function parseSupplierInvoiceText(rawText) {
     for (let i = headerIndex + 1; i < lines.length; i += 1) {
       const line = lines[i];
       if (/subtotal|gst|tax|total/i.test(line)) break;
+      if (isNoiseInvoiceLine(line)) continue;
       const m = line.match(
         /^(\d+(?:\.\d+)?)\s+(.+?)\s+([A-Za-z0-9-]{3,})\s+\$?\s*(\d+(?:\.\d{1,2})?)\s+\$?\s*(\d+(?:\.\d{1,2})?)$/
       );
@@ -5007,7 +5033,8 @@ app.post("/api/admin/login", (req, res) => {
   const secret = String(req.body?.password || req.body?.pin || "").trim();
   let role = "";
   let loginName = "";
-  if (TECH_USERNAMES.includes(username) && !TECH_USERS[username]) {
+  const isTechName = Boolean(username && TECH_USERS[username]) || TECH_USERNAMES.includes(username);
+  if (isTechName && !TECH_USERS[username]) {
     recordLoginFailure(ip);
     return res.status(401).json({
       error:
@@ -8998,6 +9025,24 @@ app.post("/api/invoice-candidates/:candidateId/unmatch", requireOwnerAdmin, (req
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
   }
+});
+
+app.delete("/api/invoice-candidates/:candidateId", requireOwnerAdmin, (req, res) => {
+  const rows = readInvoiceCandidates();
+  const index = rows.findIndex((row) => row.id === req.params.candidateId);
+  if (index < 0) return res.status(404).json({ error: "Candidate not found" });
+  const previous = normalizeCandidate(rows[index]);
+  if (previous.decision === "accepted" || previous.decision === "edited_then_accepted") {
+    return res.status(400).json({ error: "Unmatch this line before deleting it." });
+  }
+  if (stockedCandidateIds().has(previous.id)) {
+    return res.status(400).json({ error: "This line is already in stock." });
+  }
+  rows.splice(index, 1);
+  writeInvoiceCandidates(rows);
+  const invoice = refreshSupplierInvoiceStatus(previous.supplierInvoiceId);
+  writePartAudit("invoiceCandidate", previous.id, "delete", previous, null, req, "extracted line deleted");
+  res.json({ ok: true, supplierInvoice: invoice });
 });
 
 app.post("/api/invoice-candidates/:candidateId/reject", requireOwnerAdmin, (req, res) => {

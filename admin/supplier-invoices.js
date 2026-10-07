@@ -1068,6 +1068,9 @@ function renderCandidates() {
                 <button type="button" class="ghost" data-action="edit-accept"${pending ? "" : " disabled"}>Change Job</button>
                 <button type="button" class="ghost" data-action="tool"${pending ? "" : " disabled"}>Tool</button>
               </details>`;
+              const deleteBtn = !matched && !row.stocked
+                ? `<button type="button" class="danger" data-action="delete-line">Delete</button>`
+                : "";
               const actions = matched
                 ? editing
                   ? `<button type="button" class="primary" data-action="save-matched">Save</button>
@@ -1080,11 +1083,13 @@ function renderCandidates() {
                   </details>`
                 : ignored || consumable || tool
                   ? `<button type="button" class="ghost" data-action="unmatch">Restore</button>
+                  ${deleteBtn}
                   ${ignored ? "" : stockActionButton(row)}`
-                : `${selectedJobId ? unmatchBtn : ""}
+                  : `${selectedJobId ? unmatchBtn : ""}
                   ${stockActionButton(row)}
                   <button type="button" class="ghost" data-action="consumable"${pending ? "" : " disabled"}>Consumable</button>
                   <button type="button" class="danger" data-action="reject"${pending ? "" : " disabled"}>Ignore</button>
+                  ${deleteBtn}
                   ${jobTools}`;
               return `<tr data-id="${Admin.escapeAttr(row.id)}" class="${matched ? "is-matched" : ""} ${editing ? "is-editing" : ""}">
                 <td><input type="checkbox" data-select-candidate ${selectedCandidateIds.has(row.id) ? "checked" : ""}${pending ? "" : " disabled"} /></td>
@@ -1213,6 +1218,25 @@ function renderCandidates() {
         editingCandidateIds.delete(id);
         renderCandidates();
         showStatus("Edit cancelled");
+        return;
+      }
+      if (btn.dataset.action === "delete-line") {
+        const name = String(
+          rowEl.querySelector('[data-field="description"]')?.value ||
+            rowEl.querySelector('[data-field="partNumber"]')?.value ||
+            "this line"
+        ).trim();
+        if (!window.confirm(`Delete ${name}?`)) return;
+        try {
+          btn.disabled = true;
+          await Admin.api(`/api/invoice-candidates/${id}`, { method: "DELETE" });
+          await loadInvoice(current.id);
+          await loadList();
+          showStatus("Line deleted");
+        } catch (err) {
+          btn.disabled = false;
+          showStatus(err.message || "Request failed");
+        }
         return;
       }
       try {
