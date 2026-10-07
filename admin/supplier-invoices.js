@@ -21,6 +21,7 @@ const monthConsumablesEl = document.getElementById("supplier-month-consumables")
 let rows = [];
 let jobs = [];
 let current = null;
+let readingInvoice = false;
 let candidates = [];
 let selectedCandidateIds = new Set();
 let editingCandidateIds = new Set();
@@ -500,12 +501,23 @@ async function importInvoiceFile(file) {
     await attachOriginalFile(file);
     return;
   }
+  readingInvoice = true;
+  if (ocrStatusLine) {
+    ocrStatusLine.textContent = "Reading invoice…";
+    ocrStatusLine.className = "muted small supplier-ocr-status pending";
+  }
+  showStatus("Reading invoice…");
   const body = new FormData();
   body.append("file", file);
-  const result = await Admin.api("/api/supplier-invoices/import-file", {
-    method: "POST",
-    body,
-  });
+  let result;
+  try {
+    result = await Admin.api("/api/supplier-invoices/import-file", {
+      method: "POST",
+      body,
+    });
+  } finally {
+    readingInvoice = false;
+  }
   if (!result?.invoice?.id) throw new Error("Import finished but invoice is missing.");
   await loadInvoice(result.invoice.id);
   await loadList();
@@ -1344,10 +1356,15 @@ async function addManualLine() {
 }
 
 async function saveInvoice() {
+  if (readingInvoice) {
+    showStatus("Still reading the invoice. The fields will fill when it finishes.");
+    return;
+  }
   await savePendingLineEdits();
   const payload = collectForm();
   if (!payload.supplier || !payload.invoiceNo) {
-    throw new Error("Supplier and invoice number are required.");
+    showStatus("Type the supplier and invoice number from the photo, then press Save invoice.");
+    return;
   }
   if (!current?.id) {
     current = await Admin.api("/api/supplier-invoices", {
