@@ -4090,10 +4090,9 @@ function siteLockGateHtml() {
     .mark{margin:0;font-size:2.4rem;font-weight:700;letter-spacing:.02em}
     .mark span{display:block;margin-top:.15rem;color:#e9a305;font-size:1.05rem;letter-spacing:.22em;font-weight:800}
     h1{margin:1.35rem 0 .45rem;font-size:2.6rem;letter-spacing:.08em;text-transform:uppercase}
-    .lead,.workshop,.hours,.addr{margin:0}
+    .lead,.hours,.addr{margin:0}
     .lead{color:#e9a305;font-size:1.15rem}
-    .workshop{margin-top:1.35rem;font-size:1.05rem}
-    .hours{margin-top:.35rem;color:rgba(255,255,255,.78)}
+    .hours{margin-top:1.35rem;color:rgba(255,255,255,.78)}
     .phone{display:inline-block;margin-top:1.15rem;color:#fff;font-size:1.45rem;font-weight:700;text-decoration:none}
     .addr{margin-top:.85rem;color:rgba(255,255,255,.78);line-height:1.45}
     .staff{margin-top:2.2rem;background:none;border:0;color:rgba(255,255,255,.45);font:inherit;font-size:.85rem;cursor:pointer;text-decoration:underline}
@@ -4110,7 +4109,6 @@ function siteLockGateHtml() {
     <p class="mark">Deane<span>AUTO REPAIRS</span></p>
     <h1>Open soon</h1>
     <p class="lead">Our website is opening soon.</p>
-    <p class="workshop">The workshop is open now.</p>
     <p class="hours">Mon–Sat 8:30am – 5:30pm · Sunday closed</p>
     <a class="phone" href="tel:${phoneTel}">${phoneDisplay}</a>
     <p class="addr">${business.addressLine2}<br>${business.street}, ${business.suburb}, ${business.city}</p>
