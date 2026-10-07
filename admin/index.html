@@ -19,9 +19,9 @@
       <form id="login-form" class="login-card">
         <p class="brand"><span class="script">Deane</span> AUTO REPAIRS</p>
         <h1>Workshop sign in</h1>
-        <p class="muted">Admin uses username <strong>admin</strong> and the admin PIN. Technicians use <strong>dean01</strong> or <strong>dean02</strong>.</p>
+        <p class="muted">Admin uses username <strong>admin</strong> and the admin PIN. Technicians use <strong>deane01</strong> or <strong>deane02</strong>.</p>
         <label for="username">Username</label>
-        <input id="username" name="username" type="text" autocomplete="username" placeholder="admin, dean01, or dean02" />
+        <input id="username" name="username" type="text" autocomplete="username" placeholder="admin, deane01, or deane02" />
         <label for="pin">Password</label>
         <input id="pin" type="password" autocomplete="current-password" required />
         <button type="submit">Sign in</button>
@@ -474,7 +474,7 @@
             <form id="supplier-invoice-form" class="report-form">
               <fieldset>
                 <legend>① Upload Supplier Invoice</legend>
-                <p class="muted small">Upload PDF or photo. We read the supplier, invoice number, total, and part lines. Company name, address, and email are ignored.</p>
+                <p class="muted small">Upload PDF or photo. We read the supplier, invoice number, total, and part lines. If something is missed, type it in. Company name, address, and email are ignored.</p>
                 <div class="photo-row">
                   <label class="file-label">
                     Choose files
@@ -508,7 +508,10 @@
 
               <fieldset>
                 <legend>③ Extracted Items (Parts / Lines)</legend>
-                <p class="muted small">Check part name, part number, qty, and cost. Add to stock is manual, so boxes and litres can be entered correctly.</p>
+                <p class="muted small">Check part name, part number, qty, and cost. If a line was not read, add it and type it in. Add to stock is separate, so boxes and litres can be entered correctly.</p>
+                <div class="line-actions">
+                  <button type="button" id="btn-supplier-invoice-add-line" class="ghost">+ Add line</button>
+                </div>
                 <div id="supplier-candidates-list" class="supplier-candidates"></div>
               </fieldset>
 
@@ -1002,7 +1005,7 @@
     <script src="jobs.js?v=20261006jobstock"></script>
     <script src="billing.js?v=20261006jobstock"></script>
     <script src="inventory.js?v=20261007oildrum"></script>
-    <script src="supplier-invoices.js?v=20261007statement"></script>
+    <script src="supplier-invoices.js?v=20261007manualline"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>
     <script src="customers.js?v=20260906techcustomers"></script>
     <script src="referrals.js?v=20260906usedon"></script>

@@ -544,7 +544,7 @@ function renderOcrStatus() {
     return;
   }
   if (!candidates.length) {
-    ocrStatusLine.textContent = "⚠ Please check (no extracted lines yet)";
+    ocrStatusLine.textContent = "Type any supplier, invoice number, or part lines that were not read";
     ocrStatusLine.className = "muted small supplier-ocr-status warn";
     return;
   }
@@ -988,7 +988,7 @@ function renderCandidates() {
   renderOcrStatus();
   if (!candidates.length) {
     selectedCandidateIds = new Set();
-    candidatesEl.innerHTML = '<div class="empty">No extracted items yet. Upload an invoice file first.</div>';
+    candidatesEl.innerHTML = '<div class="empty">No lines yet. Use Add line and type the part name, number, qty, and cost.</div>';
     return;
   }
   const validIds = new Set(candidates.map((row) => row.id));
@@ -1128,6 +1128,14 @@ function renderCandidates() {
   candidatesEl.querySelectorAll('[data-field="qty"]').forEach((el) => {
     el.addEventListener("change", () => {
       el.value = String(Math.max(1, Math.round(Number(el.value) || 1)));
+    });
+  });
+  candidatesEl.querySelectorAll("tr[data-id]").forEach((rowEl) => {
+    const row = candidates.find((item) => item.id === rowEl.dataset.id);
+    if (!row || row.decision !== "pending") return;
+    rowEl.querySelectorAll("[data-field='description'], [data-field='partNumber'], [data-field='qty'], [data-field='costPrice']").forEach((el) => {
+      el.addEventListener("change", () => scheduleLineSave(rowEl));
+      el.addEventListener("blur", () => scheduleLineSave(rowEl));
     });
   });
   candidatesEl.querySelectorAll("[data-action]").forEach((btn) => {
@@ -1283,7 +1291,60 @@ function openNew() {
   Admin.setViewTitle("New supplier invoice");
 }
 
+function scheduleLineSave(rowEl) {
+  if (!rowEl) return;
+  clearTimeout(rowEl._lineSaveTimer);
+  rowEl._lineSaveTimer = setTimeout(() => {
+    saveManualLine(rowEl).catch((err) => showStatus(err.message));
+  }, 400);
+}
+
+async function saveManualLine(rowEl) {
+  const id = rowEl?.dataset?.id || "";
+  const row = candidates.find((item) => item.id === id);
+  if (!row || row.decision !== "pending") return;
+  const description = String(rowEl.querySelector('[data-field="description"]')?.value || "");
+  const partNumber = String(rowEl.querySelector('[data-field="partNumber"]')?.value || "");
+  const qty = Math.max(1, Math.round(Number(rowEl.querySelector('[data-field="qty"]')?.value) || 1));
+  const costRaw = Number(rowEl.querySelector('[data-field="costPrice"]')?.value);
+  const costPrice = Number.isFinite(costRaw) ? costRaw : 0;
+  row.descriptionCandidate = description;
+  row.partNumberCandidate = partNumber;
+  row.qtyCandidate = qty;
+  row.costPriceCandidate = costPrice;
+  await Admin.api(`/api/invoice-candidates/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ description, partNumber, qty, costPrice }),
+  });
+}
+
+async function savePendingLineEdits() {
+  if (!candidatesEl) return;
+  const rows = [...candidatesEl.querySelectorAll("tr[data-id]")];
+  for (const rowEl of rows) {
+    await saveManualLine(rowEl);
+  }
+}
+
+async function addManualLine() {
+  if (!current?.id) {
+    await saveInvoice();
+  }
+  if (!current?.id) return;
+  const created = await Admin.api(`/api/supplier-invoices/${current.id}/lines`, {
+    method: "POST",
+    body: JSON.stringify({ description: "", partNumber: "", qty: 1, costPrice: 0 }),
+  });
+  candidates.push(created);
+  renderCandidates();
+  candidatesEl
+    ?.querySelector(`tr[data-id="${CSS.escape(created.id)}"] [data-field="description"]`)
+    ?.focus();
+  showStatus("Type the part name, number, qty, and cost.");
+}
+
 async function saveInvoice() {
+  await savePendingLineEdits();
   const payload = collectForm();
   if (!payload.supplier || !payload.invoiceNo) {
     throw new Error("Supplier and invoice number are required.");
@@ -1371,6 +1432,13 @@ document.getElementById("btn-supplier-invoice-import-inline")?.addEventListener(
 document.getElementById("btn-supplier-invoice-back")?.addEventListener("click", async () => {
   try {
     await showList();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+document.getElementById("btn-supplier-invoice-add-line")?.addEventListener("click", async () => {
+  try {
+    await addManualLine();
   } catch (err) {
     alert(err.message);
   }

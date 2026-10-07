@@ -82,7 +82,11 @@ function resolveAdminPin() {
 }
 
 const ADMIN_PIN = resolveAdminPin();
-const TECH_USERNAMES = ["dean01", "dean02"];
+const TECH_USERNAMES = ["deane01", "deane02"];
+const TECH_USERNAME_ALIASES = {
+  dean01: "deane01",
+  dean02: "deane02",
+};
 const staffContext = new AsyncLocalStorage();
 
 function secretsEqual(a, b) {
@@ -91,11 +95,39 @@ function secretsEqual(a, b) {
   return timingSafeEqual(left, right);
 }
 
+function normalizeTechUsername(username) {
+  const raw = String(username || "")
+    .trim()
+    .toLowerCase();
+  return TECH_USERNAME_ALIASES[raw] || raw;
+}
+
+function cleanEnvSecret(value) {
+  let s = String(value || "").trim();
+  if (
+    (s.startsWith('"') && s.endsWith('"') && s.length >= 2) ||
+    (s.startsWith("'") && s.endsWith("'") && s.length >= 2)
+  ) {
+    s = s.slice(1, -1).trim();
+  }
+  return s;
+}
+
+function techPasswordFromEnv(username) {
+  const u = String(username || "").toUpperCase();
+  const short = u.replace(/^DEANE/, "DEAN");
+  const keys = [`TECH_${u}_PASSWORD`, `TECH_${short}_PASSWORD`, `TECH_${u}`];
+  for (const key of keys) {
+    const password = cleanEnvSecret(process.env[key]);
+    if (password) return { key, password };
+  }
+  return { key: `TECH_${u}_PASSWORD`, password: "" };
+}
+
 function resolveTechUsers() {
   const users = {};
   for (const username of TECH_USERNAMES) {
-    const key = `TECH_${username.toUpperCase()}_PASSWORD`;
-    const password = String(process.env[key] || "").trim();
+    const { key, password } = techPasswordFromEnv(username);
     if (!password) continue;
     if (KNOWN_WEAK_PINS.has(password.toLowerCase()) || password.length < 8) {
       console.error(
@@ -108,7 +140,7 @@ function resolveTechUsers() {
   }
   if (!Object.keys(users).length) {
     console.warn(
-      "Technician logins are not configured. Set TECH_DEAN01_PASSWORD and TECH_DEAN02_PASSWORD to enable dean01 / dean02."
+      "Technician logins are not configured. Set TECH_DEANE01_PASSWORD and TECH_DEANE02_PASSWORD to enable deane01 / deane02."
     );
   }
   return users;
@@ -4971,7 +5003,7 @@ app.post("/api/admin/login", (req, res) => {
       error: "Too many sign-in attempts. Try again in 15 minutes.",
     });
   }
-  const username = String(req.body?.username || "").trim().toLowerCase();
+  const username = normalizeTechUsername(req.body?.username);
   const secret = String(req.body?.password || req.body?.pin || "").trim();
   let role = "";
   let loginName = "";
@@ -4979,7 +5011,7 @@ app.post("/api/admin/login", (req, res) => {
     recordLoginFailure(ip);
     return res.status(401).json({
       error:
-        "Technician login is not set up on this server. Add TECH_DEAN01_PASSWORD and TECH_DEAN02_PASSWORD in Render Environment, then restart.",
+        "Technician login is not set up on this server. Add TECH_DEANE01_PASSWORD and TECH_DEANE02_PASSWORD in Render Environment, then restart.",
     });
   }
   if (username && TECH_USERS[username] && secretsEqual(secret, TECH_USERS[username])) {
@@ -8499,38 +8531,27 @@ app.post(
       const file = req.file;
       if (!file) return res.status(400).json({ error: "No file uploaded" });
       const rawText = await extractTextFromImportFile(file);
-      if (!rawText) {
-        return res.status(400).json({
-          error: "Could not read text from file. Try a clearer image or higher resolution photo.",
-        });
-      }
-
       const parsedInvoice = parseSupplierInvoiceText(rawText);
       const supplier = String(req.body?.supplier || parsedInvoice.supplier || "").trim();
       const invoiceNo = String(req.body?.invoiceNo || parsedInvoice.invoiceNo || "").trim();
       const lineCount = parsedInvoice.candidates?.length || 0;
-      if (!lineCount && (!supplier || !invoiceNo)) {
-        return res.status(400).json({
-          error: !supplier
-            ? "Could not read the supplier name on this photo. Take it flatter and brighter, or type the supplier and invoice number and add the lines."
-            : "Could not read the invoice number on this photo. Take it flatter and brighter, or type the invoice number and add the lines.",
-        });
-      }
-      if (!supplier) {
-        return res.status(400).json({ error: "Could not detect supplier. Enter supplier manually." });
-      }
-      if (!invoiceNo) {
-        return res
-          .status(400)
-          .json({ error: "Could not detect invoice number. Enter invoice number manually." });
-      }
+      const missing = [];
+      if (!supplier) missing.push("supplier");
+      if (!invoiceNo) missing.push("invoice number");
+      if (!lineCount) missing.push("part lines");
+      const warning = missing.length
+        ? `Photo saved. Type the ${missing.join(", ")} the reader missed. Use Add line for parts, then press Save invoice.`
+        : "";
 
       const invoices = readSupplierInvoices();
-      const duplicate = invoices.find(
-        (row) =>
-          normalizeSupplierName(row.supplier) === normalizeSupplierName(supplier) &&
-          normalizeInvoiceNo(row.invoiceNo) === normalizeInvoiceNo(invoiceNo)
-      );
+      const duplicate =
+        supplier && invoiceNo
+          ? invoices.find(
+              (row) =>
+                normalizeSupplierName(row.supplier) === normalizeSupplierName(supplier) &&
+                normalizeInvoiceNo(row.invoiceNo) === normalizeInvoiceNo(invoiceNo)
+            )
+          : null;
       if (duplicate) {
         return res.status(409).json({
           error: "Duplicate supplier invoice number for this supplier.",
@@ -8615,9 +8636,7 @@ app.post(
           invoiceNo: parsedInvoice.invoiceNo,
           invoiceDate: parsedInvoice.invoiceDate,
         },
-        warning: lineCount
-          ? ""
-          : "Photo saved. The handwritten part lines were not clear enough to read. Add those lines from the photo.",
+        warning,
       });
     } catch (err) {
       console.error("Could not import supplier invoice file:", err);
@@ -8809,6 +8828,59 @@ app.post(
     res.json(next);
   }
 );
+
+app.post("/api/supplier-invoices/:invoiceId/lines", requireOwnerAdmin, (req, res) => {
+  const invoices = readSupplierInvoices();
+  const invoice = invoices.find((row) => row.id === req.params.invoiceId);
+  if (!invoice) return res.status(404).json({ error: "Supplier invoice not found" });
+  const body = req.body || {};
+  const now = nowIso();
+  const rows = readInvoiceCandidates();
+  const created = normalizeCandidate({
+    id: randomUUID(),
+    supplierInvoiceId: invoice.id,
+    lineNo: nextCandidateLineNo(rows, invoice.id),
+    rawLineText: "",
+    partNumberCandidate: String(body.partNumber || "").trim(),
+    descriptionCandidate: String(body.description || "").trim(),
+    qtyCandidate: Math.max(1, Math.round(Number(body.qty) || 1)),
+    costPriceCandidate: toMoney(body.costPrice),
+    supplierCandidate: String(invoice.supplier || "").trim(),
+    confidence: 1,
+    decision: "pending",
+    createdAt: now,
+    updatedAt: now,
+  });
+  rows.push(created);
+  writeInvoiceCandidates(rows);
+  refreshSupplierInvoiceStatus(invoice.id);
+  res.status(201).json(created);
+});
+
+app.patch("/api/invoice-candidates/:candidateId", requireOwnerAdmin, (req, res) => {
+  const rows = readInvoiceCandidates();
+  const index = rows.findIndex((row) => row.id === req.params.candidateId);
+  if (index < 0) return res.status(404).json({ error: "Candidate not found" });
+  const previous = normalizeCandidate(rows[index]);
+  if (previous.decision !== "pending") {
+    return res.status(400).json({ error: "Only a line that is still to allocate can be edited here." });
+  }
+  const body = req.body || {};
+  const next = normalizeCandidate({
+    ...previous,
+    partNumberCandidate:
+      body.partNumber != null ? String(body.partNumber).trim() : previous.partNumberCandidate,
+    descriptionCandidate:
+      body.description != null ? String(body.description).trim() : previous.descriptionCandidate,
+    qtyCandidate:
+      body.qty != null ? Math.max(1, Math.round(Number(body.qty) || 1)) : previous.qtyCandidate,
+    costPriceCandidate: body.costPrice != null ? toMoney(body.costPrice) : previous.costPriceCandidate,
+    updatedAt: nowIso(),
+  });
+  rows[index] = next;
+  writeInvoiceCandidates(rows);
+  res.json(next);
+});
 
 app.post("/api/supplier-invoices/:invoiceId/parse", requireOwnerAdmin, (req, res) => {
   const invoices = readSupplierInvoices();
@@ -9342,6 +9414,6 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(
     techNames.length
       ? `Technician logins: ${techNames.join(", ")}`
-      : "Technician logins: OFF — set TECH_DEAN01_PASSWORD / TECH_DEAN02_PASSWORD"
+      : "Technician logins: OFF — set TECH_DEANE01_PASSWORD / TECH_DEANE02_PASSWORD"
   );
 });
