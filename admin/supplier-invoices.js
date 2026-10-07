@@ -50,6 +50,26 @@ function formatMoney(value) {
   return `$${money(value).toFixed(2)}`;
 }
 
+function lineQtyValue(rowEl) {
+  return Math.max(1, Math.round(Number(rowEl?.querySelector('[data-field="qty"]')?.value) || 1));
+}
+
+function syncLinePrices(rowEl, source) {
+  const unitEl = rowEl?.querySelector('[data-field="costPrice"]');
+  const totalEl = rowEl?.querySelector('[data-field="lineTotal"]');
+  if (!unitEl || !totalEl) return;
+  const qty = lineQtyValue(rowEl);
+  if (source === "unit") {
+    const unit = money(unitEl.value);
+    unitEl.value = unit.toFixed(2);
+    totalEl.value = money(unit * qty).toFixed(2);
+    return;
+  }
+  const total = money(totalEl.value);
+  totalEl.value = total.toFixed(2);
+  unitEl.value = (qty > 0 ? money(total / qty) : 0).toFixed(2);
+}
+
 function aucklandYearMonth(iso) {
   const raw = String(iso || "").trim();
   if (/^\d{4}-\d{2}/.test(raw)) return raw.slice(0, 7);
@@ -1035,7 +1055,8 @@ function renderCandidates() {
             <th>Qty</th>
             <th><span class="th-two-line">PART<br />NAME</span></th>
             <th><span class="th-two-line">PART<br />NUMBER</span></th>
-            <th>Cost ex GST</th>
+            <th><span class="th-two-line">UNIT<br />EX GST</span></th>
+            <th><span class="th-two-line">TOTAL<br />EX GST</span></th>
             <th>Status</th>
             <th>Action</th>
           </tr>
@@ -1096,7 +1117,8 @@ function renderCandidates() {
                 <td><input data-field="qty" type="number" min="1" step="1" inputmode="numeric" value="${Admin.escapeAttr(String(Math.max(1, Math.round(Number(row.qtyCandidate) || 1))))}"${disabled} /></td>
                 <td><input data-field="description" value="${Admin.escapeAttr(row.descriptionCandidate || "")}"${disabled} /></td>
                 <td><input data-field="partNumber" value="${Admin.escapeAttr(row.partNumberCandidate || "")}"${disabled} /></td>
-                <td><input data-field="costPrice" type="number" min="0" step="0.01" value="${Admin.escapeAttr(String(row.costPriceCandidate ?? 0))}"${disabled} /></td>
+                <td><input data-field="costPrice" type="number" min="0" step="0.01" value="${Admin.escapeAttr(money(row.costPriceCandidate).toFixed(2))}"${disabled} /></td>
+                <td><input data-field="lineTotal" type="number" min="0" step="0.01" value="${Admin.escapeAttr(money((Number(row.qtyCandidate) || 1) * (Number(row.costPriceCandidate) || 0)).toFixed(2))}"${disabled} /></td>
                 <td class="supplier-line-status">${statusHtml}</td>
                 <td class="supplier-line-actions">
                   ${actions}
@@ -1145,14 +1167,22 @@ function renderCandidates() {
   candidatesEl.querySelectorAll('[data-field="qty"]').forEach((el) => {
     el.addEventListener("change", () => {
       el.value = String(Math.max(1, Math.round(Number(el.value) || 1)));
+      const rowEl = el.closest("tr");
+      if (rowEl) syncLinePrices(rowEl, "qty");
     });
   });
   candidatesEl.querySelectorAll("tr[data-id]").forEach((rowEl) => {
     const row = candidates.find((item) => item.id === rowEl.dataset.id);
     if (!row || row.decision !== "pending") return;
-    rowEl.querySelectorAll("[data-field='description'], [data-field='partNumber'], [data-field='qty'], [data-field='costPrice']").forEach((el) => {
-      el.addEventListener("change", () => scheduleLineSave(rowEl));
-      el.addEventListener("blur", () => scheduleLineSave(rowEl));
+    rowEl.querySelectorAll("[data-field='description'], [data-field='partNumber'], [data-field='qty'], [data-field='costPrice'], [data-field='lineTotal']").forEach((el) => {
+      const save = () => {
+        if (el.dataset.field === "lineTotal") syncLinePrices(rowEl, "total");
+        else if (el.dataset.field === "costPrice") syncLinePrices(rowEl, "unit");
+        else if (el.dataset.field === "qty") syncLinePrices(rowEl, "qty");
+        scheduleLineSave(rowEl);
+      };
+      el.addEventListener("change", save);
+      el.addEventListener("blur", save);
     });
   });
   candidatesEl.querySelectorAll("[data-action]").forEach((btn) => {
