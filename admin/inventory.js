@@ -722,6 +722,11 @@
       alert("Choose a category. Handwritten lines need a category before they go into stock.");
       return;
     }
+    if (receiveLineAlready) {
+      closeReceive();
+      flash("This part from this invoice is already in stock.");
+      return;
+    }
     const match = findStockMatch(receiveMatchInput());
     if (!receiveLineAlready && match && receiveKeptSell && costsDiffer(match) && !receiveSellTouched) {
       const keep = confirm(

@@ -8968,9 +8968,15 @@ app.post("/api/supplier-invoices/:invoiceId/parse", requireOwnerAdmin, (req, res
 app.get("/api/supplier-invoices/:invoiceId/candidates", requireOwnerAdmin, (req, res) => {
   const invoice = readSupplierInvoices().find((row) => row.id === req.params.invoiceId);
   if (!invoice) return res.status(404).json({ error: "Supplier invoice not found" });
-  const stocked = stockedCandidateIds();
-  const rows = readInvoiceCandidates()
-    .filter((row) => row.supplierInvoiceId === req.params.invoiceId)
+  const candidateRows = readInvoiceCandidates().filter(
+    (row) => row.supplierInvoiceId === req.params.invoiceId
+  );
+  const stocked = inventoryLib.stockedCandidateIdSet(
+    candidateRows,
+    readInventoryItems(),
+    readInventoryMovements()
+  );
+  const rows = candidateRows
     .map((row) => ({ ...normalizeCandidate(row), stocked: stocked.has(row.id) }))
     .sort((a, b) => Number(a.lineNo) - Number(b.lineNo));
   res.json(rows);

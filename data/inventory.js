@@ -253,12 +253,14 @@ function applyReceive(items, movements, input, now) {
   const qty = roundQty(input?.qty);
   if (!(qty > 0)) throw stockError("Enter a quantity greater than 0.");
   const candidateId = cleanText(input?.candidateId, 80);
-  if (candidateId) {
-    const prior = (movements || []).find((row) => row.candidateId === candidateId);
-    const existing = prior ? items.find((row) => row.id === prior.itemId) || null : null;
-    if (prior && existing) {
-      return { item: existing, created: false, already: true, movement: prior };
-    }
+  const priorReceipt = liveInvoiceReceipt(items, movements, input);
+  if (priorReceipt) {
+    return {
+      item: priorReceipt.item,
+      created: false,
+      already: true,
+      movement: priorReceipt.movement,
+    };
   }
   let item = findMatch(items, draft);
   let created = false;
@@ -298,6 +300,53 @@ function applyReceive(items, movements, input, now) {
     createdAt: now,
   };
   return { item, created, already: false, movement };
+}
+
+function liveInvoiceReceipt(items, movements, input) {
+  const candidateId = cleanText(input?.candidateId, 80);
+  const invoiceId = cleanText(input?.supplierInvoiceId, 80);
+  const part = partKey(input?.partNumber);
+  const name = nameKey(input?.name);
+  const live = new Map((items || []).map((row) => [row.id, row]));
+  for (const movement of movements || []) {
+    const item = live.get(movement.itemId);
+    if (!item) continue;
+    if (candidateId && String(movement.candidateId || "") === candidateId) {
+      return { item, movement };
+    }
+    if (!invoiceId || String(movement.supplierInvoiceId || "") !== invoiceId) continue;
+    const itemPart = partKey(item.partNumber);
+    if (part && itemPart === part) return { item, movement };
+    if (!part && !itemPart && name && nameKey(item.name) === name) return { item, movement };
+  }
+  return null;
+}
+
+function stockedCandidateIdSet(candidates, items, movements) {
+  const live = new Map((items || []).map((row) => [row.id, row]));
+  const direct = new Set();
+  const invoicePart = new Set();
+  const invoiceName = new Set();
+  for (const movement of movements || []) {
+    const item = live.get(movement.itemId);
+    if (!item) continue;
+    const candidateId = String(movement.candidateId || "").trim();
+    if (candidateId) direct.add(candidateId);
+    const invoiceId = String(movement.supplierInvoiceId || "").trim();
+    if (!invoiceId) continue;
+    const part = partKey(item.partNumber);
+    if (part) invoicePart.add(`${invoiceId}|${part}`);
+    else invoiceName.add(`${invoiceId}|${nameKey(item.name)}`);
+  }
+  const ids = new Set(direct);
+  for (const row of candidates || []) {
+    const invoiceId = String(row.supplierInvoiceId || "").trim();
+    const part = partKey(row.partNumberCandidate);
+    const name = nameKey(row.descriptionCandidate);
+    if (part && invoicePart.has(`${invoiceId}|${part}`)) ids.add(row.id);
+    if (!part && name && invoiceName.has(`${invoiceId}|${name}`)) ids.add(row.id);
+  }
+  return ids;
 }
 
 function findByPartNumber(items, partNumber, supplier) {
@@ -427,6 +476,7 @@ module.exports = {
   presentItem,
   searchItems,
   applyReceive,
+  stockedCandidateIdSet,
   applyAdjust,
   lineCountsAsStock,
   receiveSupplierInvoice,
