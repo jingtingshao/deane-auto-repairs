@@ -1432,7 +1432,9 @@ function isSupplierHeaderLine(line) {
 }
 
 function looksLikePartLine(line) {
-  const text = String(line || "").trim();
+  const text = String(line || "")
+    .trim()
+    .replace(/^[^A-Za-z0-9$]+/, "");
   if (isSupplierHeaderLine(text)) return false;
   if (/^(sub\s*total|subtotal|gst|tax|total|amount\s+due|balance(\s+due)?|rounding|freight|shipping)\b/i.test(text)) {
     return false;
@@ -1677,6 +1679,61 @@ function parseTopstarRows(lines) {
   return items;
 }
 
+function statementSupplierName(text) {
+  const match = String(text || "").match(/from\s*:\s*([^\n\r|]{2,80})/i);
+  if (!match) return "";
+  return match[1]
+    .replace(/[_|].*$/, "")
+    .replace(/\bto\s*:.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function statementInvoiceNumber(text) {
+  const labeled =
+    String(text || "").match(
+      /(?:tax\s*)?invoice\s*(?:number|no|#)\s*[:\-]?\s*([A-Z0-9][A-Z0-9-]{3,})/i
+    ) || String(text || "").match(/\bnumber\s*[:\-]?\s*(\d{5,8})\b/i);
+  if (labeled?.[1] && !/^(date|order|statement)$/i.test(labeled[1])) return labeled[1];
+  const head = String(text || "").split(/\b(?:description|bank\s*account)\b/i)[0] || "";
+  return (head.match(/\b\d{6,8}\b/g) || [])[0] || "";
+}
+
+function parseStatementPartLines(lines) {
+  let category = "";
+  const items = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (
+      /^(sub\s*total|tax\b|total\b|signed|from\b|to\b|gst\b|bank\b|date\b|order\b|description\b|qty\b|each\b|invoice\b)/i.test(
+        line
+      )
+    ) {
+      continue;
+    }
+    if (/^[A-Za-z][A-Za-z ]{2,24}$/.test(line)) {
+      category = line.replace(/\s+/g, " ").trim();
+      continue;
+    }
+    const match = line.match(
+      /^[^A-Za-z0-9]*([A-Z]?\d{3,6}[A-Z]?)\s+(\d{1,3})(?:\s*[vV✓✔xX])?\s+(\d+\.\d{2})\b/i
+    );
+    if (!match) continue;
+    const qty = Number(match[2]) || 1;
+    const lineTotal = Number(match[3]) || 0;
+    items.push({
+      lineNo: i + 1,
+      rawLineText: line,
+      partNumberCandidate: String(match[1] || "").toUpperCase(),
+      descriptionCandidate: category || "Part",
+      qtyCandidate: qty,
+      costPriceCandidate: toMoney(qty > 0 ? lineTotal / qty : lineTotal),
+      confidence: 0.84,
+    });
+  }
+  return items;
+}
+
 function parseSupplierInvoiceText(rawText) {
   const text = String(rawText || "");
   const lines = text
@@ -1685,9 +1742,11 @@ function parseSupplierInvoiceText(rawText) {
     .filter(Boolean);
 
   const topstar = /top\s*star/i.test(text);
+  const fromSupplier = statementSupplierName(text);
   const supplierLine = topstar
     ? "Topstar New Zealand"
     : lines.find((line) => /repco|bnt|supercheap|napa|partsmaster|autoparts/i.test(line)) ||
+      fromSupplier ||
       lines.find((line) => /^[A-Z][A-Z\s&.'-]{2,}$/.test(line) && !/invoice|bill to|date/i.test(line)) ||
       "";
   const supplier = topstar ? "Topstar New Zealand" : supplierLine.replace(/\s+sample.*$/i, "").trim();
@@ -1698,22 +1757,27 @@ function parseSupplierInvoiceText(rawText) {
     (text.match(
       /(?:sample\s*no|invoice\s*(?:number|no|#)|tax\s*invoice\s*(?:number|no|#)|inv\s*#)\s*[:\-]?\s*([A-Z0-9-]+)/i
     ) || [])[1] ||
+    statementInvoiceNumber(text) ||
     "";
   const invoiceDateLine = lines.findIndex((line) => /^invoice\s*date$/i.test(line));
   const dateRaw =
     (invoiceDateLine >= 0 ? lines[invoiceDateLine + 1] : "") ||
     (text.match(/invoice\s*date\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i) || [])[1] ||
+    (text.match(/\bdate\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i) || [])[1] ||
     "";
   const invoiceDate = normalizeInvoiceDateInput(dateRaw);
   const subtotal = Number(
-    (text.match(/subtotal\s*([\d,]+(?:\.\d{1,2})?)/i) || [])[1]?.replace(/,/g, "") || 0
+    (text.match(/sub\s*total\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i) || [])[1]?.replace(/,/g, "") || 0
   );
   const tax = Number(
-    (text.match(/total\s*gst\s*\d+%\s*([\d,]+(?:\.\d{1,2})?)/i) || [])[1]?.replace(/,/g, "") || 0
+    (text.match(/total\s*gst\s*\d+%\s*([\d,]+(?:\.\d{1,2})?)/i) ||
+      text.match(/(?:^|\n)\s*tax\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i) ||
+      [])[1]?.replace(/,/g, "") || 0
   );
   const total = Number(
     (text.match(/total\(nzd\)\s*([\d,]+(?:\.\d{1,2})?)/i) ||
-      text.match(/\btotal\s+([\d,]+(?:\.\d{1,2})?)/i) ||
+      text.match(/total\s*inclusive(?:\s*of\s*tax)?\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i) ||
+      text.match(/(?<!sub\s)\btotal\s+\$?\s*([\d,]+(?:\.\d{1,2})?)/i) ||
       [])[1]?.replace(/,/g, "") || 0
   );
 
@@ -1743,6 +1807,9 @@ function parseSupplierInvoiceText(rawText) {
         confidence: 0.92,
       });
     }
+  }
+  if (!candidates.length) {
+    candidates = parseStatementPartLines(lines);
   }
   if (!candidates.length) {
     candidates = parseCandidatesFromRawText(text, supplier);
@@ -4008,33 +4075,58 @@ function siteLockBypassPath(pathname) {
 }
 
 function siteLockGateHtml() {
+  const phoneTel = String(business.phoneTel || "08006259827");
+  const phoneDisplay = String(business.phoneDisplay || "0800 625 9827");
   return `<!DOCTYPE html>
 <html lang="en-NZ">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex,nofollow" />
-  <title>Preview lock · Deane Auto Repairs</title>
+  <title>Open soon · Deane Auto Repairs</title>
   <style>
-    body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:"Segoe UI",Arial,sans-serif;background:#0f2744;color:#1a2332}
-    form{width:min(380px,calc(100% - 2rem));background:#fff;border-radius:14px;padding:1.4rem;display:grid;gap:.7rem}
-    h1{margin:0;font-size:1.25rem}
-    p{margin:0;color:#5b6777;font-size:.95rem}
-    label{display:grid;gap:.3rem;font-weight:700;font-size:.92rem}
-    input,button{font:inherit;padding:.65rem .75rem;border-radius:10px;border:1px solid #d7e0ea}
-    button{background:#1565c0;border-color:#1565c0;color:#fff;font-weight:700;cursor:pointer}
-    .error{color:#c62828;margin:0}
+    body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:"Segoe UI",Arial,sans-serif;background:#021534;color:#fff}
+    main{width:min(440px,calc(100% - 2.4rem));text-align:center;padding:2.2rem 0}
+    .mark{margin:0;font-size:2.4rem;font-weight:700;letter-spacing:.02em}
+    .mark span{display:block;margin-top:.15rem;color:#e9a305;font-size:1.05rem;letter-spacing:.22em;font-weight:800}
+    h1{margin:1.35rem 0 .45rem;font-size:2.6rem;letter-spacing:.08em;text-transform:uppercase}
+    .lead,.workshop,.hours,.addr{margin:0}
+    .lead{color:#e9a305;font-size:1.15rem}
+    .workshop{margin-top:1.35rem;font-size:1.05rem}
+    .hours{margin-top:.35rem;color:rgba(255,255,255,.78)}
+    .phone{display:inline-block;margin-top:1.15rem;color:#fff;font-size:1.45rem;font-weight:700;text-decoration:none}
+    .addr{margin-top:.85rem;color:rgba(255,255,255,.78);line-height:1.45}
+    .staff{margin-top:2.2rem;background:none;border:0;color:rgba(255,255,255,.45);font:inherit;font-size:.85rem;cursor:pointer;text-decoration:underline}
+    form{margin-top:.8rem;display:grid;gap:.55rem;text-align:left}
+    form[hidden]{display:none}
+    label{display:grid;gap:.3rem;font-size:.9rem}
+    input,form button{font:inherit;padding:.65rem .75rem;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:#fff;color:#021534}
+    form button{background:#e9a305;border-color:#e9a305;font-weight:700;cursor:pointer}
+    .error{color:#ffb4b4;margin:0}
   </style>
 </head>
 <body>
-  <form id="gate">
-    <h1>Deane Auto Repairs</h1>
-    <p>This website is in preview. Enter the site PIN to continue.</p>
-    <label>Site PIN<input id="pin" type="password" autocomplete="current-password" required /></label>
-    <button type="submit">Unlock</button>
-    <p id="err" class="error" hidden></p>
-  </form>
+  <main>
+    <p class="mark">Deane<span>AUTO REPAIRS</span></p>
+    <h1>Open soon</h1>
+    <p class="lead">Our website is opening soon.</p>
+    <p class="workshop">The workshop is open now.</p>
+    <p class="hours">Mon–Sat 8:30am – 5:30pm · Sunday closed</p>
+    <a class="phone" href="tel:${phoneTel}">${phoneDisplay}</a>
+    <p class="addr">${business.addressLine2}<br>${business.street}, ${business.suburb}, ${business.city}</p>
+    <button type="button" class="staff" id="staff">Staff preview</button>
+    <form id="gate" hidden>
+      <label>Site PIN<input id="pin" type="password" autocomplete="current-password" required /></label>
+      <button type="submit">Unlock</button>
+      <p id="err" class="error" hidden></p>
+    </form>
+  </main>
   <script>
+    document.getElementById("staff").addEventListener("click",()=>{
+      const form=document.getElementById("gate");
+      form.hidden=false;
+      document.getElementById("pin").focus();
+    });
     const form=document.getElementById("gate");
     const err=document.getElementById("err");
     form.addEventListener("submit",async(e)=>{
@@ -4066,7 +4158,7 @@ function requireSiteUnlock(req, res, next) {
   const wantsHtml = String(req.headers.accept || "").includes("text/html");
   if (wantsHtml || req.method === "GET" || req.method === "HEAD") {
     res.setHeader("Cache-Control", "no-store");
-    return res.status(401).type("html").send(siteLockGateHtml());
+    return res.status(200).type("html").send(siteLockGateHtml());
   }
   return res.status(401).json({ error: "Site is locked. Enter the preview PIN first." });
 }
@@ -4887,6 +4979,13 @@ app.post("/api/admin/login", (req, res) => {
   const secret = String(req.body?.password || req.body?.pin || "").trim();
   let role = "";
   let loginName = "";
+  if (TECH_USERNAMES.includes(username) && !TECH_USERS[username]) {
+    recordLoginFailure(ip);
+    return res.status(401).json({
+      error:
+        "Technician login is not set up on this server. Add TECH_DEAN01_PASSWORD and TECH_DEAN02_PASSWORD in Render Environment, then restart.",
+    });
+  }
   if (username && TECH_USERS[username] && secretsEqual(secret, TECH_USERS[username])) {
     role = "technician";
     loginName = username;
@@ -8413,10 +8512,12 @@ app.post(
       const parsedInvoice = parseSupplierInvoiceText(rawText);
       const supplier = String(req.body?.supplier || parsedInvoice.supplier || "").trim();
       const invoiceNo = String(req.body?.invoiceNo || parsedInvoice.invoiceNo || "").trim();
-      if (!parsedInvoice.candidates?.length) {
+      const lineCount = parsedInvoice.candidates?.length || 0;
+      if (!lineCount && (!supplier || !invoiceNo)) {
         return res.status(400).json({
-          error:
-            "Invoice header was detected, but no parts lines were read. Please send the file/photo again, or paste OCR text under Advanced OCR text.",
+          error: !supplier
+            ? "Could not read the supplier name on this photo. Take it flatter and brighter, or type the supplier and invoice number and add the lines."
+            : "Could not read the invoice number on this photo. Take it flatter and brighter, or type the invoice number and add the lines.",
         });
       }
       if (!supplier) {
@@ -8465,9 +8566,9 @@ app.post(
         currency: String(req.body?.currency || "NZD").trim().toUpperCase() || "NZD",
         linkedJobId: String(req.body?.linkedJobId || "").trim(),
         notes: String(req.body?.notes || "").trim(),
-        status: "parsed",
+        status: lineCount ? "parsed" : "uploaded",
         imageRefs,
-        ocrRawTextRef: "",
+        ocrRawTextRef: String(rawText || "").slice(0, 12000),
         parseVersion: "pdf-v1",
         createdAt: now,
         createdBy: nowActor(req),
@@ -8518,6 +8619,9 @@ app.post(
           invoiceNo: parsedInvoice.invoiceNo,
           invoiceDate: parsedInvoice.invoiceDate,
         },
+        warning: lineCount
+          ? ""
+          : "Photo saved. The handwritten part lines were not clear enough to read. Add those lines from the photo.",
       });
     } catch (err) {
       console.error("Could not import supplier invoice file:", err);
@@ -9224,7 +9328,7 @@ app.listen(PORT, "0.0.0.0", () => {
   }
   console.log(
     SITE_PIN
-      ? "Site lock: ON (SITE_PIN set — public website requires preview PIN)"
+      ? "Site lock: ON (SITE_PIN set — public website shows Open soon)"
       : "Site lock: OFF (set SITE_PIN to lock the public website while unfinished)"
   );
   console.log(
@@ -9238,4 +9342,10 @@ app.listen(PORT, "0.0.0.0", () => {
       : "WebSMS: not configured — add WEBSMS_CLIENT_ID / WEBSMS_CLIENT_SECRET for SMS reminders"
   );
   driveBackup.startBackupScheduler({ dataDir: DATA_DIR, uploadsDir: UPLOADS_DIR });
+  const techNames = Object.keys(TECH_USERS);
+  console.log(
+    techNames.length
+      ? `Technician logins: ${techNames.join(", ")}`
+      : "Technician logins: OFF — set TECH_DEAN01_PASSWORD / TECH_DEAN02_PASSWORD"
+  );
 });

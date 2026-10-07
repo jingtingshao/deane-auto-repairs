@@ -517,8 +517,9 @@ async function importInvoiceFile(file) {
   const supplier = current.supplier || result.parsed?.supplier || "Supplier";
   const topstarNote = /topstar/i.test(supplier) ? " Topstar lines are parts from the Description column." : "";
   showStatus(
-    `${supplier} imported: ${lineCount} part line${lineCount === 1 ? "" : "s"} read.${topstarNote} Use Add to stock only for shelf quantity.`,
-    7000
+    result.warning ||
+      `${supplier} imported: ${lineCount} part line${lineCount === 1 ? "" : "s"} read.${topstarNote} Use Add to stock only for shelf quantity.`,
+    result.warning ? 9000 : 7000
   );
 }
 
@@ -574,6 +575,7 @@ function fillForm(invoice) {
   set("total", invoice.total);
   set("currency", invoice.currency || "NZD");
   set("notes", invoice.notes || "");
+  if (rawTextEl) rawTextEl.value = String(invoice.ocrRawTextRef || "");
   renderPhotos(invoice);
   renderTracking();
   renderOcrStatus();
