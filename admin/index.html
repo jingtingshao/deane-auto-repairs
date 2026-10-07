@@ -478,10 +478,11 @@
                 <div class="photo-row">
                   <label class="file-label">
                     Choose files
-                    <input id="supplier-invoice-import-file-inline" type="file" accept=".pdf,application/pdf,image/*" capture="environment" />
+                    <input id="supplier-invoice-import-file-inline" type="file" accept=".pdf,application/pdf,image/*" />
                   </label>
                   <span class="muted small">or</span>
-                  <button type="button" id="btn-supplier-invoice-import-inline" class="ghost">Take photo / Upload PDF</button>
+                  <button type="button" id="btn-supplier-invoice-import-inline" class="ghost">Take photo</button>
+                  <input id="supplier-invoice-camera-file" type="file" accept="image/*" capture="environment" hidden />
                   <div id="supplier-invoice-photos" class="photo-thumbs"></div>
                 </div>
               </fieldset>
@@ -1001,7 +1002,7 @@
     <script src="jobs.js?v=20261006jobstock"></script>
     <script src="billing.js?v=20261006jobstock"></script>
     <script src="inventory.js?v=20261007oildrum"></script>
-    <script src="supplier-invoices.js?v=20261006instock"></script>
+    <script src="supplier-invoices.js?v=20261007choosefile"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>
     <script src="customers.js?v=20260906techcustomers"></script>
     <script src="referrals.js?v=20260906usedon"></script>

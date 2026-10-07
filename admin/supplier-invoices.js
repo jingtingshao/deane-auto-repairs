@@ -9,6 +9,7 @@ const searchEl = document.getElementById("supplier-invoices-search");
 const form = document.getElementById("supplier-invoice-form");
 const importFileInput = document.getElementById("supplier-invoice-import-file");
 const importFileInputInline = document.getElementById("supplier-invoice-import-file-inline");
+const cameraFileInput = document.getElementById("supplier-invoice-camera-file");
 const photosEl = document.getElementById("supplier-invoice-photos");
 const lightboxEl = document.getElementById("supplier-invoice-lightbox");
 const rawTextEl = document.getElementById("supplier-invoice-raw-text");
@@ -1363,7 +1364,7 @@ document.getElementById("btn-supplier-invoice-import")?.addEventListener("click"
   importFileInput?.click();
 });
 document.getElementById("btn-supplier-invoice-import-inline")?.addEventListener("click", () => {
-  importFileInputInline?.click();
+  cameraFileInput?.click();
 });
 document.getElementById("btn-supplier-invoice-back")?.addEventListener("click", async () => {
   try {
@@ -1421,6 +1422,17 @@ importFileInputInline?.addEventListener("change", async () => {
     alert(err.message);
   } finally {
     importFileInputInline.value = "";
+  }
+});
+cameraFileInput?.addEventListener("change", async () => {
+  try {
+    const file = cameraFileInput.files?.[0];
+    if (!file) return;
+    await importInvoiceFile(file);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    cameraFileInput.value = "";
   }
 });
 
