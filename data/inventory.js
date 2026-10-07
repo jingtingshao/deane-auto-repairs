@@ -189,6 +189,7 @@ function findMatch(items, input) {
       const supplier = nameKey(input.supplier);
       return hits.find((row) => nameKey(row.supplier) === supplier) || hits[0];
     }
+    return null;
   }
   const name = nameKey(input.name);
   const supplier = nameKey(input.supplier);
@@ -254,8 +255,8 @@ function applyReceive(items, movements, input, now) {
   const candidateId = cleanText(input?.candidateId, 80);
   if (candidateId) {
     const prior = (movements || []).find((row) => row.candidateId === candidateId);
-    if (prior) {
-      const existing = items.find((row) => row.id === prior.itemId) || null;
+    const existing = prior ? items.find((row) => row.id === prior.itemId) || null : null;
+    if (prior && existing) {
       return { item: existing, created: false, already: true, movement: prior };
     }
   }

@@ -9205,10 +9205,11 @@ function writeInventoryMovements(rows) {
 }
 
 function stockedCandidateIds() {
+  const liveItems = new Set(readInventoryItems().map((row) => row.id));
   const ids = new Set();
   for (const row of readInventoryMovements()) {
     const id = String(row?.candidateId || "").trim();
-    if (id) ids.add(id);
+    if (id && liveItems.has(row.itemId)) ids.add(id);
   }
   return ids;
 }
@@ -9343,6 +9344,8 @@ app.delete("/api/inventory/:id", requireOwnerAdmin, (req, res) => {
   const next = rows.filter((row) => row.id !== req.params.id);
   if (next.length === rows.length) return res.status(404).json({ error: "Stock item not found" });
   writeInventoryItems(next);
+  const movements = readInventoryMovements().filter((row) => row.itemId !== req.params.id);
+  writeInventoryMovements(movements);
   res.json({ ok: true });
 });
 
