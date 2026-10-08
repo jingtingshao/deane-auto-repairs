@@ -63,11 +63,38 @@ function syncLinePrices(rowEl, source) {
     const unit = money(unitEl.value);
     unitEl.value = unit.toFixed(2);
     totalEl.value = money(unit * qty).toFixed(2);
-    return;
+  } else {
+    const total = money(totalEl.value);
+    totalEl.value = total.toFixed(2);
+    unitEl.value = (qty > 0 ? money(total / qty) : 0).toFixed(2);
   }
-  const total = money(totalEl.value);
-  totalEl.value = total.toFixed(2);
-  unitEl.value = (qty > 0 ? money(total / qty) : 0).toFixed(2);
+  updateLineGrandTotals();
+}
+
+function rowExGst(rowEl) {
+  const qty = lineQtyValue(rowEl);
+  const unit = money(rowEl.querySelector('[data-field="costPrice"]')?.value);
+  const total = money(rowEl.querySelector('[data-field="lineTotal"]')?.value);
+  const active = document.activeElement;
+  const field = active && rowEl.contains(active) ? active.dataset.field : "";
+  if (field === "costPrice" || field === "qty") return money(unit * qty);
+  if (field === "lineTotal") return total;
+  return total || money(unit * qty);
+}
+
+function updateLineGrandTotals() {
+  const exclEl = document.getElementById("supplier-lines-total-ex");
+  const inclEl = document.getElementById("supplier-lines-total-in");
+  if (!exclEl || !inclEl || !candidatesEl) return;
+  let excl = 0;
+  candidatesEl.querySelectorAll("tr[data-id]").forEach((rowEl) => {
+    const row = candidates.find((item) => item.id === rowEl.dataset.id);
+    if (row?.decision === "rejected") return;
+    excl += rowExGst(rowEl);
+  });
+  excl = money(excl);
+  exclEl.textContent = formatMoney(excl);
+  inclEl.textContent = formatMoney(excl * 1.15);
 }
 
 function aucklandYearMonth(iso) {
@@ -1127,6 +1154,10 @@ function renderCandidates() {
         </tbody>
       </table>
     </div>
+    <div class="supplier-line-grand">
+      <span>Total excl GST <strong id="supplier-lines-total-ex">$0.00</strong></span>
+      <span>Total incl GST <strong id="supplier-lines-total-in">$0.00</strong></span>
+    </div>
   `;
 
   document.getElementById("supplier-candidates-select-all")?.addEventListener("change", (e) => {
@@ -1162,6 +1193,7 @@ function renderCandidates() {
     });
   });
   bindJobPickers();
+  updateLineGrandTotals();
   candidatesEl.querySelectorAll('[data-field="qty"]').forEach((el) => {
     el.addEventListener("change", () => {
       el.value = String(Math.max(1, Math.round(Number(el.value) || 1)));
@@ -1181,6 +1213,9 @@ function renderCandidates() {
       };
       el.addEventListener("change", save);
       el.addEventListener("blur", save);
+      if (el.dataset.field === "qty" || el.dataset.field === "costPrice" || el.dataset.field === "lineTotal") {
+        el.addEventListener("input", () => updateLineGrandTotals());
+      }
     });
   });
   candidatesEl.querySelectorAll("[data-action]").forEach((btn) => {
