@@ -110,15 +110,19 @@
   function findStockMatch(input) {
     const category = String(input?.category || "");
     const key = partKey(input?.partNumber);
+    const name = nameKey(input?.name);
     if (key) {
-      const hits = items.filter((row) => row.category === category && partKey(row.partNumber) === key);
+      const hits = items.filter((row) => {
+        if (row.category !== category || partKey(row.partNumber) !== key) return false;
+        if (name && nameKey(row.name) !== name) return false;
+        return true;
+      });
       if (hits.length === 1) return hits[0];
       if (hits.length > 1) {
         const supplier = nameKey(input?.supplier);
         return hits.find((row) => nameKey(row.supplier) === supplier) || hits[0];
       }
     }
-    const name = nameKey(input?.name);
     const supplier = nameKey(input?.supplier);
     if (!name || !category) return null;
     return (
@@ -136,6 +140,7 @@
     for (const [needle, id] of GUESS_RULES) {
       if (hay.includes(needle)) return id;
     }
+    if (/\b\d{3}\s*\/\s*\d{2}\s*r\s*\d{2}\b/i.test(hay) || /\b\d{3}\s*r\s*\d{2}\s*c?\b/i.test(hay)) return "tyre";
     return "";
   }
 

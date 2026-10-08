@@ -125,6 +125,7 @@ function guessCategory(text) {
   for (const [needle, id] of GUESS_RULES) {
     if (hay.includes(needle)) return id;
   }
+  if (/\b\d{3}\s*\/\s*\d{2}\s*r\s*\d{2}\b/i.test(hay) || /\b\d{3}\s*r\s*\d{2}\s*c?\b/i.test(hay)) return "tyre";
   return "";
 }
 
@@ -314,7 +315,12 @@ function liveInvoiceReceipt(items, movements, input) {
     const item = live.get(movement.itemId);
     if (!item) continue;
     if (candidateId && String(movement.candidateId || "") === candidateId) {
-      return { item, movement };
+      const itemPart = partKey(item.partNumber);
+      const itemName = nameKey(item.name);
+      const samePart = !part || itemPart === part;
+      const sameName = !name || itemName === name;
+      if (samePart && sameName) return { item, movement };
+      continue;
     }
     if (!invoiceId || String(movement.supplierInvoiceId || "") !== invoiceId) continue;
     const itemPart = partKey(item.partNumber);
@@ -327,28 +333,30 @@ function liveInvoiceReceipt(items, movements, input) {
 
 function stockedCandidateIdSet(candidates, items, movements) {
   const live = new Map((items || []).map((row) => [row.id, row]));
-  const direct = new Set();
-  const invoicePartName = new Set();
-  const invoiceName = new Set();
+  const receipts = [];
   for (const movement of movements || []) {
     const item = live.get(movement.itemId);
     if (!item) continue;
-    const candidateId = String(movement.candidateId || "").trim();
-    if (candidateId) direct.add(candidateId);
-    const invoiceId = String(movement.supplierInvoiceId || "").trim();
-    if (!invoiceId) continue;
-    const part = partKey(item.partNumber);
-    const itemName = nameKey(item.name);
-    if (part) invoicePartName.add(`${invoiceId}|${part}|${itemName}`);
-    else if (itemName) invoiceName.add(`${invoiceId}|${itemName}`);
+    receipts.push({
+      candidateId: String(movement.candidateId || "").trim(),
+      invoiceId: String(movement.supplierInvoiceId || "").trim(),
+      part: partKey(item.partNumber),
+      name: nameKey(item.name),
+    });
   }
-  const ids = new Set(direct);
+  const ids = new Set();
   for (const row of candidates || []) {
     const invoiceId = String(row.supplierInvoiceId || "").trim();
     const part = partKey(row.partNumberCandidate);
     const name = nameKey(row.descriptionCandidate);
-    if (part && invoicePartName.has(`${invoiceId}|${part}|${name}`)) ids.add(row.id);
-    if (!part && name && invoiceName.has(`${invoiceId}|${name}`)) ids.add(row.id);
+    const hit = receipts.some((receipt) => {
+      const samePart = Boolean(part) && receipt.part === part && receipt.name === name;
+      const sameBlankPart = !part && !receipt.part && Boolean(name) && receipt.name === name;
+      if (!samePart && !sameBlankPart) return false;
+      if (receipt.candidateId && receipt.candidateId === row.id) return true;
+      return Boolean(receipt.invoiceId) && receipt.invoiceId === invoiceId;
+    });
+    if (hit) ids.add(row.id);
   }
   return ids;
 }
