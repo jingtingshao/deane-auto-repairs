@@ -79,6 +79,15 @@
     return unit === "litre" ? `${text} L` : text;
   }
 
+  function formatMarkup(cost, sell) {
+    const c = Number(cost) || 0;
+    const s = Number(sell) || 0;
+    if (!(c > 0)) return "—";
+    const pct = Math.round(((s / c) - 1) * 1000) / 10;
+    const text = Number.isInteger(pct) ? String(pct) : pct.toFixed(1);
+    return `${text}%`;
+  }
+
   function suggestPrice(cost) {
     const c = Math.round(Math.max(0, Number(cost) || 0) * 100) / 100;
     const band = BANDS.find((row) => row.max == null || c <= row.max) || BANDS[BANDS.length - 1];
@@ -319,15 +328,14 @@
           <th>Supplier</th>
           <th>On hand</th>
           <th>Cost</th>
-          <th>Suggested sell</th>
           <th>Sell ex GST</th>
+          <th>Markup</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         ${rows
           .map((item) => {
-            const price = item.price || suggestPrice(item.costPrice);
             const unit = item.unit === "litre" ? " / L" : "";
             const fit = [item.partNumber, item.fitment].filter(Boolean).join(" · ");
             return `<tr data-id="${Admin.escapeAttr(item.id)}">
@@ -336,11 +344,10 @@
               <td>${Admin.escapeHtml(item.supplier || "—")}</td>
               <td>${Admin.escapeHtml(formatQty(item.qtyOnHand, item.unit))}</td>
               <td>${money(item.costPrice)}${unit}</td>
-              <td>${money(price.sellMin)}–${money(price.sellMax)}</td>
               <td><strong>${money(item.sellPrice)}${unit}</strong><div class="muted small">${money(Math.round(item.sellPrice * 1.15 * 100) / 100)} incl</div></td>
+              <td>${formatMarkup(item.costPrice, item.sellPrice)}</td>
               <td class="supplier-line-actions">
                 <button type="button" class="ghost" data-edit="${Admin.escapeAttr(item.id)}">Edit</button>
-                <button type="button" class="ghost" data-use="${Admin.escapeAttr(item.id)}"${item.qtyOnHand > 0 ? "" : " disabled"}>${item.unit === "litre" ? "Use 1 L" : "Use 1"}</button>
               </td>
             </tr>`;
           })
@@ -349,9 +356,6 @@
     </table></div>`;
     listEl.querySelectorAll("[data-edit]").forEach((btn) => {
       btn.addEventListener("click", () => openEditor(btn.dataset.edit));
-    });
-    listEl.querySelectorAll("[data-use]").forEach((btn) => {
-      btn.addEventListener("click", () => useOne(btn.dataset.use));
     });
   }
 
@@ -402,23 +406,6 @@
       renderList();
     } catch (err) {
       flash(err.message);
-    }
-  }
-
-  async function useOne(id) {
-    const item = items.find((row) => row.id === id);
-    if (!item) return;
-    const label = item.unit === "litre" ? "1 L" : "1";
-    if (!confirm(`Take ${label} of ${item.name} off the shelf?`)) return;
-    try {
-      await Admin.api(`/api/inventory/${id}/adjust`, {
-        method: "POST",
-        body: JSON.stringify({ qtyDelta: -1, note: "Used" }),
-      });
-      await show();
-      flash(`${item.name} updated.`);
-    } catch (err) {
-      alert(err.message);
     }
   }
 
