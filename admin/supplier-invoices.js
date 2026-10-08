@@ -889,7 +889,7 @@ function markLineStocked(candidateId) {
     const otherPart = String(other.partNumberCandidate || "").replace(/\s+/g, "").toUpperCase();
     const otherName = String(other.descriptionCandidate || "").trim().toLowerCase().replace(/\s+/g, " ");
     if (other.id === id) other.stocked = true;
-    else if (part && otherPart === part) other.stocked = true;
+    else if (part && otherPart === part && name && otherName === name) other.stocked = true;
     else if (!part && !otherPart && name && otherName === name) other.stocked = true;
   }
   renderCandidates();

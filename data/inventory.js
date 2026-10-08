@@ -180,10 +180,13 @@ function nameKey(value) {
 function findMatch(items, input) {
   const category = input.category;
   const key = partKey(input.partNumber);
+  const name = nameKey(input.name);
   if (key) {
-    const hits = items.filter(
-      (row) => row.category === category && partKey(row.partNumber) === key
-    );
+    const hits = items.filter((row) => {
+      if (row.category !== category || partKey(row.partNumber) !== key) return false;
+      if (name && nameKey(row.name) !== name) return false;
+      return true;
+    });
     if (hits.length === 1) return hits[0];
     if (hits.length > 1) {
       const supplier = nameKey(input.supplier);
@@ -191,7 +194,6 @@ function findMatch(items, input) {
     }
     return null;
   }
-  const name = nameKey(input.name);
   const supplier = nameKey(input.supplier);
   if (!name) return null;
   return (
@@ -316,8 +318,9 @@ function liveInvoiceReceipt(items, movements, input) {
     }
     if (!invoiceId || String(movement.supplierInvoiceId || "") !== invoiceId) continue;
     const itemPart = partKey(item.partNumber);
-    if (part && itemPart === part) return { item, movement };
-    if (!part && !itemPart && name && nameKey(item.name) === name) return { item, movement };
+    const itemName = nameKey(item.name);
+    if (part && itemPart === part && (!name || itemName === name)) return { item, movement };
+    if (!part && !itemPart && name && itemName === name) return { item, movement };
   }
   return null;
 }
@@ -325,7 +328,7 @@ function liveInvoiceReceipt(items, movements, input) {
 function stockedCandidateIdSet(candidates, items, movements) {
   const live = new Map((items || []).map((row) => [row.id, row]));
   const direct = new Set();
-  const invoicePart = new Set();
+  const invoicePartName = new Set();
   const invoiceName = new Set();
   for (const movement of movements || []) {
     const item = live.get(movement.itemId);
@@ -335,15 +338,16 @@ function stockedCandidateIdSet(candidates, items, movements) {
     const invoiceId = String(movement.supplierInvoiceId || "").trim();
     if (!invoiceId) continue;
     const part = partKey(item.partNumber);
-    if (part) invoicePart.add(`${invoiceId}|${part}`);
-    else invoiceName.add(`${invoiceId}|${nameKey(item.name)}`);
+    const itemName = nameKey(item.name);
+    if (part) invoicePartName.add(`${invoiceId}|${part}|${itemName}`);
+    else if (itemName) invoiceName.add(`${invoiceId}|${itemName}`);
   }
   const ids = new Set(direct);
   for (const row of candidates || []) {
     const invoiceId = String(row.supplierInvoiceId || "").trim();
     const part = partKey(row.partNumberCandidate);
     const name = nameKey(row.descriptionCandidate);
-    if (part && invoicePart.has(`${invoiceId}|${part}`)) ids.add(row.id);
+    if (part && invoicePartName.has(`${invoiceId}|${part}|${name}`)) ids.add(row.id);
     if (!part && name && invoiceName.has(`${invoiceId}|${name}`)) ids.add(row.id);
   }
   return ids;
@@ -391,9 +395,10 @@ function receiveSupplierInvoice(items, movements, invoice, candidates, now, newI
       continue;
     }
     const supplier = String(invoice?.supplier || line?.supplierCandidate || "").trim();
-    const existing = findByPartNumber(items, partNumber, supplier);
     const category =
-      existing?.category || guessCategory(`${name} ${partNumber}`);
+      guessCategory(`${name} ${partNumber}`) ||
+      findByPartNumber(items, partNumber, supplier)?.category ||
+      "";
     if (!category) {
       skipped.push({ id, name, reason: "Category not recognised" });
       continue;
@@ -407,8 +412,8 @@ function receiveSupplierInvoice(items, movements, invoice, candidates, now, newI
           id: newId(),
           movementId: newId(),
           category,
-          name: existing?.name || name,
-          partNumber: existing?.partNumber || partNumber,
+          name,
+          partNumber,
           supplier,
           qty,
           costPrice: override.costPrice != null ? override.costPrice : line?.costPriceCandidate,
