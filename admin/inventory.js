@@ -285,8 +285,7 @@
 
   function renderCategoryChips() {
     if (!catsEl) return;
-    const chips = [{ id: "", label: "All" }, ...categories];
-    catsEl.innerHTML = chips
+    catsEl.innerHTML = categories
       .map(
         (row) =>
           `<button type="button" class="ghost${row.id === categoryFilter ? " is-active" : ""}" data-cat="${Admin.escapeAttr(row.id)}">${Admin.escapeHtml(row.label)}</button>`
@@ -294,7 +293,8 @@
       .join("");
     catsEl.querySelectorAll("[data-cat]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        categoryFilter = btn.dataset.cat || "";
+        const next = btn.dataset.cat || "";
+        categoryFilter = categoryFilter === next ? "" : next;
         renderCategoryChips();
         renderList();
       });
@@ -315,9 +315,16 @@
 
   function renderList() {
     if (!listEl) return;
+    const q = String(searchEl?.value || "").trim();
+    if (!q && !categoryFilter) {
+      listEl.innerHTML = `<p class="muted">Search for a part, or choose a category.</p>`;
+      return;
+    }
     const rows = visibleItems();
     if (!rows.length) {
-      listEl.innerHTML = `<p class="muted">No stock yet. Add a part, or open a supplier invoice and choose Add to stock.</p>`;
+      listEl.innerHTML = items.length
+        ? `<p class="muted">No matching stock.</p>`
+        : `<p class="muted">No stock yet. Add a part, or open a supplier invoice and choose Add to stock.</p>`;
       return;
     }
     listEl.innerHTML = `<div class="line-table-wrap"><table class="line-table stock-table">
@@ -638,6 +645,8 @@
         await Admin.api("/api/inventory", { method: "POST", body: JSON.stringify(body) });
       }
       closeEditor();
+      categoryFilter = body.category;
+      renderCategoryChips();
       await show();
       flash("Stock saved.");
     } catch (err) {
