@@ -3587,7 +3587,8 @@ function publicViewTokenOk(doc, raw) {
 function normalizeLines(lines) {
   if (!Array.isArray(lines)) return [];
   return lines.map((line) => {
-    const gstInclUnit = Math.round(Math.max(0, Number(line.gstInclUnit) || 0));
+    const gstInclUnit =
+      Math.round(Math.max(0, Number(line.gstInclUnit) || 0) * 100 + Number.EPSILON) / 100;
     const unitPriceIncl =
       gstInclUnit > 0
         ? catalog.exclFromIncl(gstInclUnit)
@@ -3820,7 +3821,8 @@ function describeLineChanges(beforeLines, afterLines) {
       if (
         Number(prev.qty) !== Number(line.qty) ||
         Number(prev.unitPriceIncl) !== Number(line.unitPriceIncl) ||
-        Math.round(Number(prev.gstInclUnit) || 0) !== Math.round(Number(line.gstInclUnit) || 0)
+        Math.round((Number(prev.gstInclUnit) || 0) * 100) !==
+          Math.round((Number(line.gstInclUnit) || 0) * 100)
       ) {
         details.push(`Changed: ${line.description}`);
       }

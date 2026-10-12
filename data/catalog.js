@@ -71,9 +71,9 @@ function advertisedInclFromExcl(excl) {
 
 function lineAmounts(line) {
   const qty = Number(line?.qty) || 0;
-  const inclUnit = Math.round(Number(line?.gstInclUnit) || 0);
+  const inclUnit = round2(Number(line?.gstInclUnit) || 0);
   if (inclUnit > 0) {
-    const totalInclCents = Math.round(qty * inclUnit * 100);
+    const totalInclCents = Math.round(qty * toCents(inclUnit));
     const gstCents = gstFromInclCents(totalInclCents);
     const netCents = totalInclCents - gstCents;
     return {
@@ -108,9 +108,9 @@ function lineTotal(line) {
   return lineAmounts(line).net;
 }
 
-/** Unit price including GST. Whole-dollar inclusive entries stay on that integer. */
+/** Unit price including GST. A typed inclusive price stays on that amount. */
 function unitPriceGstIncl(line) {
-  const stored = Math.round(Number(line?.gstInclUnit) || 0);
+  const stored = round2(Number(line?.gstInclUnit) || 0);
   if (stored > 0) return stored;
   const qty = Number(line?.qty) || 0;
   if (!(qty > 0)) return 0;
@@ -141,7 +141,7 @@ function cloneLines(lines) {
     description: line.description,
     qty: line.qty,
     unitPriceIncl: line.unitPriceIncl,
-    gstInclUnit: Math.round(Number(line.gstInclUnit) || 0),
+    gstInclUnit: round2(Number(line.gstInclUnit) || 0),
   }));
 }
 

@@ -63,7 +63,7 @@ function newLine(partial = {}) {
     description: partial.description || "",
     qty: partial.qty != null ? partial.qty : 1,
     unitPriceIncl: partial.unitPriceIncl != null ? partial.unitPriceIncl : 0,
-    gstInclUnit: Math.round(Math.max(0, Number(partial.gstInclUnit) || 0)),
+    gstInclUnit: round2(Math.max(0, Number(partial.gstInclUnit) || 0)),
     stockItemId: String(partial.stockItemId || "").trim(),
   };
 }
@@ -1122,10 +1122,10 @@ function renderQuickAdds() {
 }
 
 function inclFieldValue(line) {
-  const stored = Math.round(Number(line?.gstInclUnit) || 0);
-  if (stored > 0) return String(stored);
+  const stored = round2(Number(line?.gstInclUnit) || 0);
+  if (stored > 0) return stored.toFixed(2);
   const advertised = advertisedInclFromExcl(line?.unitPriceIncl);
-  return advertised != null ? String(advertised) : "";
+  return advertised != null ? Number(advertised).toFixed(2) : "";
 }
 
 function renderLines() {
@@ -1137,7 +1137,7 @@ function renderLines() {
         <td><input data-field="description" value="${Admin.escapeAttr(line.description)}" ${locked ? "readonly" : ""} /></td>
         <td><input class="qty" data-field="qty" type="number" min="0" step="0.25" value="${Admin.escapeAttr(String(line.qty))}" ${locked ? "readonly" : ""} /></td>
         <td><input class="price" data-field="unitPriceIncl" type="number" min="0" step="0.01" value="${Admin.escapeAttr(String(line.unitPriceIncl))}" ${locked ? "readonly" : ""} /></td>
-        <td><input class="price-incl" data-field="gstInclUnit" type="number" min="0" step="1" inputmode="numeric" placeholder="0" title="Whole dollars including GST" value="${Admin.escapeAttr(inclFieldValue(line))}" ${locked ? "readonly" : ""} /></td>
+        <td><input class="price-incl" data-field="gstInclUnit" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" title="Price including GST" value="${Admin.escapeAttr(inclFieldValue(line))}" ${locked ? "readonly" : ""} /></td>
         <td class="total">${money(totalIncl)}</td>
         <td>${locked ? "" : `<button type="button" class="ghost" data-remove="${index}">×</button>`}</td>
       </tr>`;
@@ -1151,14 +1151,13 @@ function renderLines() {
       const field = input.dataset.field;
       const line = lineRows[index];
       if (field === "gstInclUnit") {
-        const raw = String(input.value || "");
+        const raw = String(input.value || "").trim();
         let incl = 0;
-        if (/^\d+$/.test(raw)) incl = Number(raw);
-        else if (raw !== "") {
+        if (raw !== "" && raw !== ".") {
           const n = Number(raw);
-          incl = Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
-          input.value = incl ? String(incl) : "";
+          if (Number.isFinite(n) && n > 0) incl = round2(n);
         }
+        if (/^\d+\.\d{3,}$/.test(raw)) input.value = incl ? incl.toFixed(2) : "";
         line.gstInclUnit = incl;
         if (incl > 0) {
           line.unitPriceIncl = exclFromIncl(incl);
@@ -1171,7 +1170,7 @@ function renderLines() {
         const inclInput = row.querySelector('[data-field="gstInclUnit"]');
         if (inclInput) {
           const advertised = advertisedInclFromExcl(line.unitPriceIncl);
-          inclInput.value = advertised != null ? String(advertised) : "";
+          inclInput.value = advertised != null ? Number(advertised).toFixed(2) : "";
         }
       } else if (field === "qty") {
         line.qty = Number(input.value) || 0;
@@ -1184,6 +1183,12 @@ function renderLines() {
       if (field === "description") syncWofExpiryField();
       updateConsumableQuickLabel();
       scheduleBillAutosave();
+    });
+    input.addEventListener("blur", () => {
+      if (input.dataset.field !== "gstInclUnit") return;
+      const line = lineRows[Number(input.closest("tr")?.dataset.index)];
+      const incl = round2(Number(line?.gstInclUnit) || 0);
+      input.value = incl > 0 ? incl.toFixed(2) : "";
     });
   });
   billingLinesEl.querySelectorAll("[data-remove]").forEach((btn) => {
@@ -1226,9 +1231,9 @@ function exclFromIncl(incl) {
 
 function lineAmounts(line) {
   const qty = Number(line?.qty) || 0;
-  const inclUnit = Math.round(Number(line?.gstInclUnit) || 0);
+  const inclUnit = round2(Number(line?.gstInclUnit) || 0);
   if (inclUnit > 0) {
-    const totalInclCents = Math.round(qty * inclUnit * 100);
+    const totalInclCents = Math.round(qty * toCents(inclUnit));
     const gstCents = Math.round(totalInclCents * (3 / 23));
     const netCents = totalInclCents - gstCents;
     return {

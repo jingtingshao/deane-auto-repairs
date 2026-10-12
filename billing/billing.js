@@ -149,7 +149,7 @@ function render(doc) {
   const lineRows = (doc.lines || [])
     .map((line) => {
       const qty = Number(line.qty) || 0;
-      const storedIncl = Math.round(Number(line.gstInclUnit) || 0);
+      const storedIncl = Math.round((Number(line.gstInclUnit) || 0) * 100) / 100;
       const incl =
         storedIncl > 0
           ? storedIncl
