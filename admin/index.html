@@ -806,7 +806,8 @@
                 <legend>Customer &amp; vehicle</legend>
                 <p class="muted small">
                   Type the plate to fill the customer, or choose from the list.
-                  Add or change details under <strong>Customers</strong>.
+                  You can type the vehicle model here if it was left blank. Saving stores it on this invoice and on the customer.
+                  Add or change the name, phone or plate under <strong>Customers</strong>.
                 </p>
                 <label class="plate-find">
                   Find by plate
@@ -837,7 +838,7 @@
                   <label>Email<input name="customerEmail" type="email" readonly /></label>
                   <label>Phone<input name="customerPhone" type="tel" readonly /></label>
                   <label>Plate<input name="registration" readonly /></label>
-                  <label>Vehicle<input name="vehicle" readonly /></label>
+                  <label>Vehicle<input name="vehicle" placeholder="Make, model, year" /></label>
                 </div>
                 <label>Notes for customer<textarea name="notes" rows="2"></textarea></label>
                 <p class="muted small">
@@ -1007,7 +1008,7 @@
     <script src="dashboard.js?v=20261012invoiceplate"></script>
     <script src="calendar.js?v=20260905staffrole"></script>
     <script src="jobs.js?v=20261006jobstock"></script>
-    <script src="billing.js?v=20261012nototal"></script>
+    <script src="billing.js?v=20261012vehicle"></script>
     <script src="inventory.js?v=20261011stock"></script>
     <script src="supplier-invoices.js?v=20261008totals"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>

@@ -3528,6 +3528,31 @@ function requireCustomerSnapshot(body) {
   };
 }
 
+/** Keep a vehicle model typed on a quote or invoice, and store it on the customer. */
+function saveCustomerVehicleDescription(snapshot, typedVehicle) {
+  const vehicleDesc = namesLib.capitalizeVehicleDescription(String(typedVehicle || "").trim());
+  const customerId = String(snapshot?.customerId || "").trim();
+  if (!vehicleDesc || !customerId) return vehicleDesc;
+  const rows = readSavedCustomers();
+  const index = rows.findIndex((c) => c.id === customerId);
+  if (index < 0) return vehicleDesc;
+  const current = rows[index];
+  const vehicles = normalizeVehicles(current, current);
+  const wantedId = String(snapshot?.vehicleId || "").trim();
+  const wantedPlate = plateKey(snapshot?.registration || wantedId);
+  const vIndex = vehicles.findIndex(
+    (v) => v.id === wantedId || (wantedPlate && plateKey(v.registration) === wantedPlate)
+  );
+  if (vIndex < 0) return vehicleDesc;
+  if (String(vehicles[vIndex].vehicle || "").trim() === vehicleDesc) return vehicleDesc;
+  vehicles[vIndex] = { ...vehicles[vIndex], vehicle: vehicleDesc };
+  current.vehicles = vehicles;
+  current.updatedAt = nowIso();
+  rows[index] = current;
+  writeSavedCustomers(rows);
+  return vehicleDesc;
+}
+
 function newAcceptToken() {
   return randomBytes(24).toString("hex");
 }
@@ -6722,7 +6747,14 @@ app.post("/api/billing", requireAdmin, (req, res) => {
     customerEmail: String(req.body?.customerEmail || "").trim(),
     customerPhone: String(req.body?.customerPhone || "").trim(),
     registration,
-    vehicle: String(req.body?.vehicle || "").trim(),
+    vehicle: saveCustomerVehicleDescription(
+      {
+        customerId,
+        vehicleId: String(req.body?.vehicleId || "").trim(),
+        registration,
+      },
+      req.body?.vehicle
+    ),
     odometer: req.body?.odometer || "",
     notes: String(req.body?.notes || "").trim(),
     lines,
@@ -6838,6 +6870,9 @@ app.put("/api/billing/:id", requireAdmin, requireCurrentBillingIfTech, (req, res
     );
   } catch (err) {
     return res.status(err.status || 400).json({ error: err.message });
+  }
+  if (body.vehicle != null) {
+    snapshot.vehicle = saveCustomerVehicleDescription(snapshot, body.vehicle);
   }
   const locked = isLockedBilling(current);
   const incomingLines = body.lines != null ? body.lines : body.lines;

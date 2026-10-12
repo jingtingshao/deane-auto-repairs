@@ -89,6 +89,8 @@ function setBillingFieldsEditable(editable) {
   });
   if (billingCustomerSelect) billingCustomerSelect.disabled = !editable;
   if (billingVehicleSelect) billingVehicleSelect.disabled = !editable;
+  const vehicleInput = billingInput("vehicle");
+  if (vehicleInput) vehicleInput.readOnly = !editable;
   const plateFind = document.getElementById("billing-plate-find");
   if (plateFind) plateFind.disabled = !editable;
 }
@@ -723,6 +725,18 @@ function refreshBillingPartySelects(doc = currentBill) {
       ) ||
       (Admin.customerVehicles(row).length === 1 ? Admin.customerVehicles(row)[0] : null);
     Admin.applyPartyToForm(billingForm, row, vehicle);
+    if (doc?.vehicle) {
+      const el = billingInput("vehicle");
+      if (el) el.value = doc.vehicle;
+      if (vehicle && String(vehicle.vehicle || "").trim() !== String(doc.vehicle).trim()) {
+        vehicle.vehicle = doc.vehicle;
+        Admin.fillVehicleSelect(
+          billingVehicleSelect,
+          row,
+          vehicle.id || vehicle.registration || ""
+        );
+      }
+    }
     // Keep job/appointment text when directory vehicle blank but doc has values.
     if (doc?.registration && !billingInput("registration")?.value) {
       const el = billingInput("registration");
