@@ -108,6 +108,16 @@ function lineTotal(line) {
   return lineAmounts(line).net;
 }
 
+/** Unit price including GST. Whole-dollar inclusive entries stay on that integer. */
+function unitPriceGstIncl(line) {
+  const stored = Math.round(Number(line?.gstInclUnit) || 0);
+  if (stored > 0) return stored;
+  const qty = Number(line?.qty) || 0;
+  if (!(qty > 0)) return 0;
+  const totalInclCents = toCents(lineAmounts(line).totalIncl);
+  return fromCents(Math.round(totalInclCents / qty));
+}
+
 function computeTotals(lines) {
   let netCents = 0;
   let gstCents = 0;
@@ -388,6 +398,7 @@ module.exports = {
   advertisedInclFromExcl,
   lineAmounts,
   lineTotal,
+  unitPriceGstIncl,
   computeTotals,
   cloneLines,
   presetById,

@@ -1132,11 +1132,13 @@ function renderLines() {
   const locked = !canEditLines(currentBill);
   billingLinesEl.innerHTML = lineRows
     .map((line, index) => {
+      const totalIncl = lineAmounts(line).totalIncl;
       return `<tr data-index="${index}">
         <td><input data-field="description" value="${Admin.escapeAttr(line.description)}" ${locked ? "readonly" : ""} /></td>
         <td><input class="qty" data-field="qty" type="number" min="0" step="0.25" value="${Admin.escapeAttr(String(line.qty))}" ${locked ? "readonly" : ""} /></td>
         <td><input class="price" data-field="unitPriceIncl" type="number" min="0" step="0.01" value="${Admin.escapeAttr(String(line.unitPriceIncl))}" ${locked ? "readonly" : ""} /></td>
         <td><input class="price-incl" data-field="gstInclUnit" type="number" min="0" step="1" inputmode="numeric" placeholder="0" title="Whole dollars including GST" value="${Admin.escapeAttr(inclFieldValue(line))}" ${locked ? "readonly" : ""} /></td>
+        <td class="total">${money(totalIncl)}</td>
         <td>${locked ? "" : `<button type="button" class="ghost" data-remove="${index}">×</button>`}</td>
       </tr>`;
     })
@@ -1176,6 +1178,8 @@ function renderLines() {
       } else {
         line[field] = input.value;
       }
+      const totalCell = row.querySelector(".total");
+      if (totalCell) totalCell.textContent = money(lineAmounts(line).totalIncl);
       renderTotals();
       if (field === "description") syncWofExpiryField();
       updateConsumableQuickLabel();

@@ -148,12 +148,19 @@ function render(doc) {
 
   const lineRows = (doc.lines || [])
     .map((line) => {
-      const total = line.amounts?.net ?? (Number(line.qty) || 0) * (Number(line.unitPriceIncl) || 0);
+      const qty = Number(line.qty) || 0;
+      const storedIncl = Math.round(Number(line.gstInclUnit) || 0);
+      const incl =
+        storedIncl > 0
+          ? storedIncl
+          : qty > 0 && line.amounts?.totalIncl != null
+            ? Math.round((Number(line.amounts.totalIncl) / qty) * 100) / 100
+            : Math.round((Number(line.unitPriceIncl) || 0) * 1.15 * 100) / 100;
       return `<tr>
         <td>${escapeHtml(line.description)}</td>
         <td class="num">${escapeHtml(String(line.qty))}</td>
         <td class="num">${money(line.unitPriceIncl)}</td>
-        <td class="num">${money(total)}</td>
+        <td class="num">${money(incl)}</td>
       </tr>`;
     })
     .join("");
@@ -224,9 +231,12 @@ function render(doc) {
               <th class="num">Qty</th>
               <th class="num">
                 <span class="th-full">Price excl. GST</span>
-                <span class="th-short" aria-hidden="true">Price excl.</span>
+                <span class="th-short" aria-hidden="true">Excl. GST</span>
               </th>
-              <th class="num">Total</th>
+              <th class="num">
+                <span class="th-full">Price incl. GST</span>
+                <span class="th-short" aria-hidden="true">Incl. GST</span>
+              </th>
             </tr>
           </thead>
           <tbody>${lineRows}</tbody>

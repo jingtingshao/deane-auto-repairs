@@ -185,7 +185,7 @@ function buildBillingPdf(doc) {
         pdf.text("Description", cols.desc, y, { width: widths.desc, lineBreak: false });
         drawRight("Qty", cols.price, y);
         drawRight("Excl. GST", cols.total, y);
-        drawRight("Total", contentRight, y);
+        drawRight("Incl. GST", contentRight, y);
         pdf
           .moveTo(left, y + 14)
           .lineTo(left + pageWidth, y + 14)
@@ -346,7 +346,7 @@ function buildBillingPdf(doc) {
         const desc = String(line.description || "").trim();
         const qty = Number(line.qty) || 0;
         const unit = Number(line.unitPriceIncl) || 0;
-        const lineTot = catalog.lineTotal(line);
+        const unitIncl = catalog.unitPriceGstIncl(line);
         pdf.font("Helvetica").fontSize(10);
         const descHeight = pdf.heightOfString(desc, { width: widths.desc });
         ensureSpace(descHeight + 12);
@@ -357,7 +357,7 @@ function buildBillingPdf(doc) {
         pdf.font("Helvetica").fontSize(10).fillColor("#1a2332");
         drawRight(String(qty), cols.price, y);
         drawRight(money(unit), cols.total, y);
-        drawRight(money(lineTot), contentRight, y);
+        drawRight(money(unitIncl), contentRight, y);
         pdf.x = left;
         pdf.y = Math.max(afterDesc, y + 12) + 4;
       }
