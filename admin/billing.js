@@ -444,6 +444,7 @@ function renderBillingList() {
               <th>Invoice no</th>
               <th>Date</th>
               <th>Customer name</th>
+              <th>Plate</th>
               <th class="invoice-money">Invoice amount</th>
               <th class="invoice-money">Payment made</th>
               <th class="invoice-money">Balance</th>
@@ -460,13 +461,14 @@ function renderBillingList() {
                         <td class="billing-number">${Admin.escapeHtml(d.number || "—")}</td>
                         <td>${Admin.escapeHtml(when)}</td>
                         <td>${Admin.escapeHtml(d.customerName || "—")}</td>
+                        <td>${Admin.escapeHtml(String(d.registration || "").trim().toUpperCase() || "—")}</td>
                         <td class="invoice-money">${money(d.totalIncl)}</td>
                         <td class="invoice-money invoice-payment">${money(d.amountPaid)}</td>
                         <td class="invoice-money invoice-due">${money(d.balanceDue)}</td>
                       </tr>`;
                     })
                     .join("")
-                : '<tr><td colspan="6" class="empty-table-cell">No matching invoices.</td></tr>'
+                : '<tr><td colspan="7" class="empty-table-cell">No matching invoices.</td></tr>'
             }
           </tbody>
         </table>

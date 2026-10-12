@@ -213,13 +213,14 @@
         ${
           invoiceRows.length
             ? `<div class="dashboard-table-wrap"><table class="dashboard-money-table invoice-dashboard-table">
-                <thead><tr><th>Invoice no</th><th>Date</th><th>Customer name</th><th>Invoice $</th><th>Payment made</th><th>Balance</th></tr></thead>
+                <thead><tr><th>Invoice no</th><th>Date</th><th>Customer name</th><th>Plate</th><th>Invoice $</th><th>Payment made</th><th>Balance</th></tr></thead>
                 <tbody>${invoiceRows
                   .map(
                     (doc) => `<tr data-open-billing="${Admin.escapeAttr(doc.id)}" data-billing-kind="invoice">
                       <td class="number-cell">${Admin.escapeHtml(doc.number || "—")}</td>
                       <td>${Admin.escapeHtml(formatListDate(doc.sortAt || doc.sentAt || doc.createdAt || doc.updatedAt))}</td>
                       <td>${Admin.escapeHtml(doc.customerName || "—")}</td>
+                      <td>${Admin.escapeHtml(String(doc.registration || "").trim().toUpperCase() || "—")}</td>
                       <td class="money-cell">${money(doc.totalIncl)}</td>
                       <td class="money-cell paid-cell">${money(doc.amountPaid)}</td>
                       <td class="money-cell balance-cell">${money(doc.balanceDue)}</td>
