@@ -24,7 +24,11 @@ const REDIRECT_URI = `http://127.0.0.1:${PORT}`;
 
 function openBrowser(url) {
   if (process.platform === "win32") {
-    spawn("cmd", ["/c", "start", "", url], { detached: true, stdio: "ignore" });
+    // cmd.exe treats "&" as a command separator, which drops response_type from the Google URL.
+    spawn("rundll32", ["url.dll,FileProtocolHandler", url], {
+      detached: true,
+      stdio: "ignore",
+    });
   } else if (process.platform === "darwin") {
     spawn("open", [url], { detached: true, stdio: "ignore" });
   } else {
