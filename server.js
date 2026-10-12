@@ -3561,13 +3561,21 @@ function publicViewTokenOk(doc, raw) {
 
 function normalizeLines(lines) {
   if (!Array.isArray(lines)) return [];
-  return lines.map((line) => ({
-    id: line.id || randomUUID(),
-    description: catalog.capitalizeLineDescription(line.description),
-    qty: Math.max(0, Number(line.qty) || 0),
-    unitPriceIncl: Math.max(0, Number(line.unitPriceIncl) || 0),
-    stockItemId: String(line.stockItemId || "").trim(),
-  }));
+  return lines.map((line) => {
+    const gstInclUnit = Math.round(Math.max(0, Number(line.gstInclUnit) || 0));
+    const unitPriceIncl =
+      gstInclUnit > 0
+        ? catalog.exclFromIncl(gstInclUnit)
+        : Math.max(0, Number(line.unitPriceIncl) || 0);
+    return {
+      id: line.id || randomUUID(),
+      description: catalog.capitalizeLineDescription(line.description),
+      qty: Math.max(0, Number(line.qty) || 0),
+      unitPriceIncl,
+      gstInclUnit,
+      stockItemId: String(line.stockItemId || "").trim(),
+    };
+  });
 }
 
 function billableLines(lines) {
@@ -3786,7 +3794,8 @@ function describeLineChanges(beforeLines, afterLines) {
       usedBefore.add(idx);
       if (
         Number(prev.qty) !== Number(line.qty) ||
-        Number(prev.unitPriceIncl) !== Number(line.unitPriceIncl)
+        Number(prev.unitPriceIncl) !== Number(line.unitPriceIncl) ||
+        Math.round(Number(prev.gstInclUnit) || 0) !== Math.round(Number(line.gstInclUnit) || 0)
       ) {
         details.push(`Changed: ${line.description}`);
       }
@@ -6688,17 +6697,9 @@ app.post("/api/billing", requireAdmin, (req, res) => {
     }
   }
   const bodyLines = Array.isArray(req.body?.lines) ? req.body.lines : null;
-  const lines = (bodyLines && bodyLines.length
-    ? bodyLines
-    : catalog.cloneLines(preset.lines)
-  ).map((line) => ({
-    id: line.id || randomUUID(),
-    description: catalog.capitalizeLineDescription
-      ? catalog.capitalizeLineDescription(line.description)
-      : String(line.description || "").trim(),
-    qty: Number(line.qty) || 0,
-    unitPriceIncl: Math.max(0, Number(line.unitPriceIncl) || 0),
-  }));
+  const lines = normalizeLines(
+    bodyLines && bodyLines.length ? bodyLines : catalog.cloneLines(preset.lines)
+  );
   const doc = {
     id: randomUUID(),
     kind: preset.kind,

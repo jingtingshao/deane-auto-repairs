@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20261008totals" />
+    <link rel="stylesheet" href="admin.css?v=20261012gstincl" />
     <link rel="stylesheet" href="admin-refresh.css?v=20261002yellow" />
   </head>
   <body>
@@ -906,7 +906,10 @@
               </fieldset>
 
               <fieldset>
-                <legend>Line items (excl. GST)</legend>
+                <legend>Line items</legend>
+                <p class="muted small">
+                  Excl. GST can include cents. Incl. GST is the whole-dollar price the customer pays for one unit. Type either price and the other updates.
+                </p>
                 <div id="quick-adds" class="preset-row"></div>
                 <label class="list-search" id="billing-stock-search-label" data-admin-only>
                   Search stock
@@ -920,6 +923,7 @@
                         <th>Description</th>
                         <th>Qty</th>
                         <th>Price excl. GST</th>
+                        <th>Incl. GST</th>
                         <th>Total</th>
                         <th></th>
                       </tr>
@@ -1003,7 +1007,7 @@
     <script src="dashboard.js?v=20260902backupfoot"></script>
     <script src="calendar.js?v=20260905staffrole"></script>
     <script src="jobs.js?v=20261006jobstock"></script>
-    <script src="billing.js?v=20261006jobstock"></script>
+    <script src="billing.js?v=20261012gstincl"></script>
     <script src="inventory.js?v=20261011stock"></script>
     <script src="supplier-invoices.js?v=20261008totals"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>

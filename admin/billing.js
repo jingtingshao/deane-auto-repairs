@@ -63,6 +63,7 @@ function newLine(partial = {}) {
     description: partial.description || "",
     qty: partial.qty != null ? partial.qty : 1,
     unitPriceIncl: partial.unitPriceIncl != null ? partial.unitPriceIncl : 0,
+    gstInclUnit: Math.round(Math.max(0, Number(partial.gstInclUnit) || 0)),
     stockItemId: String(partial.stockItemId || "").trim(),
   };
 }
@@ -1078,6 +1079,7 @@ function renderQuickAdds() {
           lineRows[existing].description = "Consumable";
           lineRows[existing].qty = 1;
           lineRows[existing].unitPriceIncl = price;
+          lineRows[existing].gstInclUnit = 0;
         } else {
           lineRows.push(
             newLine({
@@ -1096,6 +1098,13 @@ function renderQuickAdds() {
   });
 }
 
+function inclFieldValue(line) {
+  const stored = Math.round(Number(line?.gstInclUnit) || 0);
+  if (stored > 0) return String(stored);
+  const advertised = advertisedInclFromExcl(line?.unitPriceIncl);
+  return advertised != null ? String(advertised) : "";
+}
+
 function renderLines() {
   const locked = !canEditLines(currentBill);
   billingLinesEl.innerHTML = lineRows
@@ -1105,6 +1114,7 @@ function renderLines() {
         <td><input data-field="description" value="${Admin.escapeAttr(line.description)}" ${locked ? "readonly" : ""} /></td>
         <td><input class="qty" data-field="qty" type="number" min="0" step="0.25" value="${Admin.escapeAttr(String(line.qty))}" ${locked ? "readonly" : ""} /></td>
         <td><input class="price" data-field="unitPriceIncl" type="number" min="0" step="0.01" value="${Admin.escapeAttr(String(line.unitPriceIncl))}" ${locked ? "readonly" : ""} /></td>
+        <td><input class="price-incl" data-field="gstInclUnit" type="number" min="0" step="1" inputmode="numeric" placeholder="0" title="Whole dollars including GST" value="${Admin.escapeAttr(inclFieldValue(line))}" ${locked ? "readonly" : ""} /></td>
         <td class="total">${money(total)}</td>
         <td>${locked ? "" : `<button type="button" class="ghost" data-remove="${index}">×</button>`}</td>
       </tr>`;
@@ -1116,10 +1126,36 @@ function renderLines() {
       const row = input.closest("tr");
       const index = Number(row.dataset.index);
       const field = input.dataset.field;
-      let value = input.value;
-      if (field === "qty" || field === "unitPriceIncl") value = Number(value) || 0;
-      lineRows[index][field] = value;
-      const total = lineAmounts(lineRows[index]).net;
+      const line = lineRows[index];
+      if (field === "gstInclUnit") {
+        const raw = String(input.value || "");
+        let incl = 0;
+        if (/^\d+$/.test(raw)) incl = Number(raw);
+        else if (raw !== "") {
+          const n = Number(raw);
+          incl = Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
+          input.value = incl ? String(incl) : "";
+        }
+        line.gstInclUnit = incl;
+        if (incl > 0) {
+          line.unitPriceIncl = exclFromIncl(incl);
+          const exclInput = row.querySelector('[data-field="unitPriceIncl"]');
+          if (exclInput) exclInput.value = String(line.unitPriceIncl);
+        }
+      } else if (field === "unitPriceIncl") {
+        line.gstInclUnit = 0;
+        line.unitPriceIncl = Number(input.value) || 0;
+        const inclInput = row.querySelector('[data-field="gstInclUnit"]');
+        if (inclInput) {
+          const advertised = advertisedInclFromExcl(line.unitPriceIncl);
+          inclInput.value = advertised != null ? String(advertised) : "";
+        }
+      } else if (field === "qty") {
+        line.qty = Number(input.value) || 0;
+      } else {
+        line[field] = input.value;
+      }
+      const total = lineAmounts(line).net;
       row.querySelector(".total").textContent = money(total);
       renderTotals();
       if (field === "description") syncWofExpiryField();
@@ -1159,8 +1195,25 @@ function advertisedInclFromExcl(excl) {
   return null;
 }
 
+function exclFromIncl(incl) {
+  const inclCents = toCents(incl);
+  const gstCents = Math.round(inclCents * (3 / 23));
+  return fromCents(inclCents - gstCents);
+}
+
 function lineAmounts(line) {
   const qty = Number(line?.qty) || 0;
+  const inclUnit = Math.round(Number(line?.gstInclUnit) || 0);
+  if (inclUnit > 0) {
+    const totalInclCents = Math.round(qty * inclUnit * 100);
+    const gstCents = Math.round(totalInclCents * (3 / 23));
+    const netCents = totalInclCents - gstCents;
+    return {
+      net: fromCents(netCents),
+      gst: fromCents(gstCents),
+      totalIncl: fromCents(totalInclCents),
+    };
+  }
   const unit = Number(line?.unitPriceIncl) || 0;
   const advertised = advertisedInclFromExcl(unit);
   if (advertised != null) {

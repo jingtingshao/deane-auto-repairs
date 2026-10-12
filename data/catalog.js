@@ -71,6 +71,17 @@ function advertisedInclFromExcl(excl) {
 
 function lineAmounts(line) {
   const qty = Number(line?.qty) || 0;
+  const inclUnit = Math.round(Number(line?.gstInclUnit) || 0);
+  if (inclUnit > 0) {
+    const totalInclCents = Math.round(qty * inclUnit * 100);
+    const gstCents = gstFromInclCents(totalInclCents);
+    const netCents = totalInclCents - gstCents;
+    return {
+      net: fromCents(netCents),
+      gst: fromCents(gstCents),
+      totalIncl: fromCents(totalInclCents),
+    };
+  }
   const unit = Number(line?.unitPriceIncl) || 0;
   const advertised = advertisedInclFromExcl(unit);
   if (advertised != null) {
@@ -120,6 +131,7 @@ function cloneLines(lines) {
     description: line.description,
     qty: line.qty,
     unitPriceIncl: line.unitPriceIncl,
+    gstInclUnit: Math.round(Number(line.gstInclUnit) || 0),
   }));
 }
 

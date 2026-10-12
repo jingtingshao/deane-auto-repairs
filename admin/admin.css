@@ -1119,6 +1119,10 @@ label.check input {
   width: 110px;
 }
 
+.line-table .price-incl {
+  width: 88px;
+}
+
 .line-table .total {
   white-space: nowrap;
   font-weight: 700;
