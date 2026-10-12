@@ -797,6 +797,7 @@
                 <legend id="billing-legend">Quote</legend>
                 <div class="grid-2">
                   <label>Number (auto)<input id="billing-field-number" name="number" readonly /></label>
+                  <label id="billing-issue-date-label" hidden>Date<input id="billing-field-issuedAt" type="date" readonly /></label>
                   <label>Valid until (7 days)<input id="billing-field-validUntil" name="validUntil" type="date" /></label>
                 </div>
               </fieldset>
@@ -826,7 +827,7 @@
                       <option value="">Select customer…</option>
                     </select>
                   </label>
-                  <label>Name<input name="customerName" readonly /></label>
+                  <label>Customer name<input name="customerName" readonly /></label>
                   <label>
                     Vehicle
                     <select name="vehicleId" id="billing-vehicle-id" required>
@@ -835,7 +836,7 @@
                   </label>
                   <label>Email<input name="customerEmail" type="email" readonly /></label>
                   <label>Phone<input name="customerPhone" type="tel" readonly /></label>
-                  <label>Registration<input name="registration" readonly /></label>
+                  <label>Plate<input name="registration" readonly /></label>
                   <label>Vehicle<input name="vehicle" readonly /></label>
                 </div>
                 <label>Notes for customer<textarea name="notes" rows="2"></textarea></label>
@@ -1007,7 +1008,7 @@
     <script src="dashboard.js?v=20261012invoiceplate"></script>
     <script src="calendar.js?v=20260905staffrole"></script>
     <script src="jobs.js?v=20261006jobstock"></script>
-    <script src="billing.js?v=20261012invoiceplate"></script>
+    <script src="billing.js?v=20261012identity"></script>
     <script src="inventory.js?v=20261011stock"></script>
     <script src="supplier-invoices.js?v=20261008totals"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>

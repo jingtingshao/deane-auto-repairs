@@ -799,6 +799,13 @@ function fillForm(doc) {
 
   const validLabel = billingInput("validUntil")?.closest("label");
   if (validLabel) validLabel.hidden = doc.kind !== "quote";
+  const issueLabel = document.getElementById("billing-issue-date-label");
+  const issueInput = document.getElementById("billing-field-issuedAt");
+  if (issueLabel) issueLabel.hidden = doc.kind !== "invoice";
+  if (issueInput) {
+    const raw = String(doc.issuedAt || doc.sentAt || doc.createdAt || "").slice(0, 10);
+    issueInput.value = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : Admin.todayIso();
+  }
 
   const paymentFs = document.getElementById("billing-payment-fieldset");
   if (paymentFs) {

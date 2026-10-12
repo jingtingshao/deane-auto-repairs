@@ -215,6 +215,16 @@ main {
   margin: 0;
 }
 
+.identity-grid {
+  display: grid;
+  grid-template-columns: 0.8fr 1.3fr 0.9fr;
+  gap: 0.75rem;
+}
+
+.identity-grid .detail-value {
+  font-size: 1.2rem;
+}
+
 .grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -497,6 +507,18 @@ button.primary {
     width: min(760px, calc(100% - 1.25rem));
   }
 
+  .top-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .top-meta {
+    text-align: left;
+    width: 100%;
+    padding: 0 0 0.75rem;
+  }
+
+  .identity-grid,
   .grid-2 {
     grid-template-columns: 1fr;
   }
@@ -715,8 +737,9 @@ button.primary {
     margin-bottom: 0.35rem;
   }
 
+  .identity-grid,
   .grid-2 {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 0.5rem;
   }
 

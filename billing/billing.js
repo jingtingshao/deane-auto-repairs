@@ -119,8 +119,12 @@ function render(doc) {
 
   const shop = doc.shop || {};
   const factLines = [];
+  const plate = String(doc.registration || "").trim().toUpperCase();
+  const issueDate = formatDateShort(isInvoice ? invoiceIssueIso(doc) : doc.createdAt || doc.sentAt || "");
   if (isInvoice) {
-    factLines.push(`Issue date ${formatDateShort(invoiceIssueIso(doc))}`);
+    factLines.push(`Date ${issueDate || "—"}`);
+    factLines.push(`Customer ${doc.customerName || "—"}`);
+    factLines.push(`Plate ${plate || "—"}`);
     factLines.push("Due date Immediately");
   } else {
     factLines.push(statusLabel(doc));
@@ -192,7 +196,11 @@ function render(doc) {
     ${letterhead}
     ${banner}
     <section class="panel document-summary">
-      <div class="grid-2">
+      <div class="identity-grid">
+        <div class="detail-card">
+          <p class="detail-label">Date</p>
+          <p class="detail-value"><strong>${escapeHtml(issueDate || "—")}</strong></p>
+        </div>
         <div class="detail-card">
           <p class="detail-label">Customer</p>
           <p class="detail-value"><strong>${escapeHtml(doc.customerName || "—")}</strong></p>
@@ -200,9 +208,9 @@ function render(doc) {
           ${doc.customerPhone ? `<p class="meta">${escapeHtml(doc.customerPhone)}</p>` : ""}
         </div>
         <div class="detail-card">
-          <p class="detail-label">Vehicle</p>
-          <p class="detail-value"><strong>${escapeHtml(doc.registration || "—")}</strong></p>
-          <p class="meta">${escapeHtml(doc.vehicle || "")}</p>
+          <p class="detail-label">Plate</p>
+          <p class="detail-value"><strong>${escapeHtml(plate || "—")}</strong></p>
+          ${doc.vehicle ? `<p class="meta">${escapeHtml(doc.vehicle)}</p>` : ""}
         </div>
       </div>
     </section>
