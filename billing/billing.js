@@ -258,6 +258,7 @@ function render(doc) {
       </div>
       ${doc.notes ? `<p class="note" style="margin-top:1rem">${escapeHtml(doc.notes)}</p>` : ""}
     </section>
+    <div class="invoice-foot">
     <div class="pay-pin">
       <div class="pay">
         <h2>How to pay</h2>
@@ -298,6 +299,7 @@ function render(doc) {
       </section>`
         : ""
     }
+    </div>
     ${acceptBlock}
   `;
 

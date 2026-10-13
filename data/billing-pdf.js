@@ -199,11 +199,6 @@ function buildBillingPdf(doc) {
         return pdf.page.height - pdf.page.margins.bottom;
       }
 
-      /** How to pay starts three-quarters down the last page only. */
-      function payAnchorY() {
-        return pdf.page.height * 0.75;
-      }
-
       function reviewBlockHeight() {
         if (!review || !reviewQr) return 0;
         const qrSize = 62;
@@ -280,12 +275,16 @@ function buildBillingPdf(doc) {
         return pdf.y;
       }
 
+      function footerTop() {
+        return pageBottom() - footerHeight;
+      }
+
       function drawPayFooter() {
         const minGap = 12;
-        let y = Math.min(payAnchorY(), pageBottom() - footerHeight);
+        let y = footerTop();
         if (pdf.y + minGap > y) {
           pdf.addPage();
-          y = Math.min(payAnchorY(), pageBottom() - footerHeight);
+          y = footerTop();
         }
         pdf.x = left;
         pdf
@@ -325,14 +324,14 @@ function buildBillingPdf(doc) {
       }
 
       function ensureSpace(needed) {
-        if (pdf.y + needed > pageBottom()) {
+        if (pdf.y + needed > footerTop() - 8) {
           pdf.addPage();
           drawHeader();
         }
       }
 
       function ensureSpaceAboveFooter(needed) {
-        if (pdf.y + needed > payAnchorY()) {
+        if (pdf.y + needed > footerTop()) {
           pdf.addPage();
         }
       }
