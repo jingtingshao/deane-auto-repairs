@@ -158,11 +158,11 @@ main {
 }
 
 .panel {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 1.15rem 1.2rem;
-  margin-bottom: 1rem;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0 0 0.35rem;
+  margin-bottom: 0.85rem;
 }
 
 .panel h1 {
@@ -187,7 +187,9 @@ main {
 }
 
 .document-summary {
-  border-top: 5px solid var(--blue);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.85rem;
 }
 
 .document-summary h1 {
@@ -195,10 +197,10 @@ main {
 }
 
 .detail-card {
-  padding: 0.85rem;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--cream);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .detail-label {
@@ -351,10 +353,10 @@ button.primary {
 
 .pay {
   margin-top: 0;
-  padding: 1rem;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--blue-soft);
+  padding: 0.15rem 0 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .pay h2 {
@@ -381,7 +383,9 @@ button.primary {
 }
 
 .google-review {
-  margin-top: 0.88rem;
+  margin-top: 0.75rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--line);
 }
 
 .google-review-inner {
@@ -735,18 +739,13 @@ button.primary {
   }
 
   .panel {
-    background: #fff !important;
-    border: 1px solid #000;
-    padding: 2.2mm 2.6mm;
+    background: transparent !important;
+    border: none;
+    padding: 0 0 1.5mm;
     border-radius: 0;
-    margin-bottom: 2.2mm;
+    margin-bottom: 2mm;
     box-shadow: none;
     break-inside: auto;
-  }
-
-  .detail-card,
-  .pay {
-    background: #fff !important;
   }
 
   .panel + .panel {
@@ -754,7 +753,15 @@ button.primary {
   }
 
   .document-summary {
-    border-top: 2px solid #000;
+    border: none;
+    border-bottom: 1px solid #000;
+    padding-bottom: 1.5mm;
+  }
+
+  .detail-card {
+    border: none;
+    padding: 0;
+    background: transparent !important;
   }
 
   .panel h1 {
@@ -776,10 +783,6 @@ button.primary {
 
   .identity-grid .detail-value {
     font-size: 10.5pt;
-  }
-
-  .detail-card {
-    padding: 1.4mm 2mm;
   }
 
   .detail-label {
@@ -827,8 +830,9 @@ button.primary {
 
   .pay {
     margin-top: 0;
-    padding: 2mm 2.5mm;
-    border-color: #000;
+    padding: 0;
+    border: none;
+    background: transparent !important;
   }
 
   .pay h2 {
@@ -854,7 +858,11 @@ button.primary {
   }
 
   .google-review {
-    margin-top: 2mm;
+    margin-top: 1.6mm;
+    padding-top: 1.4mm;
+    border: none;
+    border-top: 1px solid #000;
+    background: transparent !important;
     break-inside: avoid;
     page-break-inside: avoid;
   }
