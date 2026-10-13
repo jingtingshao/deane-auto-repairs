@@ -604,7 +604,7 @@ button.primary {
 @media print {
   @page {
     size: A4;
-    margin: 14mm;
+    margin: 8mm 10mm;
   }
 
   *,
@@ -620,8 +620,8 @@ button.primary {
   body {
     background: #fff !important;
     color: #000 !important;
-    font-size: 10.5pt;
-    line-height: 1.28;
+    font-size: 9pt;
+    line-height: 1.2;
   }
 
   .wrap {
@@ -640,7 +640,7 @@ button.primary {
     background: #fff !important;
     color: #000 !important;
     padding: 0;
-    margin: 0 0 3.6mm;
+    margin: 0 0 2mm;
   }
 
   .top::after {
@@ -674,16 +674,32 @@ button.primary {
   }
 
   .brand-print-text .script {
-    font-size: 22pt;
+    font-size: 16pt;
     color: #000 !important;
     text-shadow: none;
     line-height: 1;
   }
 
   .brand-print-text .sans {
-    font-size: 14pt;
+    font-size: 10.5pt;
     color: #000 !important;
     letter-spacing: 0.06em;
+  }
+
+  .top .shop-line,
+  .top-meta .doc-facts {
+    font-size: 8.5pt;
+    line-height: 1.25;
+  }
+
+  .top-meta {
+    padding: 0;
+  }
+
+  .top-meta .doc-title {
+    margin-top: 0.6mm;
+    font-size: 12pt;
+    line-height: 1.05;
   }
 
   .top .shop-line,
@@ -706,11 +722,11 @@ button.primary {
   .panel {
     background: #fff !important;
     border: 1px solid #000;
-    padding: 0.7rem 0.8rem;
-    border-radius: 12px;
-    margin-bottom: 0.75rem;
+    padding: 2.2mm 2.6mm;
+    border-radius: 0;
+    margin-bottom: 2.2mm;
     box-shadow: none;
-    break-inside: avoid;
+    break-inside: auto;
   }
 
   .detail-card,
@@ -733,18 +749,33 @@ button.primary {
   }
 
   .panel h2 {
-    font-size: 14pt;
-    margin-bottom: 0.35rem;
+    font-size: 11pt;
+    margin-bottom: 1mm;
   }
 
   .identity-grid,
   .grid-2 {
     grid-template-columns: 1fr 1fr 1fr;
-    gap: 0.5rem;
+    gap: 2mm;
+  }
+
+  .identity-grid .detail-value {
+    font-size: 10.5pt;
   }
 
   .detail-card {
-    padding: 0.55rem 0.65rem;
+    padding: 1.4mm 2mm;
+  }
+
+  .detail-label {
+    font-size: 8pt;
+    margin-bottom: 0;
+  }
+
+  .meta {
+    margin: 0;
+    font-size: 8.5pt;
+    line-height: 1.25;
   }
 
   .detail-label,
@@ -758,16 +789,22 @@ button.primary {
 
   .lines th,
   .lines td {
-    padding: 0.33rem 0.25rem;
+    padding: 0.8mm 1mm;
+    font-size: 9pt;
+  }
+
+  .lines tfoot td {
+    font-size: 9pt;
+    padding-top: 0.8mm;
   }
 
   .lines tfoot .grand td {
-    font-size: 12pt;
+    font-size: 10pt;
   }
 
   .pay-pin {
-    margin-top: 0;
-    padding-top: 18mm;
+    margin-top: 2mm;
+    padding-top: 0;
     break-inside: avoid;
     page-break-inside: avoid;
     break-before: auto;
@@ -775,8 +812,22 @@ button.primary {
 
   .pay {
     margin-top: 0;
-    padding: 0.65rem 0.75rem;
+    padding: 2mm 2.5mm;
     border-color: #000;
+  }
+
+  .pay h2 {
+    font-size: 11pt;
+    margin-bottom: 1mm;
+  }
+
+  .pay h3 {
+    font-size: 9.5pt;
+    margin: 1.4mm 0 0.5mm;
+  }
+
+  .pay p {
+    margin: 0.3mm 0;
   }
 
   .pay-terms {
@@ -784,11 +835,11 @@ button.primary {
   }
 
   .pay-terms li {
-    margin: 0.12rem 0;
+    margin: 0.2mm 0;
   }
 
   .google-review {
-    margin-top: 0.52rem;
+    margin-top: 2mm;
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -806,8 +857,8 @@ button.primary {
   }
 
   .google-review-qr img {
-    width: 20mm;
-    height: 20mm;
+    width: 16mm;
+    height: 16mm;
     filter: grayscale(1) contrast(1.2);
   }
 
