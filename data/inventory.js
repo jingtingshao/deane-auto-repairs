@@ -33,6 +33,7 @@ const BANDS = [
 ];
 
 const GST_RATE = 0.15;
+const tyreStewardship = require("./tyre-stewardship");
 
 const GUESS_RULES = [
   ["adblue", "adblue"],
@@ -135,7 +136,8 @@ function cleanText(value, max) {
 
 function normalizeItem(raw) {
   const category = categoryById(raw?.category);
-  const costPrice = roundMoney(Math.max(0, Number(raw?.costPrice) || 0));
+  const split = tyreStewardship.tyreCostFields(raw);
+  const costPrice = split.costPrice;
   const suggested = suggestPrice(costPrice);
   const sellRaw = raw?.sellPrice;
   const sellPrice =
@@ -152,6 +154,8 @@ function normalizeItem(raw) {
     fitment: cleanText(raw?.fitment, 240),
     unit: category ? category.unit : "each",
     qtyOnHand: Math.max(0, roundQty(raw?.qtyOnHand)),
+    tyrePrice: split.tyrePrice,
+    stewardshipFee: split.stewardshipFee,
     costPrice,
     sellPrice,
     notes: cleanText(raw?.notes, 400),
@@ -283,6 +287,8 @@ function applyReceive(items, movements, input, now) {
   item.brand = draft.brand || item.brand;
   item.supplier = draft.supplier || item.supplier;
   if (draft.fitment) item.fitment = draft.fitment;
+  item.tyrePrice = draft.tyrePrice;
+  item.stewardshipFee = draft.stewardshipFee;
   item.costPrice = draft.costPrice;
   if (input?.sellPrice != null && input.sellPrice !== "") item.sellPrice = draft.sellPrice;
   else if (created) item.sellPrice = draft.sellPrice;
@@ -390,7 +396,8 @@ function receiveSupplierInvoice(items, movements, invoice, candidates, now, newI
   const overrides = new Map(
     (invoice?.lines || []).map((row) => [String(row.id || ""), row])
   );
-  for (const line of candidates || []) {
+  const paired = tyreStewardship.pairStewardshipFees(candidates);
+  for (const line of paired) {
     const id = String(line?.id || "");
     const decision = String(line?.decision || "pending");
     const override = overrides.get(id) || {};
@@ -400,6 +407,10 @@ function receiveSupplierInvoice(items, movements, invoice, candidates, now, newI
     const qty = roundQty(override.qty != null ? override.qty : line?.qtyCandidate);
     if (!name || !(qty > 0)) {
       skipped.push({ id, name: name || partNumber || "Line", reason: "Missing part name or qty" });
+      continue;
+    }
+    if (tyreStewardship.isStewardshipCandidate(line)) {
+      skipped.push({ id, name, reason: "Stewardship is added onto the tyre" });
       continue;
     }
     const supplier = String(invoice?.supplier || line?.supplierCandidate || "").trim();
@@ -424,7 +435,14 @@ function receiveSupplierInvoice(items, movements, invoice, candidates, now, newI
           partNumber,
           supplier,
           qty,
-          costPrice: override.costPrice != null ? override.costPrice : line?.costPriceCandidate,
+          tyrePrice: line?.tyrePriceCandidate,
+          stewardshipFee: line?.stewardshipFeeCandidate,
+          costPrice:
+            override.costPrice != null
+              ? override.costPrice
+              : line?.stewardshipFeeCandidate > 0
+                ? line.stockCostCandidate
+                : line?.costPriceCandidate,
           candidateId: id,
           supplierInvoiceId: String(invoice?.id || ""),
           invoiceNo: String(invoice?.invoiceNo || ""),
@@ -493,4 +511,8 @@ module.exports = {
   applyAdjust,
   lineCountsAsStock,
   receiveSupplierInvoice,
+  pairStewardshipFees: tyreStewardship.pairStewardshipFees,
+  isStewardshipCandidate: tyreStewardship.isStewardshipCandidate,
+  landedUnitCost: tyreStewardship.landedUnitCost,
+  parseTyreOrderLines: tyreStewardship.parseTyreOrderLines,
 };

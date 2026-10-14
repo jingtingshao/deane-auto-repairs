@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20261012inclcents" />
+    <link rel="stylesheet" href="admin.css?v=20261015steward" />
     <link rel="stylesheet" href="admin-refresh.css?v=20261002yellow" />
   </head>
   <body>
@@ -508,7 +508,7 @@
 
               <fieldset>
                 <legend>③ Extracted Items (Parts / Lines)</legend>
-                <p class="muted small">Total ex GST is the line amount on the supplier invoice. Unit ex GST is that total divided by qty, and that unit goes into stock. Type either price and the other updates. If a line was not read, add it and type it in.</p>
+                <p class="muted small">Total ex GST is the line amount on the supplier invoice. Unit ex GST is that total divided by qty. A tyre stewardship fee stays on its own line. Add to stock keeps that fee separate and adds it to the tyre price.</p>
                 <div class="line-actions">
                   <button type="button" id="btn-supplier-invoice-add-line" class="ghost">+ Add line</button>
                 </div>
@@ -612,6 +612,8 @@
                 <label>Supplier<input name="supplier" list="stock-suppliers" placeholder="e.g. Repco" /></label>
                 <label><span data-qty-label>Qty on hand</span><input name="qtyOnHand" type="number" min="0" step="1" value="0" /></label>
                 <label><span data-cost-label>Cost ex GST</span><input name="costPrice" type="number" min="0" step="0.01" /></label>
+                <label data-tyre-price-field hidden>Tyre price ex GST<input name="tyrePrice" type="number" min="0" step="0.01" /></label>
+                <label data-stewardship-field hidden>Stewardship ex GST<input name="stewardshipFee" type="number" min="0" step="0.01" /></label>
                 <label><span data-sell-label>Sell price ex GST</span><input name="sellPrice" type="number" min="0" step="0.01" /></label>
               </div>
               <label>Fits — used when you search<input name="fitment" placeholder="e.g. Toyota Corolla 2014–2018" /></label>
@@ -973,10 +975,13 @@
           <label>Supplier<input name="supplier" list="stock-suppliers" /></label>
           <label><span data-receive-qty-label>Qty</span><input name="qty" type="number" min="0" step="0.1" value="1" /></label>
           <label><span data-receive-cost-label>Cost ex GST</span><input name="costPrice" type="number" min="0" step="0.01" /></label>
+          <label data-receive-tyre-field hidden>Tyre price ex GST<input name="tyrePrice" type="number" min="0" step="0.01" /></label>
+          <label data-receive-fee-field hidden>Stewardship ex GST<input name="stewardshipFee" type="number" min="0" step="0.01" /></label>
           <label><span data-receive-sell-label>Sell ex GST</span><input name="sellPrice" type="number" min="0" step="0.01" /></label>
           <label>Fits<input name="fitment" placeholder="Car or model" /></label>
         </div>
         <input type="hidden" name="candidateId" />
+        <input type="hidden" name="stewardshipCandidateId" />
         <input type="hidden" name="supplierInvoiceId" />
         <input type="hidden" name="invoiceNo" />
         <p id="stock-receive-guide" class="stock-price-guide"></p>
@@ -1010,8 +1015,8 @@
     <script src="calendar.js?v=20260905staffrole"></script>
     <script src="jobs.js?v=20261006jobstock"></script>
     <script src="billing.js?v=20261012inclcents"></script>
-    <script src="inventory.js?v=20261011stock"></script>
-    <script src="supplier-invoices.js?v=20261008totals"></script>
+    <script src="inventory.js?v=20261015steward"></script>
+    <script src="supplier-invoices.js?v=20261015steward"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>
     <script src="customers.js?v=20260906techcustomers"></script>
     <script src="referrals.js?v=20260906usedon"></script>

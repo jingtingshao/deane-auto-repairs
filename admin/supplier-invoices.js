@@ -50,6 +50,76 @@ function formatMoney(value) {
   return `$${money(value).toFixed(2)}`;
 }
 
+function isStewardshipText(value) {
+  return /stewardship/i.test(String(value || ""));
+}
+
+function pairCandidates(list) {
+  const ordered = [...list].sort((a, b) => (Number(a.lineNo) || 0) - (Number(b.lineNo) || 0));
+  let previous = null;
+  const feeById = new Map();
+  for (const row of ordered) {
+    const text = `${row.descriptionCandidate || ""} ${row.partNumberCandidate || ""} ${row.rawLineText || ""}`;
+    const decision = String(row.decision || "pending");
+    const keep = decision === "pending" || decision === "attached";
+    if (isStewardshipText(text)) {
+      row.stewardshipLine = true;
+      row.tyrePriceCandidate = 0;
+      row.stewardshipFeeCandidate = money(row.costPriceCandidate);
+      row.stockCostCandidate = 0;
+      row.stewardshipCandidateId = "";
+      if (previous && keep) {
+        row.linkedTyreCandidateId = previous.id || "";
+        if (previous.id) feeById.set(previous.id, row);
+      } else {
+        row.linkedTyreCandidateId = "";
+      }
+      continue;
+    }
+    row.stewardshipLine = false;
+    row.linkedTyreCandidateId = "";
+    previous = row;
+  }
+  for (const row of list) {
+    if (row.stewardshipLine) continue;
+    const fee = feeById.get(row.id);
+    const tyre = money(row.costPriceCandidate);
+    const feePrice = fee ? money(fee.costPriceCandidate) : 0;
+    row.tyrePriceCandidate = tyre;
+    row.stewardshipFeeCandidate = feePrice;
+    row.stockCostCandidate = money(tyre + feePrice);
+    row.stewardshipCandidateId = fee?.id || "";
+  }
+}
+
+function stewardshipNoteText(row) {
+  if (row?.stewardshipLine) {
+    return "Separate line. Added onto the tyre above when that tyre goes into stock.";
+  }
+  const fee = Number(row?.stewardshipFeeCandidate) || 0;
+  if (!(fee > 0)) return "";
+  const tyre = Number(row.tyrePriceCandidate) || 0;
+  const stock = Number(row.stockCostCandidate) || money(tyre + fee);
+  return `Stock ${formatMoney(stock)} · tyre ${formatMoney(tyre)} + stewardship ${formatMoney(fee)}`;
+}
+
+function syncStewardshipFromInputs() {
+  if (!candidatesEl) return;
+  candidatesEl.querySelectorAll("tr[data-id]").forEach((rowEl) => {
+    const row = candidates.find((item) => item.id === rowEl.dataset.id);
+    if (!row) return;
+    const cost = Number(rowEl.querySelector('[data-field="costPrice"]')?.value);
+    if (Number.isFinite(cost)) row.costPriceCandidate = cost;
+  });
+  pairCandidates(candidates);
+  candidatesEl.querySelectorAll("tr[data-id]").forEach((rowEl) => {
+    const row = candidates.find((item) => item.id === rowEl.dataset.id);
+    const note = rowEl.querySelector(".stewardship-note");
+    if (!row || !note) return;
+    note.textContent = stewardshipNoteText(row);
+  });
+}
+
 function lineQtyValue(rowEl) {
   return Math.max(1, Math.round(Number(rowEl?.querySelector('[data-field="qty"]')?.value) || 1));
 }
@@ -889,6 +959,11 @@ function statusPill(tone, label) {
 
 function renderStatusPill(row, selectedJobId) {
   const pills = [];
+  if (row.stewardshipLine || row.decision === "attached") {
+    pills.push(statusPill("matched", "On the tyre"));
+    if (row.stocked) pills.push(statusPill("stocked", "In stock"));
+    return pills.join("");
+  }
   if (row.decision === "consumable") pills.push(statusPill("consumable", "Consumable"));
   else if (row.decision === "tool") pills.push(statusPill("tool", "Tool"));
   else if (row.decision === "rejected") pills.push(statusPill("ignored", "Ignored"));
@@ -902,6 +977,7 @@ function renderStatusPill(row, selectedJobId) {
 }
 
 function stockActionButton(row) {
+  if (row.stewardshipLine) return "";
   const label = row.stocked ? "In stock" : "Add to stock";
   return `<button type="button" class="ghost${row.stocked ? " is-done" : ""}" data-action="stock"${row.stocked ? " disabled" : ""}>${label}</button>`;
 }
@@ -910,6 +986,14 @@ function markLineStocked(candidateId) {
   const id = String(candidateId || "").trim();
   const row = candidates.find((item) => item.id === id);
   if (!row) return;
+  const feeId = row.stewardshipCandidateId;
+  if (feeId) {
+    const fee = candidates.find((item) => item.id === feeId);
+    if (fee) {
+      fee.stocked = true;
+      if (fee.decision === "pending") fee.decision = "attached";
+    }
+  }
   const part = String(row.partNumberCandidate || "").replace(/\s+/g, "").toUpperCase();
   const name = String(row.descriptionCandidate || "").trim().toLowerCase().replace(/\s+/g, " ");
   for (const other of candidates) {
@@ -1043,6 +1127,7 @@ function renderCandidates() {
   if (!candidatesEl) return;
   closeJobPicker();
   renderOcrStatus();
+  pairCandidates(candidates);
   if (!candidates.length) {
     selectedCandidateIds = new Set();
     candidatesEl.innerHTML = '<div class="empty">No lines yet. Use Add line and type the part name, number, qty, and cost.</div>';
@@ -1050,7 +1135,7 @@ function renderCandidates() {
   }
   const validIds = new Set(candidates.map((row) => row.id));
   selectedCandidateIds = new Set([...selectedCandidateIds].filter((id) => validIds.has(id)));
-  const pendingRows = candidates.filter((row) => row.decision === "pending");
+  const pendingRows = candidates.filter((row) => row.decision === "pending" && !row.stewardshipLine);
   const allPendingSelected =
     pendingRows.length > 0 && pendingRows.every((row) => selectedCandidateIds.has(row.id));
   const selectedCount = [...selectedCandidateIds].filter((id) =>
@@ -1093,6 +1178,7 @@ function renderCandidates() {
               const matched = isMatchedDecision(row.decision);
               const editing = matched && editingCandidateIds.has(row.id);
               const pending = row.decision === "pending";
+              const selectable = pending && !row.stewardshipLine;
               const ignored = row.decision === "rejected";
               const consumable = row.decision === "consumable";
               const tool = row.decision === "tool";
@@ -1117,7 +1203,14 @@ function renderCandidates() {
               const deleteBtn = !matched && !row.stocked
                 ? `<button type="button" class="danger" data-action="delete-line">Delete</button>`
                 : "";
-              const actions = matched
+              const note = stewardshipNoteText(row);
+              const actions = row.stewardshipLine
+                ? pending
+                  ? `<button type="button" class="danger" data-action="reject">Ignore</button>${deleteBtn}`
+                  : ignored
+                    ? `<button type="button" class="ghost" data-action="unmatch">Restore</button>${deleteBtn}`
+                    : `<span class="muted small">Included in the tyre</span>`
+                : matched
                 ? editing
                   ? `<button type="button" class="primary" data-action="save-matched">Save</button>
                   <button type="button" class="ghost" data-action="cancel-edit">Cancel</button>
@@ -1138,11 +1231,11 @@ function renderCandidates() {
                   ${deleteBtn}
                   ${jobTools}`;
               return `<tr data-id="${Admin.escapeAttr(row.id)}" class="${matched ? "is-matched" : ""} ${editing ? "is-editing" : ""}">
-                <td><input type="checkbox" data-select-candidate ${selectedCandidateIds.has(row.id) ? "checked" : ""}${pending ? "" : " disabled"} /></td>
+                <td><input type="checkbox" data-select-candidate ${selectedCandidateIds.has(row.id) ? "checked" : ""}${selectable ? "" : " disabled"} /></td>
                 <td><input data-field="qty" type="number" min="1" step="1" inputmode="numeric" value="${Admin.escapeAttr(String(Math.max(1, Math.round(Number(row.qtyCandidate) || 1))))}"${disabled} /></td>
                 <td><input data-field="description" value="${Admin.escapeAttr(row.descriptionCandidate || "")}"${disabled} /></td>
                 <td><input data-field="partNumber" value="${Admin.escapeAttr(row.partNumberCandidate || "")}"${disabled} /></td>
-                <td><input data-field="costPrice" type="number" min="0" step="0.01" value="${Admin.escapeAttr(money(row.costPriceCandidate).toFixed(2))}"${disabled} /></td>
+                <td><input data-field="costPrice" type="number" min="0" step="0.01" value="${Admin.escapeAttr(money(row.costPriceCandidate).toFixed(2))}"${disabled} />${note ? `<div class="muted small stewardship-note">${Admin.escapeHtml(note)}</div>` : ""}</td>
                 <td><input data-field="lineTotal" type="number" min="0" step="0.01" value="${Admin.escapeAttr(money((Number(row.qtyCandidate) || 1) * (Number(row.costPriceCandidate) || 0)).toFixed(2))}"${disabled} /></td>
                 <td class="supplier-line-status">${statusHtml}</td>
                 <td class="supplier-line-actions">
@@ -1214,7 +1307,10 @@ function renderCandidates() {
       el.addEventListener("change", save);
       el.addEventListener("blur", save);
       if (el.dataset.field === "qty" || el.dataset.field === "costPrice" || el.dataset.field === "lineTotal") {
-        el.addEventListener("input", () => updateLineGrandTotals());
+        el.addEventListener("input", () => {
+          updateLineGrandTotals();
+          if (el.dataset.field === "costPrice") syncStewardshipFromInputs();
+        });
       }
     });
   });
@@ -1231,17 +1327,27 @@ function renderCandidates() {
       if (btn.dataset.action === "stock") {
         const row = candidates.find((item) => item.id === id);
         if (!row) return;
+        if (row.stewardshipLine) {
+          showStatus("Stewardship stays on its own line. Add the tyre to stock and the fee is included.");
+          return;
+        }
         if (row.stocked) {
           showStatus("This part from this invoice is already in stock.");
           return;
         }
+        syncStewardshipFromInputs();
         const qty = Number(rowEl.querySelector('[data-field="qty"]')?.value) || Number(row.qtyCandidate) || 1;
-        const cost = Number(rowEl.querySelector('[data-field="costPrice"]')?.value);
+        const tyre = Number(rowEl.querySelector('[data-field="costPrice"]')?.value);
+        const tyrePrice = Number.isFinite(tyre) ? money(tyre) : money(row.costPriceCandidate);
+        const fee = money(row.stewardshipFeeCandidate);
         window.DeaneInventory?.openReceive?.({
           name: rowEl.querySelector('[data-field="description"]')?.value || row.descriptionCandidate || "",
           partNumber: rowEl.querySelector('[data-field="partNumber"]')?.value || row.partNumberCandidate || "",
           qty,
-          costPrice: Number.isFinite(cost) ? cost : Number(row.costPriceCandidate) || 0,
+          tyrePrice: fee > 0 ? tyrePrice : undefined,
+          stewardshipFee: fee > 0 ? fee : undefined,
+          costPrice: fee > 0 ? money(tyrePrice + fee) : tyrePrice,
+          stewardshipCandidateId: fee > 0 ? row.stewardshipCandidateId || "" : "",
           supplier: form?.elements?.supplier?.value || current.supplier || "",
           invoiceNo: form?.elements?.invoiceNo?.value || current.invoiceNo || "",
           supplierInvoiceId: current.id,

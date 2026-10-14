@@ -724,9 +724,11 @@ function supplierInvoiceTrackingSummary(invoice) {
   let consumableCost = 0;
   let toolCost = 0;
   const invoiceId = String(invoice?.id || "").trim();
-  for (const row of readInvoiceCandidates()) {
-    if (row.supplierInvoiceId !== invoiceId) continue;
-    const line = toMoney((Number(row.qtyCandidate) || 0) * (Number(row.costPriceCandidate) || 0));
+  const invoiceCandidates = readInvoiceCandidates().filter((row) => row.supplierInvoiceId === invoiceId);
+  for (const row of inventoryLib.pairStewardshipFees(invoiceCandidates)) {
+    if (row.stewardshipLine) continue;
+    const unit = row.stewardshipFeeCandidate > 0 ? row.stockCostCandidate : row.costPriceCandidate;
+    const line = toMoney((Number(row.qtyCandidate) || 0) * (Number(unit) || 0));
     if (row.decision === "pending") pendingCost += line;
     if (row.decision === "rejected") ignoredCost += line;
     if (row.decision === "consumable") consumableCost += line;
@@ -759,6 +761,7 @@ function isResolvedCandidateDecision(decision) {
   return (
     isJobAcceptedCandidateDecision(decision) ||
     decision === "rejected" ||
+    decision === "attached" ||
     isShopClassifiedCandidateDecision(decision)
   );
 }
@@ -1839,13 +1842,16 @@ function parseSupplierInvoiceText(rawText) {
   );
 
   let candidates = [];
-  if (topstar) candidates = parseTopstarRows(lines);
+  const tyreOrder = inventoryLib.parseTyreOrderLines(lines);
+  const tyreOrderHasFee = tyreOrder.some((row) => inventoryLib.isStewardshipCandidate(row));
+  if (tyreOrderHasFee) candidates = tyreOrder;
+  else if (topstar) candidates = parseTopstarRows(lines);
   const headerIndex = topstar
     ? -1
     : lines.findIndex((line) =>
     /qty.*description.*(?:part\s*no|part\s*number).*unit.*total/i.test(line)
   );
-  if (headerIndex >= 0) {
+  if (headerIndex >= 0 && !tyreOrderHasFee) {
     for (let i = headerIndex + 1; i < lines.length; i += 1) {
       const line = lines[i];
       if (/subtotal|gst|tax|total/i.test(line)) break;
@@ -2056,6 +2062,11 @@ function acceptInvoiceCandidate(candidateId, req, decisionMode = "accepted") {
     err.status = 404;
     throw err;
   }
+  if (inventoryLib.isStewardshipCandidate(currentCandidate)) {
+    const err = new Error("Stewardship stays on the tyre. Add the tyre, and the fee is included in its cost.");
+    err.status = 400;
+    throw err;
+  }
   const jobs = readJobs();
   const body = req.body || {};
   const jobId =
@@ -2083,6 +2094,20 @@ function acceptInvoiceCandidate(candidateId, req, decisionMode = "accepted") {
     throw err;
   }
   const remainderQty = toQty(originalQty - allocatedQty, 0);
+  const invoiceCandidates = candidateRows.filter(
+    (row) => row.supplierInvoiceId === currentCandidate.supplierInvoiceId
+  );
+  const pairedSelf = inventoryLib
+    .pairStewardshipFees(invoiceCandidates)
+    .find((row) => row.id === currentCandidate.id);
+  const landedCost =
+    pairedSelf && pairedSelf.stewardshipFeeCandidate > 0
+      ? inventoryLib.landedUnitCost(
+          incoming.costPrice ?? currentCandidate.costPriceCandidate ?? 0,
+          pairedSelf.tyrePriceCandidate,
+          pairedSelf.stewardshipFeeCandidate
+        )
+      : toMoney(incoming.costPrice ?? currentCandidate.costPriceCandidate ?? 0);
   const part = jobsLib.normalizePart(
     {
       id: randomUUID(),
@@ -2090,7 +2115,7 @@ function acceptInvoiceCandidate(candidateId, req, decisionMode = "accepted") {
       description: incoming.description ?? currentCandidate.descriptionCandidate,
       supplier: incoming.supplier ?? currentCandidate.supplierCandidate ?? invoice.supplier,
       qty: allocatedQty,
-      costPrice: incoming.costPrice ?? currentCandidate.costPriceCandidate ?? 0,
+      costPrice: landedCost,
       markupPercent: incoming.markupPercent ?? 25,
       sellPrice: incoming.sellPrice,
       supplierInvoiceNo:
@@ -2137,6 +2162,20 @@ function acceptInvoiceCandidate(candidateId, req, decisionMode = "accepted") {
     remainderQty,
     now
   );
+  if (pairedSelf?.stewardshipCandidateId) {
+    const feeIndex = candidateRows.findIndex((row) => row.id === pairedSelf.stewardshipCandidateId);
+    const fee = feeIndex >= 0 ? candidateRows[feeIndex] : null;
+    if (fee && String(fee.decision || "pending") === "pending") {
+      candidateRows[feeIndex] = normalizeCandidate({
+        ...fee,
+        decision: "attached",
+        decidedAt: now,
+        decidedBy: nowActor(req),
+        matchReason: "Added onto the tyre price",
+        updatedAt: now,
+      });
+    }
+  }
   writeInvoiceCandidates(candidateRows);
   const invoiceAfter = refreshSupplierInvoiceStatus(currentCandidate.supplierInvoiceId);
   writePartAudit("jobPart", part.id, "approve", null, part, req, "candidate accepted");
@@ -9003,21 +9042,62 @@ app.post("/api/supplier-invoices/:invoiceId/parse", requireOwnerAdmin, (req, res
   res.status(201).json({ invoice: refreshed || invoices[invoiceIndex], candidates: matched });
 });
 
+function presentInvoiceCandidates(candidateRows) {
+  const stocked = inventoryLib.stockedCandidateIdSet(
+    candidateRows,
+    readInventoryItems(),
+    readInventoryMovements()
+  );
+  const paired = inventoryLib.pairStewardshipFees(candidateRows);
+  const stockedTyres = new Set(
+    paired.filter((row) => !row.stewardshipLine && stocked.has(row.id)).map((row) => row.id)
+  );
+  return paired
+    .map((row) => {
+      const onTyre = Boolean(row.stewardshipLine) && stockedTyres.has(row.linkedTyreCandidateId);
+      return {
+        ...normalizeCandidate(row),
+        stocked: stocked.has(row.id) || onTyre,
+        stewardshipLine: Boolean(row.stewardshipLine),
+        linkedTyreCandidateId: row.linkedTyreCandidateId || "",
+        stewardshipCandidateId: row.stewardshipCandidateId || "",
+        tyrePriceCandidate: toMoney(row.tyrePriceCandidate),
+        stewardshipFeeCandidate: toMoney(row.stewardshipFeeCandidate),
+        stockCostCandidate: toMoney(row.stockCostCandidate),
+      };
+    })
+    .sort((a, b) => Number(a.lineNo) - Number(b.lineNo));
+}
+
+function attachStewardshipLine(candidateId, actor) {
+  const id = String(candidateId || "").trim();
+  if (!id) return;
+  const rows = readInvoiceCandidates();
+  const index = rows.findIndex((row) => row.id === id);
+  if (index < 0) return;
+  const fee = rows[index];
+  if (!inventoryLib.isStewardshipCandidate(fee)) return;
+  if (String(fee.decision || "pending") !== "pending") return;
+  const now = nowIso();
+  rows[index] = normalizeCandidate({
+    ...fee,
+    decision: "attached",
+    decidedAt: now,
+    decidedBy: actor || "",
+    matchReason: "Added onto the tyre price",
+    updatedAt: now,
+  });
+  writeInvoiceCandidates(rows);
+  refreshSupplierInvoiceStatus(fee.supplierInvoiceId);
+}
+
 app.get("/api/supplier-invoices/:invoiceId/candidates", requireOwnerAdmin, (req, res) => {
   const invoice = readSupplierInvoices().find((row) => row.id === req.params.invoiceId);
   if (!invoice) return res.status(404).json({ error: "Supplier invoice not found" });
   const candidateRows = readInvoiceCandidates().filter(
     (row) => row.supplierInvoiceId === req.params.invoiceId
   );
-  const stocked = inventoryLib.stockedCandidateIdSet(
-    candidateRows,
-    readInventoryItems(),
-    readInventoryMovements()
-  );
-  const rows = candidateRows
-    .map((row) => ({ ...normalizeCandidate(row), stocked: stocked.has(row.id) }))
-    .sort((a, b) => Number(a.lineNo) - Number(b.lineNo));
-  res.json(rows);
+  res.json(presentInvoiceCandidates(candidateRows));
 });
 
 app.post("/api/supplier-invoices/:invoiceId/auto-match", requireOwnerAdmin, (req, res) => {
@@ -9395,12 +9475,24 @@ app.delete("/api/inventory/:id", requireOwnerAdmin, (req, res) => {
 
 app.post("/api/inventory/receive", requireOwnerAdmin, (req, res) => {
   try {
+    const body = req.body || {};
+    if (
+      inventoryLib.isStewardshipCandidate({
+        descriptionCandidate: body.name,
+        partNumberCandidate: body.partNumber,
+        rawLineText: body.rawLineText,
+      })
+    ) {
+      return res.status(400).json({
+        error: "Stewardship stays on the tyre. Add the tyre to stock and the fee is included in the cost.",
+      });
+    }
     const items = readInventoryItems();
     const movements = readInventoryMovements();
     const result = inventoryLib.applyReceive(
       items,
       movements,
-      { ...(req.body || {}), id: randomUUID(), movementId: randomUUID() },
+      { ...body, id: randomUUID(), movementId: randomUUID() },
       nowIso()
     );
     if (!result.already) {
@@ -9409,6 +9501,7 @@ app.post("/api/inventory/receive", requireOwnerAdmin, (req, res) => {
       writeInventoryItems(items);
       movements.push(result.movement);
       writeInventoryMovements(movements);
+      attachStewardshipLine(body.stewardshipCandidateId, nowActor(req));
     }
     res.status(result.created ? 201 : 200).json({
       item: result.item ? inventoryLib.presentItem(result.item) : null,

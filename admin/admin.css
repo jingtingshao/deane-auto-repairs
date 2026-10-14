@@ -2731,6 +2731,17 @@ label.check input {
   margin-bottom: 0.9rem;
 }
 
+.stock-editor input[readonly],
+#stock-receive-form input[readonly] {
+  background: #f4f6f8;
+}
+
+.stewardship-note {
+  margin-top: 0.25rem;
+  max-width: 18rem;
+  font-weight: 600;
+}
+
 .stock-price-guide {
   margin: 0.35rem 0 0.6rem;
   padding: 0.55rem 0.7rem;

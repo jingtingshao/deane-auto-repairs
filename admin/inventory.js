@@ -157,6 +157,70 @@
     return categories.find((row) => row.id === id) || null;
   }
 
+  function costCell(item, unit) {
+    const fee = Number(item?.stewardshipFee) || 0;
+    if (!(fee > 0)) return `${money(item.costPrice)}${unit}`;
+    return `${money(item.costPrice)}${unit}<div class="muted small">tyre ${money(item.tyrePrice)} + stewardship ${money(fee)}</div>`;
+  }
+
+  function editorSplitOpen() {
+    return Boolean(form?.querySelector("[data-stewardship-field]") && !form.querySelector("[data-stewardship-field]").hidden);
+  }
+
+  function setEditorSplit(item) {
+    const tyreField = form?.querySelector("[data-tyre-price-field]");
+    const feeField = form?.querySelector("[data-stewardship-field]");
+    const fee = Number(item?.stewardshipFee) || 0;
+    const show = fee > 0;
+    if (tyreField) tyreField.hidden = !show;
+    if (feeField) feeField.hidden = !show;
+    if (!form) return;
+    form.elements.tyrePrice.value = show ? roundMoney(item?.tyrePrice).toFixed(2) : "";
+    form.elements.stewardshipFee.value = show ? roundMoney(fee).toFixed(2) : "";
+    form.elements.costPrice.readOnly = show;
+  }
+
+  function syncEditorSplit() {
+    if (!form || !editorSplitOpen()) {
+      if (form) form.elements.costPrice.readOnly = false;
+      return;
+    }
+    const tyre = Number(form.elements.tyrePrice.value) || 0;
+    const fee = Number(form.elements.stewardshipFee.value) || 0;
+    form.elements.costPrice.value = roundMoney(tyre + fee).toFixed(2);
+    form.elements.costPrice.readOnly = true;
+  }
+
+  function receiveSplitOpen() {
+    return Boolean(
+      receiveForm?.querySelector("[data-receive-fee-field]") &&
+        !receiveForm.querySelector("[data-receive-fee-field]").hidden
+    );
+  }
+
+  function setReceiveSplit(tyrePrice, fee) {
+    const tyreField = receiveForm?.querySelector("[data-receive-tyre-field]");
+    const feeField = receiveForm?.querySelector("[data-receive-fee-field]");
+    const show = Number(fee) > 0;
+    if (tyreField) tyreField.hidden = !show;
+    if (feeField) feeField.hidden = !show;
+    if (!receiveForm) return;
+    receiveForm.elements.tyrePrice.value = show ? roundMoney(tyrePrice).toFixed(2) : "";
+    receiveForm.elements.stewardshipFee.value = show ? roundMoney(fee).toFixed(2) : "";
+    receiveForm.elements.costPrice.readOnly = show;
+    if (show) {
+      receiveForm.elements.costPrice.value = roundMoney(Number(tyrePrice) + Number(fee)).toFixed(2);
+    }
+  }
+
+  function syncReceiveSplit() {
+    if (!receiveForm || !receiveSplitOpen()) return;
+    const tyre = Number(receiveForm.elements.tyrePrice.value) || 0;
+    const fee = Number(receiveForm.elements.stewardshipFee.value) || 0;
+    receiveForm.elements.costPrice.value = roundMoney(tyre + fee).toFixed(2);
+    receiveForm.elements.costPrice.readOnly = true;
+  }
+
   function flash(msg) {
     if (statusEl) {
       statusEl.hidden = false;
@@ -238,7 +302,13 @@
     const qtyLabel = form.querySelector("[data-qty-label]");
     const costLabel = form.querySelector("[data-cost-label]");
     if (qtyLabel) qtyLabel.textContent = unit === "litre" ? "Litres on hand" : "Qty on hand";
-    if (costLabel) costLabel.textContent = unit === "litre" ? "Cost per litre ex GST" : "Cost ex GST";
+    if (costLabel) {
+      costLabel.textContent = editorSplitOpen()
+        ? "Stock cost ex GST"
+        : unit === "litre"
+          ? "Cost per litre ex GST"
+          : "Cost ex GST";
+    }
     const sellLabel = form.querySelector("[data-sell-label]");
     if (sellLabel) sellLabel.textContent = unit === "litre" ? "Sell per litre ex GST" : "Sell price ex GST";
     const qty = form.elements.qtyOnHand;
@@ -257,12 +327,23 @@
         text = `${formatQty(litres, "litre")} at ${money(drum)} for the drum is ${money(shelfCost)} per litre. ${text}`;
       }
     }
+    if (receiveSplitOpen()) {
+      const tyre = Number(receiveForm.elements.tyrePrice.value) || 0;
+      const fee = Number(receiveForm.elements.stewardshipFee.value) || 0;
+      text = `Tyre ${money(tyre)} and stewardship ${money(fee)} stay separate. Stock cost is ${money(tyre + fee)}, the two added together. ${text}`;
+    }
     receiveGuide.textContent = text;
     const qtyLabel = receiveForm.querySelector("[data-receive-qty-label]");
     const costLabel = receiveForm.querySelector("[data-receive-cost-label]");
     const sellLabel = receiveForm.querySelector("[data-receive-sell-label]");
     if (qtyLabel) qtyLabel.textContent = unit === "litre" ? "Litres" : "Qty";
-    if (costLabel) costLabel.textContent = unit === "litre" ? "Drum cost ex GST" : "Cost ex GST";
+    if (costLabel) {
+      costLabel.textContent = receiveSplitOpen()
+        ? "Stock cost ex GST"
+        : unit === "litre"
+          ? "Drum cost ex GST"
+          : "Cost ex GST";
+    }
     if (sellLabel) sellLabel.textContent = unit === "litre" ? "Sell per litre ex GST" : "Sell ex GST";
   }
 
@@ -350,7 +431,7 @@
               <td><strong>${Admin.escapeHtml(item.name)}</strong>${fit ? `<div class="muted small">${Admin.escapeHtml(fit)}</div>` : ""}</td>
               <td>${Admin.escapeHtml(item.supplier || "—")}</td>
               <td>${Admin.escapeHtml(formatQty(item.qtyOnHand, item.unit))}</td>
-              <td>${money(item.costPrice)}${unit}</td>
+              <td>${costCell(item, unit)}</td>
               <td><strong>${money(item.sellPrice)}${unit}</strong><div class="muted small">${money(Math.round(item.sellPrice * 1.15 * 100) / 100)} incl</div></td>
               <td>${formatMarkup(item.costPrice, item.sellPrice)}</td>
               <td class="supplier-line-actions">
@@ -381,6 +462,7 @@
     form.elements.costPrice.value = item ? String(item.costPrice) : "";
     form.elements.sellPrice.value = item ? String(item.sellPrice) : "";
     form.elements.notes.value = item?.notes || "";
+    setEditorSplit(item);
     fillCategorySelect(form.elements.category, item?.category || "");
     const title = document.getElementById("stock-form-legend");
     if (title) title.textContent = item ? "Edit stock" : "Add part";
@@ -536,10 +618,13 @@
     }
     const bits = [prefill?.supplier, prefill?.invoiceNo ? `Invoice ${prefill.invoiceNo}` : ""].filter(Boolean);
     const lead = bits.length ? `${bits.join(" · ")}. ` : "";
+    const split = receiveSplitOpen()
+      ? `Tyre price and stewardship are stored separately. Stock cost is the two added together. `
+      : "";
     const shelf =
       receiveUnitKind() === "litre"
         ? `${lead}Bought by the drum, sold by the litre. Qty is the litres in the drum. Cost is the price of the whole drum.`
-        : `${lead}Qty is what goes on the shelf. If this line is a whole box, type how many pieces are in the box.`;
+        : `${lead}${split}Qty is what goes on the shelf. If this line is a whole box, type how many pieces are in the box.`;
     summary.textContent = receiveKeptSell
       ? `${shelf} Sell price is the last retail price, ${money(Number(receiveForm.elements.sellPrice.value) || 0)}.`
       : shelf;
@@ -572,7 +657,9 @@
     receiveForm.elements.fitment.value = prefill.fitment || "";
     receiveForm.elements.qty.value = prefill.qty != null ? String(prefill.qty) : "1";
     receiveForm.elements.costPrice.value = prefill.costPrice != null ? String(prefill.costPrice) : "";
+    setReceiveSplit(prefill.tyrePrice, prefill.stewardshipFee);
     receiveForm.elements.candidateId.value = prefill.candidateId || "";
+    receiveForm.elements.stewardshipCandidateId.value = prefill.stewardshipCandidateId || "";
     receiveForm.elements.supplierInvoiceId.value = prefill.supplierInvoiceId || "";
     receiveForm.elements.invoiceNo.value = prefill.invoiceNo || "";
     applySavedSell();
@@ -583,6 +670,10 @@
   }
 
   function closeReceive() {
+    if (receiveForm) {
+      setReceiveSplit(0, 0);
+      if (receiveForm.elements.stewardshipCandidateId) receiveForm.elements.stewardshipCandidateId.value = "";
+    }
     if (receiveDialog) receiveDialog.hidden = true;
   }
 
@@ -591,6 +682,14 @@
     const guide = suggestPrice(form.elements.costPrice.value);
     if (!sellTouched) form.elements.sellPrice.value = guide.sell ? guide.sell.toFixed(2) : "";
     renderGuide();
+  });
+  ["tyrePrice", "stewardshipFee"].forEach((field) => {
+    form?.elements?.[field]?.addEventListener("input", () => {
+      syncEditorSplit();
+      const guide = suggestPrice(form.elements.costPrice.value);
+      if (!sellTouched) form.elements.sellPrice.value = guide.sell ? guide.sell.toFixed(2) : "";
+      renderGuide();
+    });
   });
   form?.elements?.sellPrice?.addEventListener("input", () => {
     sellTouched = true;
@@ -615,6 +714,9 @@
 
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const split = editorSplitOpen();
+    const tyrePrice = split ? Number(form.elements.tyrePrice.value) || 0 : 0;
+    const stewardshipFee = split ? Number(form.elements.stewardshipFee.value) || 0 : 0;
     const body = {
       category: form.elements.category.value,
       name: form.elements.name.value.trim(),
@@ -623,7 +725,9 @@
       supplier: form.elements.supplier.value.trim(),
       fitment: form.elements.fitment.value.trim(),
       qtyOnHand: Number(form.elements.qtyOnHand.value) || 0,
-      costPrice: Number(form.elements.costPrice.value) || 0,
+      tyrePrice,
+      stewardshipFee,
+      costPrice: split ? roundMoney(tyrePrice + stewardshipFee) : Number(form.elements.costPrice.value) || 0,
       sellPrice: Number(form.elements.sellPrice.value) || 0,
       notes: form.elements.notes.value.trim(),
     };
@@ -689,6 +793,12 @@
 
   receiveForm?.elements?.qty?.addEventListener("input", refreshReceivePrice);
   receiveForm?.elements?.costPrice?.addEventListener("input", refreshReceivePrice);
+  ["tyrePrice", "stewardshipFee"].forEach((field) => {
+    receiveForm?.elements?.[field]?.addEventListener("input", () => {
+      syncReceiveSplit();
+      refreshReceivePrice();
+    });
+  });
   receiveForm?.elements?.sellPrice?.addEventListener("input", () => {
     receiveSellTouched = true;
     renderReceiveGuide();
@@ -703,6 +813,8 @@
   });
   receiveForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const fee = receiveSplitOpen() ? roundMoney(receiveForm.elements.stewardshipFee.value) : 0;
+    const tyrePrice = receiveSplitOpen() ? roundMoney(receiveForm.elements.tyrePrice.value) : 0;
     const body = {
       category: receiveForm.elements.category.value,
       name: receiveForm.elements.name.value.trim(),
@@ -710,9 +822,12 @@
       supplier: receiveForm.elements.supplier.value.trim(),
       fitment: receiveForm.elements.fitment.value.trim(),
       qty: Number(receiveForm.elements.qty.value) || 0,
+      tyrePrice,
+      stewardshipFee: fee,
       costPrice: receiveShelfCost(),
       sellPrice: Number(receiveForm.elements.sellPrice.value) || 0,
       candidateId: receiveForm.elements.candidateId.value,
+      stewardshipCandidateId: receiveForm.elements.stewardshipCandidateId.value,
       supplierInvoiceId: receiveForm.elements.supplierInvoiceId.value,
       invoiceNo: receiveForm.elements.invoiceNo.value,
       note: receiveForm.elements.invoiceNo.value
@@ -746,7 +861,9 @@
       flash(
         result.already
           ? "That invoice line is already in stock."
-          : `${result.item?.name || "Part"} added to stock at ${money(result.item?.sellPrice)}${result.item?.unit === "litre" ? " per litre" : ""} ex GST.`
+          : fee > 0
+            ? `${result.item?.name || "Tyre"} added to stock. Tyre ${money(tyrePrice)} + stewardship ${money(fee)} = ${money(result.item?.costPrice)} cost.`
+            : `${result.item?.name || "Part"} added to stock at ${money(result.item?.sellPrice)}${result.item?.unit === "litre" ? " per litre" : ""} ex GST.`
       );
     } catch (err) {
       alert(err.message);
