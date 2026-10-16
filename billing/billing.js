@@ -243,8 +243,20 @@ function render(doc) {
           <tfoot>
             <tr>
               <td colspan="3">Subtotal excl. GST</td>
-              <td class="num">${money(totals.net)}</td>
+              <td class="num">${money(totals.linesNet ?? totals.net)}</td>
             </tr>
+            ${
+              Number(totals.discountIncl) > 0
+                ? `<tr class="discount">
+              <td colspan="3">${escapeHtml(
+                String(doc.discountNote || "").trim()
+                  ? `Discount — ${String(doc.discountNote).trim()}`
+                  : "Discount"
+              )}</td>
+              <td class="num">−${money(totals.discountNet)}</td>
+            </tr>`
+                : ""
+            }
             <tr>
               <td colspan="3">GST (15%)</td>
               <td class="num">${money(totals.gst)}</td>

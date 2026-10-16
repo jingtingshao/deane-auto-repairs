@@ -59,7 +59,7 @@ function buildBillingPdf(doc) {
 
       const pageWidth = pdf.page.width - pdf.page.margins.left - pdf.page.margins.right;
       const left = pdf.page.margins.left;
-      const totals = catalog.computeTotals(doc.lines || []);
+      const totals = catalog.computeDocTotals(doc);
       const isInvoice = doc.kind === "invoice";
       const title = isInvoice ? "Tax Invoice" : "Quote";
       const SIGN_NAVY = "#021534";
@@ -369,7 +369,8 @@ function buildBillingPdf(doc) {
           28 +
           pdf.heightOfString(String(doc.notes).trim(), { width: pageWidth });
       }
-      ensureSpaceAboveFooter(90 + notesHeight);
+      const discountRows = Number(totals.discountIncl) > 0 ? 14 : 0;
+      ensureSpaceAboveFooter(90 + notesHeight + discountRows);
       const totalsLabelX = cols.price;
       pdf
         .moveTo(totalsLabelX, pdf.y)
@@ -390,7 +391,14 @@ function buildBillingPdf(doc) {
         pdf.x = left;
         pdf.y = y + 14;
       };
-      row("Subtotal excl. GST", money(totals.net));
+      row("Subtotal excl. GST", money(totals.linesNet ?? totals.net));
+      if (Number(totals.discountIncl) > 0) {
+        const note = String(doc.discountNote || "").trim();
+        row(
+          note ? `Discount — ${note}` : "Discount",
+          `−${money(totals.discountNet)}`
+        );
+      }
       row("GST (15%)", money(totals.gst));
       row("Total incl. GST", money(totals.totalIncl), true);
       pdf.x = left;

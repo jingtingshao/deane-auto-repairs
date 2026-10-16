@@ -93,6 +93,20 @@ function setBillingFieldsEditable(editable) {
   if (vehicleInput) vehicleInput.readOnly = !editable;
   const plateFind = document.getElementById("billing-plate-find");
   if (plateFind) plateFind.disabled = !editable;
+  setDiscountFieldsEditable(editable);
+}
+
+function setDiscountFieldsEditable(editable) {
+  const amount = document.getElementById("billing-discount-incl");
+  const note = document.getElementById("billing-discount-note");
+  if (amount) {
+    amount.readOnly = !editable;
+    amount.disabled = false;
+  }
+  if (note) {
+    note.readOnly = !editable;
+    note.disabled = false;
+  }
 }
 
 function kindLabel(kind) {
@@ -175,6 +189,8 @@ async function createDoc(presetId, extras = {}) {
       notes: workNotes,
       validUntil: "",
       lines,
+      discountIncl: 0,
+      discountNote: "",
       payments: [],
       paymentStatus: "unpaid",
       amountPaid: 0,
@@ -806,6 +822,13 @@ function fillForm(doc) {
   set("number", doc.number);
   set("validUntil", doc.validUntil || "");
   set("notes", doc.notes);
+  const discountInclEl = document.getElementById("billing-discount-incl");
+  const discountNoteEl = document.getElementById("billing-discount-note");
+  if (discountInclEl) {
+    const amount = round2(Math.max(0, Number(doc.discountIncl) || 0));
+    discountInclEl.value = amount > 0 ? String(amount) : "";
+  }
+  if (discountNoteEl) discountNoteEl.value = doc.discountNote || "";
   refreshBillingPartySelects(doc);
 
   document.getElementById("billing-legend").textContent =
@@ -1264,7 +1287,25 @@ function lineAmounts(line) {
   };
 }
 
-function computeTotals(lines) {
+function gstFromInclCents(inclCents) {
+  return Math.round((Number(inclCents) || 0) * (3 / 23));
+}
+
+function currentDiscountIncl() {
+  const typed = round2(
+    Math.max(0, Number(document.getElementById("billing-discount-incl")?.value) || 0)
+  );
+  if (document.getElementById("billing-discount-incl")) return typed;
+  return round2(Math.max(0, Number(currentBill?.discountIncl) || 0));
+}
+
+function currentDiscountNote() {
+  const el = document.getElementById("billing-discount-note");
+  if (el) return String(el.value || "").trim().slice(0, 120);
+  return String(currentBill?.discountNote || "").trim().slice(0, 120);
+}
+
+function computeTotals(lines, discountIncl = 0) {
   let netCents = 0;
   let gstCents = 0;
   let totalInclCents = 0;
@@ -1274,24 +1315,75 @@ function computeTotals(lines) {
     gstCents += toCents(amounts.gst);
     totalInclCents += toCents(amounts.totalIncl);
   }
+  const linesNet = fromCents(netCents);
+  const linesGst = fromCents(gstCents);
+  const linesTotalIncl = fromCents(totalInclCents);
+  let discount = round2(Math.max(0, Number(discountIncl) || 0));
+  if (discount > linesTotalIncl) discount = linesTotalIncl;
+  if (!(discount > 0)) {
+    return {
+      net: linesNet,
+      gst: linesGst,
+      totalIncl: linesTotalIncl,
+      discountIncl: 0,
+      discountNet: 0,
+      linesNet,
+      linesGst,
+      linesTotalIncl,
+    };
+  }
+  const discountCents = toCents(discount);
+  const discountGstCents = gstFromInclCents(discountCents);
+  const discountNetCents = discountCents - discountGstCents;
+  const newTotalInclCents = totalInclCents - discountCents;
+  const newGstCents = gstFromInclCents(newTotalInclCents);
+  const newNetCents = newTotalInclCents - newGstCents;
   return {
-    net: fromCents(netCents),
-    gst: fromCents(gstCents),
-    totalIncl: fromCents(totalInclCents),
+    net: fromCents(newNetCents),
+    gst: fromCents(newGstCents),
+    totalIncl: fromCents(newTotalInclCents),
+    discountIncl: discount,
+    discountNet: fromCents(discountNetCents),
+    linesNet,
+    linesGst,
+    linesTotalIncl,
   };
 }
 
 function renderTotals() {
-  const { net, gst, totalIncl } = computeTotals(lineRows);
+  const totals = computeTotals(lineRows, currentDiscountIncl());
+  const amountEl = document.getElementById("billing-discount-incl");
+  if (amountEl) {
+    const typed = round2(Math.max(0, Number(amountEl.value) || 0));
+    if (typed > totals.linesTotalIncl) {
+      amountEl.value = totals.discountIncl > 0 ? String(totals.discountIncl) : "";
+    }
+  }
+  const note = currentDiscountNote();
+  const discountLabel = note ? `Discount — ${Admin.escapeHtml(note)}` : "Discount";
+  const discountRow =
+    totals.discountIncl > 0
+      ? `<p class="discount-row"><span>${discountLabel}</span><span>−${money(
+          totals.discountNet
+        )}</span></p>`
+      : "";
   billingTotalsEl.innerHTML = `
-    <p><span>Subtotal excl. GST</span><span>${money(net)}</span></p>
-    <p><span>GST (15%)</span><span>${money(gst)}</span></p>
-    <p><span>Total incl. GST</span><span>${money(totalIncl)}</span></p>
+    <p><span>Subtotal excl. GST</span><span>${money(totals.linesNet)}</span></p>
+    ${discountRow}
+    <p><span>GST (15%)</span><span>${money(totals.gst)}</span></p>
+    <p><span>Total incl. GST</span><span>${money(totals.totalIncl)}</span></p>
   `;
+  if (currentBill) {
+    currentBill.discountIncl = totals.discountIncl;
+    currentBill.discountNote = totals.discountIncl > 0 ? note : "";
+    currentBill.totals = totals;
+  }
+  updatePaymentSummary();
 }
 
 function collectBill() {
   const value = (name) => String(billingInput(name)?.value || "").trim();
+  const discountIncl = currentDiscountIncl();
   const payload = {
     customerId: value("customerId"),
     vehicleId: value("vehicleId"),
@@ -1302,6 +1394,8 @@ function collectBill() {
     vehicle: value("vehicle"),
     notes: capitalizeLineDescription(billingInput("notes")?.value || ""),
     validUntil: billingInput("validUntil")?.value || "",
+    discountIncl,
+    discountNote: discountIncl > 0 ? currentDiscountNote() : "",
     lines: lineRows.map((line) => ({
       ...line,
       description: capitalizeLineDescription(line.description),
@@ -1318,7 +1412,7 @@ function collectBill() {
 }
 
 function invoiceTotalIncl() {
-  return computeTotals(lineRows).totalIncl;
+  return computeTotals(lineRows, currentDiscountIncl()).totalIncl;
 }
 
 function paymentsTotal() {
@@ -1702,6 +1796,7 @@ function updateActionButtons() {
     doc.status === "draft";
   deleteBtn.hidden = doc.status !== "draft" && !unsaved;
   addLineBtn.hidden = !linesEditable;
+  setDiscountFieldsEditable(linesEditable);
 }
 
 async function showList(opts = {}) {
@@ -1774,6 +1869,15 @@ document.querySelectorAll("[data-wof-months]").forEach((btn) => {
 });
 
 document.getElementById("btn-billing-back").addEventListener("click", () => showList());
+
+document.getElementById("billing-discount-incl")?.addEventListener("input", () => {
+  renderTotals();
+  scheduleBillAutosave();
+});
+document.getElementById("billing-discount-note")?.addEventListener("input", () => {
+  renderTotals();
+  scheduleBillAutosave();
+});
 
 document.getElementById("btn-add-line").addEventListener("click", () => {
   if (!canEditLines(currentBill)) return;

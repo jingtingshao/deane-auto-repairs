@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20261015steward" />
+    <link rel="stylesheet" href="admin.css?v=20261017discount" />
     <link rel="stylesheet" href="admin-refresh.css?v=20261002yellow" />
   </head>
   <body>
@@ -938,6 +938,30 @@
                 <div class="line-actions">
                   <button type="button" id="btn-add-line" class="ghost">Add line</button>
                 </div>
+                <div id="billing-discount" class="billing-discount">
+                  <label>
+                    Discount (incl. GST)
+                    <input
+                      id="billing-discount-incl"
+                      name="discountIncl"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      inputmode="decimal"
+                      placeholder="0.00"
+                    />
+                  </label>
+                  <label>
+                    Discount reason
+                    <input
+                      id="billing-discount-note"
+                      name="discountNote"
+                      type="text"
+                      maxlength="120"
+                      placeholder="e.g. Loyalty, staff, promo"
+                    />
+                  </label>
+                </div>
                 <div id="billing-totals" class="billing-totals"></div>
               </fieldset>
 
@@ -1014,7 +1038,7 @@
     <script src="dashboard.js?v=20261012invoiceplate"></script>
     <script src="calendar.js?v=20260905staffrole"></script>
     <script src="jobs.js?v=20261006jobstock"></script>
-    <script src="billing.js?v=20261012inclcents"></script>
+    <script src="billing.js?v=20261017discount"></script>
     <script src="inventory.js?v=20261015tyreedit"></script>
     <script src="supplier-invoices.js?v=20261015steward"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>

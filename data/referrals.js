@@ -50,7 +50,7 @@ function isInvoicePaidForReferral(doc, totals) {
   if (!doc || doc.kind !== "invoice" || doc.status === "void") return false;
   const totalIncl =
     Number(totals?.totalIncl) ||
-    catalog.computeTotals(doc.lines || []).totalIncl;
+    catalog.computeDocTotals(doc).totalIncl;
   const amountPaid = money(
     (Array.isArray(doc.payments) ? doc.payments : []).reduce(
       (sum, row) => sum + (Number(row.amount) || 0),
@@ -63,7 +63,7 @@ function isInvoicePaidForReferral(doc, totals) {
 
 function isQualifyingPaidInvoice(doc) {
   if (!doc || doc.kind !== "invoice" || doc.status === "void") return false;
-  const totals = catalog.computeTotals(doc.lines || []);
+  const totals = catalog.computeDocTotals(doc);
   if (totals.totalIncl + 0.001 < rules.minInvoiceSpend) return false;
   return isInvoicePaidForReferral(doc, totals);
 }
@@ -434,7 +434,7 @@ function applyCreditsToInvoice({ storeRows, invoice, creditIds }) {
     throw err;
   }
 
-  const totals = catalog.computeTotals(invoice.lines || []);
+  const totals = catalog.computeDocTotals(invoice);
   if (totals.totalIncl + 0.001 < rules.minInvoiceSpend) {
     const err = new Error(
       `Invoice must be at least $${rules.minInvoiceSpend.toFixed(0)} to use referral credits.`

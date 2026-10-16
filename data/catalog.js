@@ -118,7 +118,24 @@ function unitPriceGstIncl(line) {
   return fromCents(Math.round(totalInclCents / qty));
 }
 
-function computeTotals(lines) {
+/** GST-inclusive discount $, capped at the lines total. */
+function normalizeDiscountIncl(value, maxIncl = Infinity) {
+  const n = round2(Math.max(0, Number(value) || 0));
+  const max = round2(Math.max(0, Number(maxIncl) || 0));
+  if (!(n > 0)) return 0;
+  if (!(max > 0)) return 0;
+  return n > max ? max : n;
+}
+
+function normalizeDiscountNote(note) {
+  return String(note || "").trim().slice(0, 120);
+}
+
+/**
+ * Line totals, then optional GST-inclusive discount.
+ * Discount reduces the inclusive total; GST is re-split with IRD 3/23.
+ */
+function computeTotals(lines, discountIncl = 0) {
   let netCents = 0;
   let gstCents = 0;
   let totalInclCents = 0;
@@ -128,12 +145,46 @@ function computeTotals(lines) {
     gstCents += toCents(amounts.gst);
     totalInclCents += toCents(amounts.totalIncl);
   }
+  const linesNet = fromCents(netCents);
+  const linesGst = fromCents(gstCents);
+  const linesTotalIncl = fromCents(totalInclCents);
+  const discount = normalizeDiscountIncl(discountIncl, linesTotalIncl);
+  if (!(discount > 0)) {
+    return {
+      totalIncl: linesTotalIncl,
+      net: linesNet,
+      gst: linesGst,
+      gstRate: GST_RATE,
+      discountIncl: 0,
+      discountNet: 0,
+      discountGst: 0,
+      linesNet,
+      linesGst,
+      linesTotalIncl,
+    };
+  }
+  const discountCents = toCents(discount);
+  const discountGstCents = gstFromInclCents(discountCents);
+  const discountNetCents = discountCents - discountGstCents;
+  const newTotalInclCents = totalInclCents - discountCents;
+  const newGstCents = gstFromInclCents(newTotalInclCents);
+  const newNetCents = newTotalInclCents - newGstCents;
   return {
-    totalIncl: fromCents(totalInclCents),
-    net: fromCents(netCents),
-    gst: fromCents(gstCents),
+    totalIncl: fromCents(newTotalInclCents),
+    net: fromCents(newNetCents),
+    gst: fromCents(newGstCents),
     gstRate: GST_RATE,
+    discountIncl: discount,
+    discountNet: fromCents(discountNetCents),
+    discountGst: fromCents(discountGstCents),
+    linesNet,
+    linesGst,
+    linesTotalIncl,
   };
+}
+
+function computeDocTotals(doc) {
+  return computeTotals(doc?.lines || [], doc?.discountIncl);
 }
 
 function cloneLines(lines) {
@@ -399,7 +450,10 @@ module.exports = {
   lineAmounts,
   lineTotal,
   unitPriceGstIncl,
+  normalizeDiscountIncl,
+  normalizeDiscountNote,
   computeTotals,
+  computeDocTotals,
   cloneLines,
   presetById,
   lineLooksLikeWof,

@@ -3722,7 +3722,7 @@ function isInvoiceOverdue(doc, payment) {
 
 function normalizeInvoicePayment(doc, body = {}, totals) {
   const totalIncl =
-    Number(totals?.totalIncl) || catalog.computeTotals(doc.lines || []).totalIncl;
+    Number(totals?.totalIncl) || catalog.computeDocTotals(doc).totalIncl;
   const payments = paymentsFromDoc(doc, body);
   const amountPaid = catalog.round2(
     payments.reduce((sum, row) => sum + row.amount, 0)
@@ -3766,7 +3766,7 @@ function ensureHistory(doc) {
   if (!doc) return;
   if (Array.isArray(doc.history) && doc.history.length) return;
   doc.history = [];
-  const totals = catalog.computeTotals(doc.lines || []);
+  const totals = catalog.computeDocTotals(doc);
   appendHistory(doc, {
     at: doc.createdAt || nowIso(),
     type: "created",
@@ -3898,6 +3898,15 @@ function describeFieldChanges(before, after) {
       details.push(`${label} updated`);
     }
   }
+  const beforeDisc = catalog.round2(Number(before.discountIncl) || 0);
+  const afterDisc = catalog.round2(Number(after.discountIncl) || 0);
+  if (beforeDisc !== afterDisc) details.push("Discount updated");
+  else if (
+    afterDisc > 0 &&
+    String(before.discountNote || "") !== String(after.discountNote || "")
+  ) {
+    details.push("Discount note updated");
+  }
   return details;
 }
 
@@ -3910,7 +3919,7 @@ function paymentMap(rows) {
 }
 
 function withBillingTotals(doc, isAdmin) {
-  const totals = catalog.computeTotals(doc.lines);
+  const totals = catalog.computeDocTotals(doc);
   const payment =
     doc.kind === "invoice"
       ? normalizeInvoicePayment(doc, {}, totals)
@@ -4344,7 +4353,7 @@ function isCurrentWorkshopBilling(doc, index = workshopCurrentIndex()) {
     return doc.status === "draft" || doc.status === "sent" || doc.status === "accepted";
   }
   if (doc.kind === "invoice") {
-    const totals = catalog.computeTotals(doc.lines || []);
+    const totals = catalog.computeDocTotals(doc);
     const payment = normalizeInvoicePayment(doc, {}, totals);
     return Boolean(payment.paymentStatus && payment.paymentStatus !== "paid");
   }
@@ -5374,7 +5383,7 @@ app.post("/api/billing/:id/apply-referral-credits", requireAdmin, (req, res) => 
       creditIds: req.body?.creditIds,
     });
     writeReferrals(result.rows);
-    const totals = catalog.computeTotals(result.invoice.lines || []);
+    const totals = catalog.computeDocTotals(result.invoice);
     const payment = normalizeInvoicePayment(result.invoice, {}, totals);
     result.invoice.paymentStatus = payment.paymentStatus;
     result.invoice.amountPaid = payment.amountPaid;
@@ -5425,7 +5434,7 @@ app.post("/api/billing/:id/remove-referral-credits", requireAdmin, (req, res) =>
         amount: result.removedAmount,
       });
     }
-    const totals = catalog.computeTotals(result.invoice.lines || []);
+    const totals = catalog.computeDocTotals(result.invoice);
     const payment = normalizeInvoicePayment(result.invoice, {}, totals);
     result.invoice.paymentStatus = payment.paymentStatus;
     result.invoice.amountPaid = payment.amountPaid;
@@ -5881,7 +5890,7 @@ app.get("/api/admin/dashboard", requireOwnerAdmin, (req, res) => {
     const billing = readBilling();
     for (const doc of billing) {
       if (doc.status === "void") continue;
-      const totals = catalog.computeTotals(doc.lines || []);
+      const totals = catalog.computeDocTotals(doc);
       if (doc.kind === "quote" && doc.status === "sent") {
         quotesAwaiting += 1;
         quotesAwaitingTotal = catalog.round2(quotesAwaitingTotal + totals.totalIncl);
@@ -6673,7 +6682,7 @@ app.get("/api/billing", requireAdmin, (req, res) => {
   const docs = readBilling()
     .filter((d) => !currentIndex || isCurrentWorkshopBilling(d, currentIndex))
     .map((d) => {
-      const totals = catalog.computeTotals(d.lines);
+      const totals = catalog.computeDocTotals(d);
       const payment =
         d.kind === "invoice" ? normalizeInvoicePayment(d, {}, totals) : null;
       const sortAt = billingAnchorDate(d);
@@ -6799,6 +6808,11 @@ app.post("/api/billing", requireAdmin, (req, res) => {
     odometer: req.body?.odometer || "",
     notes: String(req.body?.notes || "").trim(),
     lines,
+    discountIncl: catalog.normalizeDiscountIncl(
+      req.body?.discountIncl,
+      catalog.computeTotals(lines).linesTotalIncl
+    ),
+    discountNote: catalog.normalizeDiscountNote(req.body?.discountNote),
     acceptToken: preset.kind === "quote" ? newAcceptToken() : "",
     viewToken: newViewToken(),
     quoteId: "",
@@ -6809,10 +6823,11 @@ app.post("/api/billing", requireAdmin, (req, res) => {
     history: [],
     ...(preset.kind === "invoice" ? emptyPaymentFields() : {}),
   };
+  if (!(doc.discountIncl > 0)) doc.discountNote = "";
   appendHistory(doc, {
     type: "created",
     summary: doc.kind === "invoice" ? "Invoice created" : "Quote created",
-    amount: catalog.computeTotals(doc.lines).totalIncl,
+    amount: catalog.computeDocTotals(doc).totalIncl,
   });
 
   docs.push(doc);
@@ -6924,6 +6939,24 @@ app.put("/api/billing/:id", requireAdmin, requireCurrentBillingIfTech, (req, res
         ? current.lines
         : normalizeLines(incomingLines != null ? incomingLines : current.lines);
 
+  const linesTotalIncl = catalog.computeTotals(nextLines).linesTotalIncl;
+  const canEditDiscount =
+    current.kind === "invoice"
+      ? current.status !== "void"
+      : !locked;
+  const discountIncl = canEditDiscount
+    ? catalog.normalizeDiscountIncl(
+        body.discountIncl != null ? body.discountIncl : current.discountIncl,
+        linesTotalIncl
+      )
+    : catalog.normalizeDiscountIncl(current.discountIncl, linesTotalIncl);
+  const discountNote =
+    discountIncl > 0
+      ? canEditDiscount && body.discountNote != null
+        ? catalog.normalizeDiscountNote(body.discountNote)
+        : catalog.normalizeDiscountNote(current.discountNote)
+      : "";
+
   const next = {
     ...current,
     ...snapshot,
@@ -6935,6 +6968,8 @@ app.put("/api/billing/:id", requireAdmin, requireCurrentBillingIfTech, (req, res
         ? String(body.validUntil)
         : current.validUntil,
     lines: nextLines,
+    discountIncl,
+    discountNote,
     wofExpiry:
       current.kind === "invoice" && body.wofExpiry != null
         ? isoDateOnly(body.wofExpiry)
@@ -6943,7 +6978,7 @@ app.put("/api/billing/:id", requireAdmin, requireCurrentBillingIfTech, (req, res
   };
 
   if (current.kind === "invoice") {
-    const totals = catalog.computeTotals(nextLines);
+    const totals = catalog.computeTotals(nextLines, next.discountIncl);
     // Preserve referral credits on normal saves — only apply/remove APIs change them.
     next.referralCreditsApplied = referralsLib.normalizeAppliedRows(
       current.referralCreditsApplied
@@ -7007,7 +7042,7 @@ app.put("/api/billing/:id", requireAdmin, requireCurrentBillingIfTech, (req, res
       type: "edited",
       summary: current.kind === "invoice" ? "Invoice edited" : "Quote edited",
       detail: editDetails.slice(0, 8).join("; "),
-      amount: catalog.computeTotals(next.lines).totalIncl,
+      amount: catalog.computeDocTotals(next).totalIncl,
     });
   }
 
@@ -7035,7 +7070,7 @@ app.put("/api/billing/:id", requireAdmin, requireCurrentBillingIfTech, (req, res
       const payment = normalizeInvoicePayment(
         next,
         {},
-        catalog.computeTotals(next.lines || [])
+        catalog.computeDocTotals(next)
       );
       if (payment.paymentStatus === "paid") {
         persistQualifiedReferrals(next.customerId, docs);
@@ -7091,7 +7126,7 @@ app.post("/api/billing/:id/email", requireAdmin, requireCurrentBillingIfTech, as
   const name = doc.customerName || "there";
   const vehicle = doc.vehicle || "your vehicle";
   const rego = doc.registration || "";
-  const totals = catalog.computeTotals(doc.lines);
+  const totals = catalog.computeDocTotals(doc);
   const money = totals.totalIncl.toFixed(2);
   const vehicleBit = `${vehicle}${rego ? ` (${rego})` : ""}`;
   const validUntilLabel = formatDateShort(doc.validUntil) || doc.validUntil;
@@ -7326,6 +7361,11 @@ function convertQuoteToInvoice(docs, quote) {
       ...line,
       id: randomUUID(),
     })),
+    discountIncl: catalog.normalizeDiscountIncl(
+      quote.discountIncl,
+      catalog.computeTotals(lines).linesTotalIncl
+    ),
+    discountNote: catalog.normalizeDiscountNote(quote.discountNote),
     acceptToken: "",
     viewToken: newViewToken(),
     quoteId: quote.id,
@@ -7339,18 +7379,19 @@ function convertQuoteToInvoice(docs, quote) {
     history: [],
     ...emptyPaymentFields(),
   };
+  if (!(invoice.discountIncl > 0)) invoice.discountNote = "";
   invoice.invoiceId = invoice.id;
   appendHistory(invoice, {
     type: "created",
     summary: "Invoice created from quote",
     detail: previousNumber,
-    amount: catalog.computeTotals(invoice.lines).totalIncl,
+    amount: catalog.computeDocTotals(invoice).totalIncl,
   });
   appendHistory(invoice, {
     type: "invoiced",
     summary: "Converted from quote",
     detail: `${previousNumber} → ${invoice.number}`,
-    amount: catalog.computeTotals(invoice.lines).totalIncl,
+    amount: catalog.computeDocTotals(invoice).totalIncl,
   });
 
   quote.status = "invoiced";
@@ -7361,7 +7402,7 @@ function convertQuoteToInvoice(docs, quote) {
     type: "invoiced",
     summary: "Converted to invoice",
     detail: `${previousNumber} → ${invoice.number}`,
-    amount: catalog.computeTotals(invoice.lines).totalIncl,
+    amount: catalog.computeDocTotals(invoice).totalIncl,
   });
 
   docs.push(invoice);
@@ -7538,7 +7579,7 @@ async function notifyWorkshopQuoteAccepted(quote, invoice, job, req) {
     console.warn("Quote accepted but SMTP is not configured — workshop was not emailed.");
     return;
   }
-  const totals = catalog.computeTotals(quote.lines);
+  const totals = catalog.computeDocTotals(quote);
   const money = totals.totalIncl.toFixed(2);
   const vehicle = quote.vehicle || "vehicle";
   const rego = quote.registration || "";
@@ -7637,7 +7678,7 @@ app.post("/api/billing/:id/accept", async (req, res) => {
   appendHistory(doc, {
     type: "accepted",
     summary: "Quote accepted by customer",
-    amount: catalog.computeTotals(doc.lines).totalIncl,
+    amount: catalog.computeDocTotals(doc).totalIncl,
   });
 
   let invoice = null;
@@ -7744,6 +7785,11 @@ app.post("/api/billing/:id/revise", requireAdmin, requireCurrentBillingIfTech, (
       ...line,
       id: randomUUID(),
     })),
+    discountIncl: catalog.normalizeDiscountIncl(
+      source.discountIncl,
+      catalog.computeTotals(source.lines || []).linesTotalIncl
+    ),
+    discountNote: catalog.normalizeDiscountNote(source.discountNote),
     acceptToken: newAcceptToken(),
     viewToken: newViewToken(),
     quoteId: "",
@@ -7755,11 +7801,12 @@ app.post("/api/billing/:id/revise", requireAdmin, requireCurrentBillingIfTech, (
     revisedFromNumber: source.number,
     history: [],
   };
+  if (!(doc.discountIncl > 0)) doc.discountNote = "";
   appendHistory(doc, {
     type: "created",
     summary: "Quote created",
     detail: `Revised from ${source.number}`,
-    amount: catalog.computeTotals(doc.lines).totalIncl,
+    amount: catalog.computeDocTotals(doc).totalIncl,
   });
   ensureHistory(source);
   appendHistory(source, {
@@ -8565,7 +8612,7 @@ function addJobPartsToInvoiceLines(invoice, parts) {
     type: "edited",
     summary: "Job parts added to invoice",
     detail: `${added} line${added === 1 ? "" : "s"}`,
-    amount: catalog.computeTotals(invoice.lines).totalIncl,
+    amount: catalog.computeDocTotals(invoice).totalIncl,
   });
   return added;
 }

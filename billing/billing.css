@@ -297,6 +297,11 @@ main {
   text-align: right;
 }
 
+.lines tfoot .discount td {
+  color: var(--ok);
+  font-weight: 600;
+}
+
 .lines tfoot .grand td {
   font-weight: 800;
   padding-top: 0.55rem;
