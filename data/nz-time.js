@@ -38,6 +38,15 @@ function nowIso(date = new Date()) {
   return `${wall}${aucklandOffsetIso(date)}`;
 }
 
+/** ISO stamp for a Pacific/Auckland calendar day (noon). Today uses the current clock. */
+function atAucklandDayIso(dateOnly, clock = new Date()) {
+  const day = String(dateOnly || "").trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return nowIso(clock);
+  if (day === todayIso(clock)) return nowIso(clock);
+  const guess = new Date(`${day}T12:00:00+12:00`);
+  return `${day}T12:00:00${aucklandOffsetIso(guess)}`;
+}
+
 function monthKey(date = new Date()) {
   return todayIso(date).slice(0, 7);
 }
@@ -70,6 +79,7 @@ module.exports = {
   todayIso,
   plusDays,
   nowIso,
+  atAucklandDayIso,
   monthKey,
   shiftMonthKey,
   monthShortLabel,

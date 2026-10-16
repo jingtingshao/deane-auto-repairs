@@ -478,13 +478,16 @@
                 <p class="overline">LIVE JOB BOARD</p>
                 <h2>Vehicles in the workshop</h2>
               </div>
-              <a href="#jobs" data-jobs="active">See all jobs →</a>
+              <div class="panel-head-actions">
+                <button type="button" class="ghost" id="btn-dash-quick-cash">+ Quick cash</button>
+                <a href="#jobs" data-jobs="active">See all jobs →</a>
+              </div>
             </div>
             <div class="job-list">
               ${
                 boardJobs.length
                   ? boardJobs.map((job) => boardRowHtml(job, job.id === selectedBoardId)).join("")
-                  : `<p class="today-empty">No vehicles in the workshop. Saving an invoice creates a job card.</p>`
+                  : `<p class="today-empty">No vehicles in the workshop. Use Quick cash for walk-in work, or save an invoice.</p>`
               }
             </div>
           </div>
@@ -558,6 +561,13 @@
             month: el.dataset.activityMonth || "",
           });
         });
+      });
+      root.querySelector("#btn-dash-quick-cash")?.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        Admin.setSection("jobs");
+        window.DeaneJobs?.showList?.({ filter: "active" });
+        window.DeaneJobs?.openQuickCash?.();
       });
       root.querySelectorAll("[data-billing]").forEach((el) => {
         el.addEventListener("click", (event) => {

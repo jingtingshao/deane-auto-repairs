@@ -42,7 +42,15 @@ const {
 } = require("./data/google-review");
 const { readJsonArray, writeJsonArray } = require("./data/json-store");
 const { blockedStaticPath, safeUploadPath, UPLOAD_EXTS } = require("./data/static-guard");
-const { todayIso, plusDays, nowIso, monthKey, monthShortLabel, monthLongLabel } = require("./data/nz-time");
+const {
+  todayIso,
+  plusDays,
+  nowIso,
+  atAucklandDayIso,
+  monthKey,
+  monthShortLabel,
+  monthLongLabel,
+} = require("./data/nz-time");
 const referralsLib = require("./data/referrals");
 const driveBackup = require("./data/drive-backup");
 const websms = require("./data/websms");
@@ -8247,6 +8255,187 @@ app.post("/api/jobs", requireAdmin, (_req, res) => {
   res.status(400).json({
     error: "Create a job card from an accepted quote or invoice. Direct job cards are not used.",
   });
+});
+
+/**
+ * Quick cash / walk-in: plate + work done → job card, optional invoice.
+ * Known plate reuses that customer; unknown plate creates a "Cash" customer.
+ */
+app.post("/api/jobs/quick-cash", requireAdmin, (req, res) => {
+  try {
+    const registration = String(req.body?.registration || "")
+      .trim()
+      .toUpperCase();
+    const workRequested = catalog.capitalizeLineDescription(
+      String(req.body?.workRequested || "").trim()
+    );
+    const vehicleDesc = namesLib.capitalizeVehicleDescription(
+      String(req.body?.vehicle || "").trim()
+    );
+    const amountIncl = catalog.round2(Math.max(0, Number(req.body?.amountIncl) || 0));
+    const createInvoice = req.body?.createInvoice !== false;
+    const serviceDate = isoDateOnly(req.body?.serviceDate) || todayIso();
+
+    if (!plateKey(registration)) {
+      return res.status(400).json({ error: "Enter the plate." });
+    }
+    if (!workRequested) {
+      return res.status(400).json({ error: "Enter what you did for this vehicle." });
+    }
+
+    const customers = readSavedCustomers();
+    const existing = findCustomerWithSamePlate(customers, [{ registration }]);
+    let customerId = "";
+    let vehicleId = "";
+    let customerName = "Cash";
+    let customerEmail = "";
+    let customerPhone = "";
+
+    if (existing) {
+      customerId = existing.id;
+      const names = namesFromCustomer(existing);
+      customerName = names.customerName || "Cash";
+      customerEmail = String(existing.customerEmail || "").trim();
+      customerPhone = String(existing.customerPhone || "").trim();
+      const vehicles = normalizeVehicles(existing, existing);
+      const pk = plateKey(registration);
+      let vehicle =
+        vehicles.find((v) => plateKey(v.registration) === pk) || vehicles[0] || null;
+      if (!vehicle) {
+        vehicle = {
+          id: randomUUID(),
+          registration,
+          vehicle: vehicleDesc,
+          wofExpiry: "",
+          wofReminderSentAt: "",
+          wofSmsReminderSentAt: "",
+        };
+        vehicles.push(vehicle);
+        existing.vehicles = vehicles;
+        existing.registration = vehicles[0]?.registration || registration;
+        existing.updatedAt = nowIso();
+        const idx = customers.findIndex((c) => c.id === existing.id);
+        if (idx >= 0) {
+          customers[idx] = existing;
+          writeSavedCustomers(customers);
+        }
+      } else if (vehicleDesc && !String(vehicle.vehicle || "").trim()) {
+        vehicle.vehicle = vehicleDesc;
+        existing.vehicles = vehicles;
+        existing.updatedAt = nowIso();
+        const idx = customers.findIndex((c) => c.id === existing.id);
+        if (idx >= 0) {
+          customers[idx] = existing;
+          writeSavedCustomers(customers);
+        }
+      }
+      vehicleId = vehicle.id;
+    } else {
+      const upsert = upsertCustomerFromParty({
+        customerName: "Cash",
+        registration,
+        vehicle: vehicleDesc,
+      });
+      customerId = String(upsert.customerId || "").trim();
+      if (!customerId) {
+        return res.status(400).json({
+          error: "Could not create a Cash customer for this plate.",
+        });
+      }
+      const saved = readSavedCustomers().find((c) => c.id === customerId);
+      if (saved) {
+        const names = namesFromCustomer(saved);
+        customerName = names.customerName || "Cash";
+        const vehicles = normalizeVehicles(saved, saved);
+        const hit =
+          vehicles.find((v) => plateKey(v.registration) === plateKey(registration)) ||
+          vehicles[0];
+        vehicleId = hit?.id || "";
+      }
+    }
+
+    const now = atAucklandDayIso(serviceDate);
+    const jobs = readJobs();
+    const job = {
+      ...emptyJob(now),
+      number: nextJobCardNumber(jobs),
+      customerId,
+      customerName,
+      customerEmail,
+      customerPhone,
+      registration,
+      vehicle: vehicleDesc,
+      workRequested,
+      status: "in_progress",
+    };
+
+    let invoice = null;
+    if (createInvoice) {
+      const docs = readBilling();
+      const line = {
+        description: workRequested,
+        qty: 1,
+        gstInclUnit: amountIncl > 0 ? amountIncl : 0,
+        unitPriceIncl: amountIncl > 0 ? catalog.exclFromIncl(amountIncl) : 0,
+      };
+      const lines = normalizeLines([line]);
+      invoice = {
+        id: randomUUID(),
+        kind: "invoice",
+        number: nextBillingNumber(docs, "invoice"),
+        status: "draft",
+        preset: "custom_invoice",
+        createdAt: now,
+        updatedAt: now,
+        sentAt: "",
+        acceptedAt: "",
+        issuedAt: serviceDate,
+        validUntil: "",
+        customerId,
+        vehicleId,
+        customerName,
+        customerEmail,
+        customerPhone,
+        registration,
+        vehicle: vehicleDesc,
+        odometer: "",
+        notes: workRequested,
+        lines,
+        discountIncl: 0,
+        discountNote: "",
+        acceptToken: "",
+        viewToken: newViewToken(),
+        quoteId: "",
+        invoiceId: "",
+        jobId: job.id,
+        lastEmailedAt: "",
+        lastEmailedTo: "",
+        history: [],
+        ...emptyPaymentFields(),
+      };
+      invoice.invoiceId = invoice.id;
+      appendHistory(invoice, {
+        type: "created",
+        summary: "Invoice created",
+        detail: "Quick cash job",
+        amount: catalog.computeDocTotals(invoice).totalIncl,
+      });
+      linkJobToBilling(docs, job, null, invoice);
+      docs.push(invoice);
+      writeBilling(docs);
+    }
+
+    jobs.push(job);
+    writeJobs(jobs);
+
+    res.status(201).json({
+      job,
+      invoice: invoice ? withBillingTotals(invoice, true) : null,
+      createdInvoice: Boolean(invoice),
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
 });
 
 app.post("/api/jobs/from-quote/:id", requireAdmin, (req, res) => {

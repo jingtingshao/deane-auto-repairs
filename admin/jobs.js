@@ -693,6 +693,7 @@ window.DeaneJobs = {
   showList,
   openJob,
   createJob,
+  openQuickCash,
   addPartFromStock,
   filterBy(status) {
     jobFilter = status || "active";
@@ -703,6 +704,102 @@ window.DeaneJobs = {
     renderJobList();
   },
 };
+
+const quickCashDialog = document.getElementById("quick-cash-dialog");
+const quickCashForm = document.getElementById("quick-cash-form");
+let quickCashCustomers = [];
+
+function plateKeyLocal(value) {
+  return String(value || "")
+    .toUpperCase()
+    .replace(/[\s-]/g, "");
+}
+
+function openQuickCash() {
+  if (!quickCashDialog || !quickCashForm) return;
+  quickCashForm.reset();
+  const invoiceCheck = document.getElementById("quick-cash-invoice");
+  if (invoiceCheck) invoiceCheck.checked = true;
+  const dateEl = document.getElementById("quick-cash-date");
+  if (dateEl) dateEl.value = Admin.todayIso();
+  const err = document.getElementById("quick-cash-error");
+  if (err) {
+    err.hidden = true;
+    err.textContent = "";
+  }
+  setQuickCashStatus("");
+  quickCashDialog.hidden = false;
+  document.getElementById("quick-cash-plate")?.focus();
+  loadQuickCashCustomers();
+}
+
+function closeQuickCash() {
+  if (quickCashDialog) quickCashDialog.hidden = true;
+}
+
+function setQuickCashStatus(msg, ok = false) {
+  const el = document.getElementById("quick-cash-status");
+  if (!el) return;
+  if (!msg) {
+    el.hidden = true;
+    el.textContent = "";
+    return;
+  }
+  el.hidden = false;
+  el.textContent = msg;
+  el.classList.toggle("ok", Boolean(ok));
+}
+
+async function loadQuickCashCustomers() {
+  try {
+    quickCashCustomers = await Admin.api("/api/customers");
+  } catch {
+    quickCashCustomers = [];
+  }
+}
+
+function findQuickCashCustomer(plate) {
+  const q = plateKeyLocal(plate);
+  if (!q) return null;
+  let best = null;
+  for (const row of quickCashCustomers || []) {
+    const reg = String(row.registration || "").toUpperCase();
+    const pk = plateKeyLocal(reg);
+    if (!pk) continue;
+    if (pk !== q && !pk.startsWith(q) && !q.startsWith(pk)) continue;
+    const hit = {
+      row,
+      plate: reg,
+      vehicle: row.vehicle || "",
+      exact: pk === q,
+    };
+    if (hit.exact) return hit;
+    if (!best) best = hit;
+  }
+  return best;
+}
+
+function updateQuickCashPlateHint() {
+  const plate = document.getElementById("quick-cash-plate")?.value || "";
+  const q = plateKeyLocal(plate);
+  if (q.length < 3) {
+    setQuickCashStatus("");
+    return;
+  }
+  const hit = findQuickCashCustomer(plate);
+  if (hit?.exact) {
+    const name = hit.row.customerName || "Customer";
+    setQuickCashStatus(`Known plate — will use ${name}`, true);
+    const vehicleEl = document.getElementById("quick-cash-vehicle");
+    if (vehicleEl && !vehicleEl.value && hit.vehicle) {
+      vehicleEl.value = hit.vehicle;
+    }
+  } else if (hit) {
+    setQuickCashStatus(`${hit.plate} · keep typing to confirm`);
+  } else {
+    setQuickCashStatus("New plate — customer name will be Cash");
+  }
+}
 
 function scheduleJobAutosave() {
   jobAutosave.schedule();
@@ -918,5 +1015,100 @@ jobSupplierPhotosInput?.addEventListener("change", async () => {
 });
 window.addEventListener("beforeunload", () => {
   jobAutosave.flush();
+});
+
+document.getElementById("btn-quick-cash-job")?.addEventListener("click", () => {
+  openQuickCash();
+});
+document.getElementById("quick-cash-cancel")?.addEventListener("click", () => {
+  closeQuickCash();
+});
+quickCashDialog?.addEventListener("click", (event) => {
+  if (event.target === quickCashDialog) closeQuickCash();
+});
+document.getElementById("quick-cash-plate")?.addEventListener("input", (event) => {
+  Admin.applyLiveTransform(event.target, (value) => String(value || "").toUpperCase());
+  updateQuickCashPlateHint();
+});
+document.getElementById("quick-cash-work")?.addEventListener("input", (event) => {
+  Admin.applyLiveTransform(event.target, Admin.sentenceCaseLive);
+});
+document.getElementById("quick-cash-vehicle")?.addEventListener("input", (event) => {
+  Admin.applyLiveTransform(event.target, Admin.capitalizeVehicleDescription);
+});
+quickCashForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const errEl = document.getElementById("quick-cash-error");
+  const submitBtn = document.getElementById("quick-cash-submit");
+  if (errEl) {
+    errEl.hidden = true;
+    errEl.textContent = "";
+  }
+  const registration = String(
+    document.getElementById("quick-cash-plate")?.value || ""
+  )
+    .trim()
+    .toUpperCase();
+  const workRequested = String(
+    document.getElementById("quick-cash-work")?.value || ""
+  ).trim();
+  const vehicle = String(document.getElementById("quick-cash-vehicle")?.value || "").trim();
+  const amountIncl = Number(document.getElementById("quick-cash-amount")?.value) || 0;
+  const createInvoice = Boolean(document.getElementById("quick-cash-invoice")?.checked);
+  const serviceDate = String(document.getElementById("quick-cash-date")?.value || "").trim();
+  if (!registration) {
+    if (errEl) {
+      errEl.hidden = false;
+      errEl.textContent = "Enter the plate.";
+    }
+    return;
+  }
+  if (!workRequested) {
+    if (errEl) {
+      errEl.hidden = false;
+      errEl.textContent = "Enter what you did.";
+    }
+    return;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(serviceDate)) {
+    if (errEl) {
+      errEl.hidden = false;
+      errEl.textContent = "Choose the service date.";
+    }
+    return;
+  }
+  if (submitBtn) submitBtn.disabled = true;
+  try {
+    const result = await Admin.api("/api/jobs/quick-cash", {
+      method: "POST",
+      body: JSON.stringify({
+        registration,
+        workRequested,
+        vehicle,
+        amountIncl,
+        createInvoice,
+        serviceDate,
+      }),
+    });
+    closeQuickCash();
+    if (result.invoice?.id && window.DeaneBilling?.openDoc) {
+      Admin.setSection("invoices");
+      await window.DeaneBilling.openDoc(result.invoice.id);
+    } else if (result.job?.id) {
+      Admin.setSection("jobs");
+      await openJob(result.job.id);
+    } else {
+      await showList({ filter: "active" });
+    }
+  } catch (err) {
+    if (errEl) {
+      errEl.hidden = false;
+      errEl.textContent = err.message || "Could not create quick cash job.";
+    } else {
+      alert(err.message);
+    }
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
 });
 })();

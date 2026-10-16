@@ -11,8 +11,8 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20261017discount" />
-    <link rel="stylesheet" href="admin-refresh.css?v=20261002yellow" />
+    <link rel="stylesheet" href="admin.css?v=20261017quickcash" />
+    <link rel="stylesheet" href="admin-refresh.css?v=20261017quickcash" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -311,6 +311,9 @@
         <section id="jobs-section" hidden>
           <section id="jobs-list-view">
             <p class="muted small">Active jobs stay visible until the customer collects the vehicle. Mark work Ready to collect, then use Mark collected to move it into searchable history.</p>
+            <div class="jobs-list-tools">
+              <button type="button" id="btn-quick-cash-job" class="primary">+ Quick cash job</button>
+            </div>
             <label class="list-search">
               Search jobs
               <input
@@ -1016,6 +1019,69 @@
       </form>
     </div>
 
+    <div id="quick-cash-dialog" class="stock-dialog" hidden>
+      <form id="quick-cash-form" class="stock-dialog-card quick-cash-card">
+        <h2>Quick cash job</h2>
+        <p class="muted small">
+          Small walk-in work: enter the plate and what you did. Name defaults to Cash when the plate is new. Tick Create invoice if you want a tax invoice for payment.
+        </p>
+        <div class="grid-3">
+          <label>
+            Date
+            <input name="serviceDate" id="quick-cash-date" type="date" required />
+          </label>
+          <label>
+            Plate
+            <input
+              name="registration"
+              id="quick-cash-plate"
+              required
+              autocapitalize="characters"
+              spellcheck="false"
+              placeholder="ABC123"
+              autocomplete="off"
+            />
+          </label>
+          <label>
+            Amount incl. GST (optional)
+            <input
+              name="amountIncl"
+              id="quick-cash-amount"
+              type="number"
+              min="0"
+              step="0.01"
+              inputmode="decimal"
+              placeholder="0.00"
+            />
+          </label>
+          <label>
+            Vehicle (optional)
+            <input name="vehicle" id="quick-cash-vehicle" placeholder="e.g. Toyota Corolla" />
+          </label>
+        </div>
+        <label>
+          What we did
+          <textarea
+            name="workRequested"
+            id="quick-cash-work"
+            rows="3"
+            required
+            placeholder="e.g. Replace wiper blades, battery terminal clean"
+          ></textarea>
+        </label>
+        <p id="quick-cash-status" class="muted small" hidden></p>
+        <label class="quick-cash-check">
+          <input type="checkbox" name="createInvoice" id="quick-cash-invoice" checked />
+          Create invoice now
+        </label>
+        <div class="line-actions">
+          <button type="button" class="ghost" id="quick-cash-cancel">Cancel</button>
+          <button type="submit" class="primary" id="quick-cash-submit">Create</button>
+        </div>
+        <p id="quick-cash-error" class="error" hidden></p>
+      </form>
+    </div>
+
     <div
       id="booking-alert"
       class="booking-alert"
@@ -1035,9 +1101,9 @@
     </div>
 
     <script src="admin.js?v=20261006suppliers"></script>
-    <script src="dashboard.js?v=20261012invoiceplate"></script>
+    <script src="dashboard.js?v=20261017quickcash"></script>
     <script src="calendar.js?v=20260905staffrole"></script>
-    <script src="jobs.js?v=20261006jobstock"></script>
+    <script src="jobs.js?v=20261017quickcashdate"></script>
     <script src="billing.js?v=20261017discount"></script>
     <script src="inventory.js?v=20261015tyreedit"></script>
     <script src="supplier-invoices.js?v=20261015steward"></script>
