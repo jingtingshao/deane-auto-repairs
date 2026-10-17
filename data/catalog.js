@@ -308,13 +308,20 @@ const PRESETS = [
   {
     id: "custom_invoice",
     kind: "invoice",
-    label: "Custom invoice",
+    label: "Other repair (blank)",
     title: "Tax invoice",
     lines: [{ description: "", qty: 1, unitPriceIncl: 0 }],
   },
 ];
 
 const QUICK_ADDS = [
+  {
+    id: "blank",
+    label: "+ Other repair (blank)",
+    description: "",
+    qty: 1,
+    unitPriceIncl: 0,
+  },
   {
     label: "+ WOF $79",
     description: "WOF inspection",

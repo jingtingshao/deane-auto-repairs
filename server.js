@@ -3890,6 +3890,11 @@ function describeLineChanges(beforeLines, afterLines) {
   return details;
 }
 
+/** Workshop-only notes on a quote/invoice. Never sent to the customer. */
+function cleanInternalNotes(value) {
+  return String(value || "").trim().slice(0, 2000);
+}
+
 function describeFieldChanges(before, after) {
   const labels = [
     ["customerName", "Customer"],
@@ -3898,6 +3903,7 @@ function describeFieldChanges(before, after) {
     ["registration", "Registration"],
     ["vehicle", "Vehicle"],
     ["notes", "Notes"],
+    ["internalNotes", "Workshop notes"],
     ["validUntil", "Valid until"],
   ];
   const details = [];
@@ -3990,6 +3996,7 @@ function withBillingTotals(doc, isAdmin) {
     delete payload.acceptToken;
     delete payload.viewToken;
     delete payload.history;
+    delete payload.internalNotes;
   } else if (Array.isArray(payload.history)) {
     payload.history = [...payload.history].sort((a, b) =>
       String(b.at).localeCompare(String(a.at))
@@ -6815,6 +6822,7 @@ app.post("/api/billing", requireAdmin, (req, res) => {
     ),
     odometer: req.body?.odometer || "",
     notes: String(req.body?.notes || "").trim(),
+    internalNotes: cleanInternalNotes(req.body?.internalNotes),
     lines,
     discountIncl: catalog.normalizeDiscountIncl(
       req.body?.discountIncl,
@@ -6971,6 +6979,10 @@ app.put("/api/billing/:id", requireAdmin, requireCurrentBillingIfTech, (req, res
     odometer: body.odometer != null ? String(body.odometer).trim() : current.odometer,
     notes:
       body.notes != null ? catalog.capitalizeLineDescription(body.notes) : current.notes,
+    internalNotes:
+      body.internalNotes != null
+        ? cleanInternalNotes(body.internalNotes)
+        : cleanInternalNotes(current.internalNotes),
     validUntil:
       current.kind === "quote" && body.validUntil != null
         ? String(body.validUntil)
@@ -7365,6 +7377,7 @@ function convertQuoteToInvoice(docs, quote) {
     vehicle: quote.vehicle || "",
     odometer: quote.odometer || "",
     notes: quote.notes || "",
+    internalNotes: cleanInternalNotes(quote.internalNotes),
     lines: lines.map((line) => ({
       ...line,
       id: randomUUID(),
@@ -7789,6 +7802,7 @@ app.post("/api/billing/:id/revise", requireAdmin, requireCurrentBillingIfTech, (
     vehicle: source.vehicle || "",
     odometer: source.odometer || "",
     notes: notes ? `${notes}\n\n(${revisedNote})` : revisedNote,
+    internalNotes: cleanInternalNotes(source.internalNotes),
     lines: (source.lines || []).map((line) => ({
       ...line,
       id: randomUUID(),
@@ -8275,6 +8289,7 @@ app.post("/api/jobs/quick-cash", requireAdmin, (req, res) => {
     const amountIncl = catalog.round2(Math.max(0, Number(req.body?.amountIncl) || 0));
     const createInvoice = req.body?.createInvoice !== false;
     const serviceDate = isoDateOnly(req.body?.serviceDate) || todayIso();
+    const internalNotes = cleanInternalNotes(req.body?.internalNotes);
 
     if (!plateKey(registration)) {
       return res.status(400).json({ error: "Enter the plate." });
@@ -8366,6 +8381,7 @@ app.post("/api/jobs/quick-cash", requireAdmin, (req, res) => {
       registration,
       vehicle: vehicleDesc,
       workRequested,
+      notes: internalNotes,
       status: "in_progress",
     };
 
@@ -8400,6 +8416,7 @@ app.post("/api/jobs/quick-cash", requireAdmin, (req, res) => {
         vehicle: vehicleDesc,
         odometer: "",
         notes: workRequested,
+        internalNotes,
         lines,
         discountIncl: 0,
         discountNote: "",

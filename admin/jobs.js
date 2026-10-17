@@ -1056,6 +1056,9 @@ quickCashForm?.addEventListener("submit", async (event) => {
   const amountIncl = Number(document.getElementById("quick-cash-amount")?.value) || 0;
   const createInvoice = Boolean(document.getElementById("quick-cash-invoice")?.checked);
   const serviceDate = String(document.getElementById("quick-cash-date")?.value || "").trim();
+  const internalNotes = String(
+    document.getElementById("quick-cash-internal-notes")?.value || ""
+  ).trim();
   if (!registration) {
     if (errEl) {
       errEl.hidden = false;
@@ -1088,6 +1091,7 @@ quickCashForm?.addEventListener("submit", async (event) => {
         amountIncl,
         createInvoice,
         serviceDate,
+        internalNotes,
       }),
     });
     closeQuickCash();

@@ -128,6 +128,7 @@ const FIXED_WEBSITE_INVOICE_PRESETS = new Set([
   "diesel",
   "european",
   "ppi",
+  "custom_invoice",
 ]);
 
 function renderPresetButtons() {
@@ -187,6 +188,7 @@ async function createDoc(presetId, extras = {}) {
       vehicle: String(extras.vehicle || "").trim(),
       odometer: extras.odometer || "",
       notes: workNotes,
+      internalNotes: String(extras.internalNotes || "").trim(),
       validUntil: "",
       lines,
       discountIncl: 0,
@@ -243,6 +245,7 @@ async function createFromJob(job, kind) {
     vehicle: job.vehicle || "",
     odometer: job.odometer || "",
     notes: work,
+    internalNotes: job.notes || "",
     lineDescription: work,
   });
 }
@@ -822,6 +825,7 @@ function fillForm(doc) {
   set("number", doc.number);
   set("validUntil", doc.validUntil || "");
   set("notes", doc.notes);
+  set("internalNotes", doc.internalNotes || "");
   const discountInclEl = document.getElementById("billing-discount-incl");
   const discountNoteEl = document.getElementById("billing-discount-note");
   if (discountInclEl) {
@@ -1140,6 +1144,10 @@ function renderQuickAdds() {
       }
       renderLines();
       scheduleBillAutosave();
+      if (item.id === "blank") {
+        const inputs = billingLinesEl?.querySelectorAll('[data-field="description"]');
+        inputs?.[inputs.length - 1]?.focus();
+      }
     });
   });
 }
@@ -1393,6 +1401,7 @@ function collectBill() {
     registration: value("registration"),
     vehicle: value("vehicle"),
     notes: capitalizeLineDescription(billingInput("notes")?.value || ""),
+    internalNotes: String(billingInput("internalNotes")?.value || "").trim(),
     validUntil: billingInput("validUntil")?.value || "",
     discountIncl,
     discountNote: discountIncl > 0 ? currentDiscountNote() : "",

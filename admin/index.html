@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20261017quickcash" />
+    <link rel="stylesheet" href="admin.css?v=20261018internalnotes" />
     <link rel="stylesheet" href="admin-refresh.css?v=20261017quickcash" />
   </head>
   <body>
@@ -846,6 +846,14 @@
                   <label>Vehicle<input name="vehicle" placeholder="Make, model, year" /></label>
                 </div>
                 <label>Notes for customer<textarea name="notes" rows="2"></textarea></label>
+                <label class="internal-notes">
+                  Workshop notes (internal only)
+                  <textarea
+                    name="internalNotes"
+                    rows="2"
+                    placeholder="Only staff see this. Not printed on the invoice or shown to the customer."
+                  ></textarea>
+                </label>
                 <p class="muted small">
                   Customer documents show bank account name
                   <strong>Dreamworld Investments Limited</strong>,
@@ -1069,6 +1077,15 @@
             placeholder="e.g. Replace wiper blades, battery terminal clean"
           ></textarea>
         </label>
+        <label>
+          Workshop notes (internal only, optional)
+          <textarea
+            name="internalNotes"
+            id="quick-cash-internal-notes"
+            rows="2"
+            placeholder="Only staff see this. Not on the invoice."
+          ></textarea>
+        </label>
         <p id="quick-cash-status" class="muted small" hidden></p>
         <label class="quick-cash-check">
           <input type="checkbox" name="createInvoice" id="quick-cash-invoice" checked />
@@ -1103,8 +1120,8 @@
     <script src="admin.js?v=20261006suppliers"></script>
     <script src="dashboard.js?v=20261017quickcash"></script>
     <script src="calendar.js?v=20260905staffrole"></script>
-    <script src="jobs.js?v=20261017quickcashdate"></script>
-    <script src="billing.js?v=20261017discount"></script>
+    <script src="jobs.js?v=20261018internalnotes"></script>
+    <script src="billing.js?v=20261018internalnotes"></script>
     <script src="inventory.js?v=20261015tyreedit"></script>
     <script src="supplier-invoices.js?v=20261015steward"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>

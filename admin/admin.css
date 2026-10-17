@@ -1160,6 +1160,11 @@ label.check input {
   margin-top: 0.6rem;
 }
 
+.internal-notes textarea {
+  background: #fff8e1;
+  border-color: #e9c46a;
+}
+
 .billing-discount {
   margin-top: 0.9rem;
   display: grid;
