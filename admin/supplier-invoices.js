@@ -467,14 +467,26 @@ function ensureJobPickerPanel() {
     if (list) list.innerHTML = jobPickerRowsHtml(e.target.value, selectedJobId, highlight, currentRow) ||
       `<p class="muted small">No jobs with parts to match</p>`;
   });
-  panel.addEventListener("click", (e) => {
+  panel.addEventListener("click", async (e) => {
     const option = e.target.closest("[data-job-id]");
     if (!option) return;
     const rowId = document.body.dataset.jobPickerRow || "";
     const rowEl = candidatesEl?.querySelector(`tr[data-id="${CSS.escape(rowId)}"]`);
     if (!rowEl) return;
-    applyJobPickerValue(rowEl, option.dataset.jobId);
+    const jobId = option.dataset.jobId || "";
+    applyJobPickerValue(rowEl, jobId);
     closeJobPicker();
+    const row = candidates.find((item) => item.id === rowId);
+    if (!jobId || !row || row.decision !== "pending" || !current?.id) return;
+    const job = findJob(jobId);
+    try {
+      await applyCandidateAction(rowId, "accept", rowEl);
+      await loadInvoice(current.id);
+      await loadList();
+      showStatus(`Matched to ${job?.number || "job"}${job?.registration ? ` · ${job.registration}` : ""}`);
+    } catch (err) {
+      alert(err.message || "Could not match this line to the job.");
+    }
   });
   return panel;
 }
