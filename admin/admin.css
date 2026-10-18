@@ -550,6 +550,32 @@ label.check input {
   margin-bottom: 0.75rem;
 }
 
+.quick-cash-parts {
+  margin: 0.75rem 0;
+}
+
+.quick-cash-work-matches {
+  margin-top: 0.35rem;
+}
+
+.quick-cash-match-title {
+  margin: 0;
+  padding: 0.4rem 0.75rem 0.2rem;
+}
+
+.quick-cash-parts .stock-results {
+  margin-top: 0.35rem;
+}
+
+.quick-cash-parts-table {
+  margin-top: 0.5rem;
+  width: 100%;
+}
+
+.quick-cash-parts-table input.qty {
+  width: 5rem;
+}
+
 .quick-cash-check {
   display: flex;
   align-items: center;
@@ -1070,10 +1096,14 @@ label.check input {
 
 .pay-entry {
   display: grid;
-  grid-template-columns: minmax(10rem, 14rem) minmax(12rem, 1fr);
+  grid-template-columns: minmax(10rem, 14rem) minmax(8rem, 10rem) minmax(12rem, 1fr);
   gap: 0.75rem 1rem;
   align-items: end;
   margin-top: 0.75rem;
+}
+
+.pay-amount-edit {
+  width: 8rem;
 }
 
 .pay-method-block {

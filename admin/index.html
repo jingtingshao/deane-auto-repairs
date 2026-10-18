@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20261018internalnotes" />
+    <link rel="stylesheet" href="admin.css?v=20261019workmatch" />
     <link rel="stylesheet" href="admin-refresh.css?v=20261017quickcash" />
   </head>
   <body>
@@ -893,6 +893,17 @@
                     Date
                     <input id="billing-pay-date" type="date" />
                   </label>
+                  <label>
+                    Amount
+                    <input
+                      id="billing-pay-amount"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      inputmode="decimal"
+                      placeholder="Balance due"
+                    />
+                  </label>
                   <div class="pay-method-block">
                     <p class="pay-method-label">Paid by</p>
                     <div class="pay-method-row" role="group" aria-label="Paid by">
@@ -1050,7 +1061,7 @@
             />
           </label>
           <label>
-            Amount incl. GST (optional)
+            Labour incl. GST (optional)
             <input
               name="amountIncl"
               id="quick-cash-amount"
@@ -1076,6 +1087,15 @@
             placeholder="e.g. Replace wiper blades, battery terminal clean"
           ></textarea>
         </label>
+        <div id="quick-cash-work-matches" class="stock-results quick-cash-work-matches" hidden></div>
+        <div class="quick-cash-parts">
+          <label class="list-search">
+            Parts from stock (optional)
+            <input id="quick-cash-stock-search" type="search" placeholder="Part, number, car, or supplier" autocomplete="off" />
+          </label>
+          <div id="quick-cash-stock-results" class="stock-results" hidden></div>
+          <div id="quick-cash-parts-list"></div>
+        </div>
         <label>
           Workshop notes (internal only, optional)
           <textarea
@@ -1119,8 +1139,8 @@
     <script src="admin.js?v=20261006suppliers"></script>
     <script src="dashboard.js?v=20261017quickcash"></script>
     <script src="calendar.js?v=20260905staffrole"></script>
-    <script src="jobs.js?v=20261018internalnotes"></script>
-    <script src="billing.js?v=20261018discountabs"></script>
+    <script src="jobs.js?v=20261019workmatch"></script>
+    <script src="billing.js?v=20261018splitpay"></script>
     <script src="inventory.js?v=20261015tyreedit"></script>
     <script src="supplier-invoices.js?v=20261015steward"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>

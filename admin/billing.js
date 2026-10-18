@@ -1460,13 +1460,15 @@ function updatePaymentSummary() {
   const creditBit =
     credits > 0 ? ` · Referral credit ${money(credits)}` : "";
   el.textContent = `Status: ${status} · Paid ${money(paid)}${creditBit} · Balance due ${money(due)} · Invoice ${money(total)}`;
+  const amountEl = document.getElementById("billing-pay-amount");
+  if (amountEl) amountEl.placeholder = due > 0 ? due.toFixed(2) : "0.00";
   const hint = document.getElementById("billing-pay-full-hint");
   if (hint) {
     hint.textContent =
       due > 0
         ? selectedPayMethod() === "Credits"
           ? `Add payment applies whole $20 referral credit(s) against the ${money(due)} due.`
-          : `Add payment records the full balance due (${money(due)}).`
+          : `Leave Amount empty to record the full ${money(due)}, or type part of it (e.g. half cash, half EFTPOS).`
         : "Nothing left to pay.";
   }
 }
@@ -1588,7 +1590,9 @@ function renderPayments() {
         .map(
           (p, index) => `<tr data-index="${index}">
           <td>${Admin.escapeHtml(Admin.formatDateShort(p.paidAt) || "—")}</td>
-          <td>${money(p.amount)}</td>
+          <td><input class="price pay-amount-edit" type="number" min="0" step="0.01" inputmode="decimal" data-pay-amount="${index}" value="${Admin.escapeAttr(
+            round2(Number(p.amount) || 0).toFixed(2)
+          )}" /></td>
           <td>${Admin.escapeHtml(p.note || "")}</td>
           <td><button type="button" class="ghost" data-remove-pay="${index}">×</button></td>
         </tr>`
@@ -1613,6 +1617,28 @@ function renderPayments() {
     billingPaymentsEl.querySelectorAll("[data-remove-pay]").forEach((btn) => {
       btn.addEventListener("click", () => {
         paymentRows.splice(Number(btn.dataset.removePay), 1);
+        renderPayments();
+        scheduleBillAutosave();
+      });
+    });
+    billingPaymentsEl.querySelectorAll("[data-pay-amount]").forEach((input) => {
+      input.addEventListener("input", (event) => event.stopPropagation());
+      input.addEventListener("change", (event) => {
+        event.stopPropagation();
+        const row = paymentRows[Number(input.dataset.payAmount)];
+        if (!row) return;
+        const previous = round2(Number(row.amount) || 0);
+        const max = round2(invoiceBalanceDue() + previous);
+        let next = round2(Math.max(0, Number(input.value) || 0));
+        if (next > max) {
+          alert(`This payment can be at most ${money(max)} (the invoice total minus other payments).`);
+          next = max;
+        }
+        if (!(next > 0)) {
+          input.value = previous.toFixed(2);
+          return;
+        }
+        row.amount = next;
         renderPayments();
         scheduleBillAutosave();
       });
@@ -2090,7 +2116,14 @@ document.getElementById("btn-add-payment")?.addEventListener("click", async () =
     await applyCreditsAsPayment();
     return;
   }
-  addPaymentRow(invoiceBalanceDue(), method);
+  const due = invoiceBalanceDue();
+  const amountEl = document.getElementById("billing-pay-amount");
+  const typed = round2(Math.max(0, Number(amountEl?.value) || 0));
+  if (typed > due + 0.009) {
+    alert(`Only ${money(due)} is left to pay.`);
+    return;
+  }
+  if (addPaymentRow(typed > 0 ? typed : due, method) && amountEl) amountEl.value = "";
 });
 
 document.getElementById("btn-add-deposit-30")?.addEventListener("click", () => {

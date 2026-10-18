@@ -708,6 +708,7 @@ window.DeaneJobs = {
 const quickCashDialog = document.getElementById("quick-cash-dialog");
 const quickCashForm = document.getElementById("quick-cash-form");
 let quickCashCustomers = [];
+let quickCashParts = [];
 
 function plateKeyLocal(value) {
   return String(value || "")
@@ -715,9 +716,163 @@ function plateKeyLocal(value) {
     .replace(/[\s-]/g, "");
 }
 
+function quickCashMoney(n) {
+  return new Intl.NumberFormat("en-NZ", { style: "currency", currency: "NZD" }).format(
+    Number(n) || 0
+  );
+}
+
+function renderQuickCashParts() {
+  const el = document.getElementById("quick-cash-parts-list");
+  if (!el) return;
+  if (!quickCashParts.length) {
+    el.innerHTML = "";
+    return;
+  }
+  el.innerHTML = `<table class="line-table quick-cash-parts-table">
+    <thead><tr><th>Part</th><th>Qty</th><th>Each incl. GST</th><th></th></tr></thead>
+    <tbody>${quickCashParts
+      .map((part, index) => {
+        const unit = part.unit === "litre" ? " / L" : "";
+        const onHand = Number(part.qtyOnHand);
+        const stockNote = Number.isFinite(onHand) ? `${onHand} on hand` : "";
+        return `<tr>
+          <td><strong>${Admin.escapeHtml(part.name)}</strong>${
+            part.partNumber ? ` <span class="muted small">${Admin.escapeHtml(part.partNumber)}</span>` : ""
+          }${stockNote ? `<br /><span class="muted small">${Admin.escapeHtml(stockNote)}</span>` : ""}</td>
+          <td><input class="qty" type="number" min="0.25" step="0.25" data-qc-qty="${index}" value="${Admin.escapeAttr(
+            String(part.qty)
+          )}" /></td>
+          <td>${quickCashMoney((Number(part.sellPrice) || 0) * 1.15)}${unit}</td>
+          <td><button type="button" class="ghost" data-qc-remove="${index}">×</button></td>
+        </tr>`;
+      })
+      .join("")}</tbody>
+  </table>`;
+  el.querySelectorAll("[data-qc-qty]").forEach((input) => {
+    input.addEventListener("input", () => {
+      const part = quickCashParts[Number(input.dataset.qcQty)];
+      if (part) part.qty = Math.max(0, Number(input.value) || 0);
+    });
+  });
+  el.querySelectorAll("[data-qc-remove]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      quickCashParts.splice(Number(btn.dataset.qcRemove), 1);
+      renderQuickCashParts();
+    });
+  });
+}
+
+function addQuickCashPart(item) {
+  if (!item?.id) return;
+  const existing = quickCashParts.find((part) => part.stockItemId === item.id);
+  if (existing) {
+    existing.qty = (Number(existing.qty) || 0) + 1;
+  } else {
+    quickCashParts.push({
+      stockItemId: item.id,
+      name: item.name || "Part",
+      partNumber: item.partNumber || "",
+      sellPrice: Number(item.sellPrice) || 0,
+      unit: item.unit || "",
+      qtyOnHand: item.qtyOnHand,
+      qty: 1,
+    });
+  }
+  renderQuickCashParts();
+}
+
+let workMatchTimer = null;
+let workMatchSeq = 0;
+
+function hideWorkMatches() {
+  const el = document.getElementById("quick-cash-work-matches");
+  if (!el) return;
+  el.hidden = true;
+  el.innerHTML = "";
+}
+
+async function stockSearch(q) {
+  try {
+    const rows = await Admin.api(`/api/inventory?q=${encodeURIComponent(q)}`);
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Search stock with the last words typed, so "replace both h11" still finds the H11 bulb. */
+async function updateWorkMatches(text) {
+  const el = document.getElementById("quick-cash-work-matches");
+  if (!el) return;
+  const words = String(text || "")
+    .split(/[\s,;/]+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 2);
+  if (!words.length) {
+    hideWorkMatches();
+    return;
+  }
+  const seq = ++workMatchSeq;
+  const tries = [];
+  if (words.length >= 2) tries.push(words.slice(-2).join(" "));
+  tries.push(words[words.length - 1]);
+  let rows = [];
+  for (const q of tries) {
+    rows = await stockSearch(q);
+    if (seq !== workMatchSeq) return;
+    if (rows.length) break;
+  }
+  const picked = new Set(quickCashParts.map((p) => p.stockItemId));
+  rows = rows.filter((item) => !picked.has(item.id)).slice(0, 5);
+  if (!rows.length) {
+    hideWorkMatches();
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML = `<p class="muted small quick-cash-match-title">Stock match — click to add as a part</p>${rows
+    .map((item, index) => {
+      const unit = item.unit === "litre" ? " / L" : "";
+      const meta = [item.partNumber, item.fitment, `${Number(item.qtyOnHand) || 0} on hand`]
+        .filter(Boolean)
+        .join(" · ");
+      return `<button type="button" class="stock-result" data-work-pick="${index}">
+        <span><strong>${Admin.escapeHtml(item.name)}</strong><span class="muted small">${Admin.escapeHtml(meta)}</span></span>
+        <span class="stock-sell"><strong>${quickCashMoney((Number(item.sellPrice) || 0) * 1.15)}${unit}</strong><span class="muted small">incl. GST</span></span>
+      </button>`;
+    })
+    .join("")}`;
+  el.querySelectorAll("[data-work-pick]").forEach((btn) => {
+    btn.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      const item = rows[Number(btn.dataset.workPick)];
+      if (!item) return;
+      addQuickCashPart(item);
+      hideWorkMatches();
+    });
+  });
+}
+
+function bindQuickCashStockSearch() {
+  window.DeaneInventory?.bindStockSearch?.(
+    document.getElementById("quick-cash-stock-search"),
+    document.getElementById("quick-cash-stock-results"),
+    addQuickCashPart
+  );
+}
+
 function openQuickCash() {
   if (!quickCashDialog || !quickCashForm) return;
   quickCashForm.reset();
+  quickCashParts = [];
+  renderQuickCashParts();
+  hideWorkMatches();
+  bindQuickCashStockSearch();
+  const results = document.getElementById("quick-cash-stock-results");
+  if (results) {
+    results.hidden = true;
+    results.innerHTML = "";
+  }
   const invoiceCheck = document.getElementById("quick-cash-invoice");
   if (invoiceCheck) invoiceCheck.checked = true;
   const dateEl = document.getElementById("quick-cash-date");
@@ -1032,6 +1187,12 @@ document.getElementById("quick-cash-plate")?.addEventListener("input", (event) =
 });
 document.getElementById("quick-cash-work")?.addEventListener("input", (event) => {
   Admin.applyLiveTransform(event.target, Admin.sentenceCaseLive);
+  clearTimeout(workMatchTimer);
+  const text = event.target.value;
+  workMatchTimer = setTimeout(() => updateWorkMatches(text), 250);
+});
+document.getElementById("quick-cash-work")?.addEventListener("blur", () => {
+  setTimeout(hideWorkMatches, 200);
 });
 document.getElementById("quick-cash-vehicle")?.addEventListener("input", (event) => {
   Admin.applyLiveTransform(event.target, Admin.capitalizeVehicleDescription);
@@ -1092,6 +1253,9 @@ quickCashForm?.addEventListener("submit", async (event) => {
         createInvoice,
         serviceDate,
         internalNotes,
+        parts: quickCashParts
+          .filter((part) => Number(part.qty) > 0)
+          .map((part) => ({ stockItemId: part.stockItemId, qty: Number(part.qty) })),
       }),
     });
     closeQuickCash();

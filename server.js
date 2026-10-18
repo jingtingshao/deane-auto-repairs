@@ -986,10 +986,19 @@ function issueJobStock(job, previousParts) {
     movements.push(movement);
   };
 
+  const linkedIds = new Set(
+    nextParts
+      .map((part) => String(part.stockItemId || prevById.get(part.id)?.stockItemId || "").trim())
+      .filter(Boolean)
+  );
+
   for (const part of nextParts) {
     const prev = prevById.get(part.id);
     const issued = Math.max(0, Number(prev?.stockIssuedQty) || 0);
-    const item = resolveJobStockItem(items, { ...part, stockItemId: part.stockItemId || prev?.stockItemId || "" });
+    const explicitId = String(part.stockItemId || prev?.stockItemId || "").trim();
+    let item = resolveJobStockItem(items, { ...part, stockItemId: explicitId });
+    // A text-only line must not take the same item again when another line is already linked to it.
+    if (item && !explicitId && linkedIds.has(item.id)) item = null;
     if (!item) {
       part.stockIssuedQty = issued;
       if (prev?.stockItemId) part.stockItemId = prev.stockItemId;
@@ -8298,6 +8307,22 @@ app.post("/api/jobs/quick-cash", requireAdmin, (req, res) => {
       return res.status(400).json({ error: "Enter what you did for this vehicle." });
     }
 
+    const stockItems = readInventoryItems();
+    const stockParts = [];
+    for (const row of Array.isArray(req.body?.parts) ? req.body.parts : []) {
+      const qty = Math.round(Math.max(0, Number(row?.qty) || 0) * 1000) / 1000;
+      if (!(qty > 0)) continue;
+      const item = stockItems.find((it) => it.id === String(row?.stockItemId || "").trim());
+      if (!item) {
+        return res.status(400).json({ error: "A chosen stock part no longer exists. Search it again." });
+      }
+      const existing = stockParts.find((p) => p.item.id === item.id);
+      if (existing) existing.qty += qty;
+      else stockParts.push({ item, qty });
+    }
+    const stockLineDescription = (item) =>
+      [item.name, item.partNumber].filter(Boolean).join(" ").trim() || "Part";
+
     const customers = readSavedCustomers();
     const existing = findCustomerWithSamePlate(customers, [{ registration }]);
     let customerId = "";
@@ -8382,8 +8407,28 @@ app.post("/api/jobs/quick-cash", requireAdmin, (req, res) => {
       vehicle: vehicleDesc,
       workRequested,
       notes: internalNotes,
+      parts: jobsLib.normalizeParts(
+        stockParts.map(({ item, qty }) => {
+          const cost = Number(item.costPrice) || 0;
+          const sell = Number(item.sellPrice) || 0;
+          return {
+            description: stockLineDescription(item),
+            partNumber: item.partNumber || "",
+            qty,
+            costPrice: cost,
+            sellPrice: sell,
+            markupPercent: cost > 0 ? (sell / cost - 1) * 100 : 0,
+            supplier: item.supplier || "",
+            uom: item.unit === "litre" ? "L" : "ea",
+            source: "stock",
+            stockItemId: item.id,
+          };
+        }),
+        () => randomUUID()
+      ),
       status: "in_progress",
     };
+    job.status = jobsLib.normalizeJobStatus(job.status, job.parts);
 
     let invoice = null;
     if (createInvoice) {
@@ -8394,7 +8439,15 @@ app.post("/api/jobs/quick-cash", requireAdmin, (req, res) => {
         gstInclUnit: amountIncl > 0 ? amountIncl : 0,
         unitPriceIncl: amountIncl > 0 ? catalog.exclFromIncl(amountIncl) : 0,
       };
-      const lines = normalizeLines([line]);
+      const lines = normalizeLines([
+        line,
+        ...stockParts.map(({ item, qty }) => ({
+          description: stockLineDescription(item),
+          qty,
+          unitPriceIncl: Number(item.sellPrice) || 0,
+          stockItemId: item.id,
+        })),
+      ]);
       invoice = {
         id: randomUUID(),
         kind: "invoice",
@@ -8442,6 +8495,7 @@ app.post("/api/jobs/quick-cash", requireAdmin, (req, res) => {
       writeBilling(docs);
     }
 
+    issueJobStock(job);
     jobs.push(job);
     writeJobs(jobs);
 
