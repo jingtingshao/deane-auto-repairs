@@ -120,7 +120,7 @@ function unitPriceGstIncl(line) {
 
 /** GST-inclusive discount $, capped at the lines total. */
 function normalizeDiscountIncl(value, maxIncl = Infinity) {
-  const n = round2(Math.max(0, Number(value) || 0));
+  const n = round2(Math.abs(Number(value) || 0));
   const max = round2(Math.max(0, Number(maxIncl) || 0));
   if (!(n > 0)) return 0;
   if (!(max > 0)) return 0;

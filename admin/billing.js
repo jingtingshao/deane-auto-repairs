@@ -1301,7 +1301,7 @@ function gstFromInclCents(inclCents) {
 
 function currentDiscountIncl() {
   const typed = round2(
-    Math.max(0, Number(document.getElementById("billing-discount-incl")?.value) || 0)
+    Math.abs(Number(document.getElementById("billing-discount-incl")?.value) || 0)
   );
   if (document.getElementById("billing-discount-incl")) return typed;
   return round2(Math.max(0, Number(currentBill?.discountIncl) || 0));
@@ -1326,7 +1326,7 @@ function computeTotals(lines, discountIncl = 0) {
   const linesNet = fromCents(netCents);
   const linesGst = fromCents(gstCents);
   const linesTotalIncl = fromCents(totalInclCents);
-  let discount = round2(Math.max(0, Number(discountIncl) || 0));
+  let discount = round2(Math.abs(Number(discountIncl) || 0));
   if (discount > linesTotalIncl) discount = linesTotalIncl;
   if (!(discount > 0)) {
     return {
@@ -1362,7 +1362,7 @@ function renderTotals() {
   const totals = computeTotals(lineRows, currentDiscountIncl());
   const amountEl = document.getElementById("billing-discount-incl");
   if (amountEl) {
-    const typed = round2(Math.max(0, Number(amountEl.value) || 0));
+    const typed = round2(Math.abs(Number(amountEl.value) || 0));
     if (typed > totals.linesTotalIncl) {
       amountEl.value = totals.discountIncl > 0 ? String(totals.discountIncl) : "";
     }
