@@ -190,6 +190,7 @@ function setSection(name) {
   const calendarSection = document.getElementById("calendar-section");
   const supplierInvoicesSection = document.getElementById("supplier-invoices-section");
   const suppliersSection = document.getElementById("suppliers-section");
+  const partsGuideSection = document.getElementById("parts-guide-section");
   const stockSection = document.getElementById("stock-section");
   const btnNew = document.getElementById("btn-new");
   const billingOpen = name === "quotes" || name === "invoices";
@@ -204,11 +205,13 @@ function setSection(name) {
   if (calendarSection) calendarSection.hidden = name !== "calendar";
   if (supplierInvoicesSection) supplierInvoicesSection.hidden = name !== "supplier_invoices";
   if (suppliersSection) suppliersSection.hidden = name !== "suppliers";
+  if (partsGuideSection) partsGuideSection.hidden = name !== "parts_guide";
   if (stockSection) stockSection.hidden = name !== "stock";
   if (btnNew) {
     if (
       name === "supplier_invoices" ||
       name === "suppliers" ||
+      name === "parts_guide" ||
       name === "stock" ||
       name === "calendar" ||
       name === "sms_inbox" ||
@@ -232,6 +235,7 @@ function setSection(name) {
     calendar: "nav-calendar",
     supplier_invoices: "nav-supplier-invoices",
     suppliers: "nav-suppliers",
+    parts_guide: "nav-parts-guide",
     stock: "nav-stock",
   };
   Object.entries(navMap).forEach(([section, id]) => {
@@ -266,6 +270,11 @@ function setSection(name) {
   if (name === "suppliers") {
     setOverline("SUPPLIERS");
     viewTitle.textContent = "Suppliers";
+  }
+  if (name === "parts_guide") {
+    setOverline("PARTS GUIDE");
+    viewTitle.textContent = "Where to buy parts";
+    window.DeanePartsGuide?.show?.();
   }
   if (name === "stock") {
     setOverline("STOCK");
@@ -698,6 +707,10 @@ document.getElementById("nav-supplier-invoices")?.addEventListener("click", () =
 document.getElementById("nav-suppliers")?.addEventListener("click", () => {
   setSection("suppliers");
   window.DeaneSuppliers?.showList?.();
+});
+
+document.getElementById("nav-parts-guide")?.addEventListener("click", () => {
+  setSection("parts_guide");
 });
 
 document.getElementById("nav-stock")?.addEventListener("click", () => {
