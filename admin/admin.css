@@ -2920,6 +2920,43 @@ label.check input {
   border: 1px solid var(--line);
 }
 
+.stock-history-card {
+  width: min(820px, 100%);
+}
+
+.stock-history-table td {
+  vertical-align: top;
+}
+
+.stock-history-table .stock-out {
+  color: var(--attention, #c62828);
+}
+
+.stock-history-table .stock-in {
+  color: var(--ok, #2e7d32);
+}
+
+.stock-history-repeat td {
+  background: #fff8e1;
+}
+
+.stock-history-warn {
+  color: #8a5a00;
+  font-weight: 600;
+  margin-top: 0.2rem;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--blue, #1565c0);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .stock-dialog-card h2 {
   margin: 0 0 0.35rem;
   font-family: var(--display);

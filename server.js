@@ -9678,6 +9678,50 @@ app.get("/api/inventory", requireOwnerAdmin, (req, res) => {
   res.json(items.map((row) => inventoryLib.presentItem(row)));
 });
 
+/** Stock movements for one part, newest first, with the job / invoice / plate each one belongs to. */
+app.get("/api/inventory/:id/history", requireOwnerAdmin, (req, res) => {
+  const item = readInventoryItems().find((row) => row.id === req.params.id);
+  if (!item) return res.status(404).json({ error: "Stock item not found" });
+  const jobs = readJobs();
+  const docs = readBilling();
+  const jobsByNumber = new Map(jobs.map((job) => [String(job.number || "").toUpperCase(), job]));
+  const movements = readInventoryMovements()
+    .filter((row) => row.itemId === item.id)
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    .slice(0, 60)
+    .map((row) => {
+      const note = String(row.note || "");
+      const jobNumber = (note.match(/\bJob\s+(JC-\d{4}-\d+)/i) || [])[1] || "";
+      const job = jobNumber ? jobsByNumber.get(jobNumber.toUpperCase()) : null;
+      const invoice = job?.invoiceId ? docs.find((d) => d.id === job.invoiceId) : null;
+      const usedQty = job
+        ? (job.parts || [])
+            .filter((part) => part.stockItemId === item.id)
+            .reduce((sum, part) => sum + (Number(part.qty) || 0), 0)
+        : 0;
+      return {
+        id: row.id,
+        createdAt: row.createdAt || "",
+        qtyDelta: Number(row.qtyDelta) || 0,
+        qtyAfter: Number(row.qtyAfter) || 0,
+        note,
+        supplier: row.supplier || "",
+        invoiceNo: row.invoiceNo || "",
+        supplierInvoiceId: row.supplierInvoiceId || "",
+        jobNumber,
+        jobId: job?.id || "",
+        jobMissing: Boolean(jobNumber && !job),
+        registration: job?.registration || "",
+        customerName: job?.customerName || "",
+        jobUsesQty: usedQty,
+        invoiceId: invoice?.id || "",
+        invoiceNumber: invoice?.number || "",
+        invoiceStatus: invoice?.status || "",
+      };
+    });
+  res.json({ item: inventoryLib.presentItem(item), movements });
+});
+
 app.get("/api/inventory/:id", requireOwnerAdmin, (req, res) => {
   const item = readInventoryItems().find((row) => row.id === req.params.id);
   if (!item) return res.status(404).json({ error: "Stock item not found" });

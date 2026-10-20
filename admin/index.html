@@ -11,8 +11,8 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20261020partsguide" />
-    <link rel="stylesheet" href="admin-refresh.css?v=20261017quickcash" />
+    <link rel="stylesheet" href="admin.css?v=20261021guidehistory" />
+    <link rel="stylesheet" href="admin-refresh.css?v=20261021capricorn" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -35,6 +35,7 @@
           <span>Deane</span>
           <strong>AUTO REPAIRS</strong>
           <small>WORKSHOP SYSTEM</small>
+          <em class="sidebar-trade-account" title="Use when ordering parts. Not shown to customers.">Capricorn 283279</em>
         </button>
         <nav>
           <button type="button" id="nav-dashboard" class="active" data-admin-only><b>▦</b> Today</button>
@@ -1044,6 +1045,17 @@
     </div>
 
     <datalist id="stock-suppliers"></datalist>
+    <div id="stock-history-dialog" class="stock-dialog" hidden>
+      <div class="stock-dialog-card stock-history-card">
+        <h2>Stock history</h2>
+        <p id="stock-history-title" class="muted"></p>
+        <div id="stock-history-body"></div>
+        <div class="line-actions">
+          <button type="button" class="ghost" id="stock-history-close">Close</button>
+        </div>
+      </div>
+    </div>
+
     <div id="stock-receive-dialog" class="stock-dialog" hidden>
       <form id="stock-receive-form" class="stock-dialog-card">
         <h2>Add to stock</h2>
@@ -1176,7 +1188,7 @@
     <script src="calendar.js?v=20260905staffrole"></script>
     <script src="jobs.js?v=20261019workmatch"></script>
     <script src="billing.js?v=20261018splitpay"></script>
-    <script src="inventory.js?v=20261015tyreedit"></script>
+    <script src="inventory.js?v=20261020stockhistory"></script>
     <script src="supplier-invoices.js?v=20261019pickaccept"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>
     <script src="parts-directory.js?v=20261020english"></script>

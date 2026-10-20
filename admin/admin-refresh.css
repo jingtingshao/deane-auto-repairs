@@ -88,6 +88,14 @@
   color: #84939e;
 }
 
+.sidebar .brand .sidebar-trade-account {
+  display: block;
+  margin-top: 8px;
+  font: normal 700 12px var(--mono);
+  letter-spacing: 0.04em;
+  color: #f5c518;
+}
+
 .sidebar nav {
   display: grid;
   gap: 5px;

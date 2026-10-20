@@ -450,6 +450,7 @@
               <td><strong>${money(item.sellPrice)}${unit}</strong><div class="muted small">${money(Math.round(item.sellPrice * 1.15 * 100) / 100)} incl</div></td>
               <td>${formatMarkup(item.costPrice, item.sellPrice)}</td>
               <td class="supplier-line-actions">
+                <button type="button" class="ghost" data-history="${Admin.escapeAttr(item.id)}">History</button>
                 <button type="button" class="ghost" data-edit="${Admin.escapeAttr(item.id)}">Edit</button>
               </td>
             </tr>`;
@@ -460,7 +461,115 @@
     listEl.querySelectorAll("[data-edit]").forEach((btn) => {
       btn.addEventListener("click", () => openEditor(btn.dataset.edit));
     });
+    listEl.querySelectorAll("[data-history]").forEach((btn) => {
+      btn.addEventListener("click", () => openHistory(btn.dataset.history));
+    });
   }
+
+  const historyDialog = document.getElementById("stock-history-dialog");
+
+  function closeHistory() {
+    if (historyDialog) historyDialog.hidden = true;
+  }
+
+  function historySourceHtml(row) {
+    if (row.jobNumber) {
+      const bits = [];
+      bits.push(
+        row.jobId
+          ? `<button type="button" class="link-button" data-open-job="${Admin.escapeAttr(row.jobId)}">${Admin.escapeHtml(row.jobNumber)}</button>`
+          : `${Admin.escapeHtml(row.jobNumber)}${row.jobMissing ? ' <span class="muted small">(job deleted)</span>' : ""}`
+      );
+      if (row.registration) bits.push(Admin.escapeHtml(row.registration));
+      if (row.customerName) bits.push(Admin.escapeHtml(row.customerName));
+      if (row.invoiceId) {
+        bits.push(
+          `<button type="button" class="link-button" data-open-invoice="${Admin.escapeAttr(row.invoiceId)}">Invoice ${Admin.escapeHtml(row.invoiceNumber || "")}</button>${
+            row.invoiceStatus === "void" ? ' <span class="muted small">(void)</span>' : ""
+          }`
+        );
+      }
+      const reason = row.note.replace(/^Job\s+JC-\d{4}-\d+\s*/i, "").trim();
+      return `${bits.join(" · ")}${reason ? `<div class="muted small">${Admin.escapeHtml(reason)}</div>` : ""}`;
+    }
+    if (row.invoiceNo || row.supplierInvoiceId) {
+      const label = [row.supplier, row.invoiceNo ? `invoice ${row.invoiceNo}` : ""].filter(Boolean).join(" ");
+      return row.supplierInvoiceId
+        ? `<button type="button" class="link-button" data-open-supplier="${Admin.escapeAttr(row.supplierInvoiceId)}">${Admin.escapeHtml(label || "Parts invoice")}</button>`
+        : Admin.escapeHtml(label);
+    }
+    return Admin.escapeHtml(row.note || "—");
+  }
+
+  async function openHistory(id) {
+    if (!historyDialog) return;
+    const titleEl = document.getElementById("stock-history-title");
+    const bodyEl = document.getElementById("stock-history-body");
+    historyDialog.hidden = false;
+    if (bodyEl) bodyEl.innerHTML = `<p class="muted">Loading…</p>`;
+    try {
+      const data = await Admin.api(`/api/inventory/${encodeURIComponent(id)}/history`);
+      const item = data.item || {};
+      if (titleEl) {
+        titleEl.textContent = [item.name, item.partNumber].filter(Boolean).join(" · ") || "Stock history";
+      }
+      const rows = data.movements || [];
+      const jobUse = new Map();
+      for (const row of rows) {
+        if (!row.jobNumber || !(row.qtyDelta < 0)) continue;
+        jobUse.set(row.jobNumber, (jobUse.get(row.jobNumber) || 0) + 1);
+      }
+      if (!bodyEl) return;
+      bodyEl.innerHTML = rows.length
+        ? `<p class="muted small">On hand now: <strong>${Admin.escapeHtml(formatQty(item.qtyOnHand, item.unit))}</strong>. Newest first.</p>
+          <div class="line-table-wrap"><table class="line-table stock-history-table">
+            <thead><tr><th>Date</th><th>Change</th><th>After</th><th>Where</th></tr></thead>
+            <tbody>${rows
+              .map((row) => {
+                const repeated = row.jobNumber && (jobUse.get(row.jobNumber) || 0) > 1 && row.qtyDelta < 0;
+                const delta = `${row.qtyDelta > 0 ? "+" : ""}${row.qtyDelta}`;
+                return `<tr class="${repeated ? "stock-history-repeat" : ""}">
+                  <td>${Admin.escapeHtml(Admin.formatDateShort(row.createdAt) || "—")}</td>
+                  <td class="${row.qtyDelta < 0 ? "stock-out" : "stock-in"}"><strong>${Admin.escapeHtml(delta)}</strong></td>
+                  <td>${Admin.escapeHtml(String(row.qtyAfter))}</td>
+                  <td>${historySourceHtml(row)}${
+                    repeated ? '<div class="small stock-history-warn">Used more than once on this job — check for a duplicate line.</div>' : ""
+                  }</td>
+                </tr>`;
+              })
+              .join("")}</tbody>
+          </table></div>`
+        : `<p class="muted">No stock movements recorded for this part yet.</p>`;
+      bodyEl.querySelectorAll("[data-open-job]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          closeHistory();
+          Admin.setSection("jobs");
+          await window.DeaneJobs?.openJob?.(btn.dataset.openJob);
+        });
+      });
+      bodyEl.querySelectorAll("[data-open-invoice]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          closeHistory();
+          Admin.setSection("invoices");
+          await window.DeaneBilling?.openDoc?.(btn.dataset.openInvoice);
+        });
+      });
+      bodyEl.querySelectorAll("[data-open-supplier]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          closeHistory();
+          Admin.setSection("supplier_invoices");
+          await window.DeaneSupplierInvoices?.openInvoice?.(btn.dataset.openSupplier);
+        });
+      });
+    } catch (err) {
+      if (bodyEl) bodyEl.innerHTML = `<p class="error">${Admin.escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  document.getElementById("stock-history-close")?.addEventListener("click", closeHistory);
+  historyDialog?.addEventListener("click", (event) => {
+    if (event.target === historyDialog) closeHistory();
+  });
 
   function openEditor(id) {
     const item = id ? items.find((row) => row.id === id) : null;
