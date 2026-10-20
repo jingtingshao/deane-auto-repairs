@@ -124,6 +124,7 @@
       name: "EuroPart (European Auto Spares)",
       priority: 70,
       near: false,
+      wrecker: true,
       groups: ["euro"],
       conditions: ["new", "used"],
       makes: ["BMW", "Audi", "Mercedes", "MINI", "VW", "Volkswagen", "Bosch", "Febi", "Mahle"],
@@ -140,6 +141,7 @@
       name: "Euro1 Auto Spares",
       priority: 80,
       near: true,
+      wrecker: true,
       groups: ["euro"],
       conditions: ["new", "used"],
       makes: ["BMW", "Mercedes", "Porsche", "Maserati"],
@@ -155,6 +157,7 @@
       name: "AAA Autocentre",
       priority: 90,
       near: true,
+      wrecker: true,
       groups: ["euro"],
       conditions: ["used"],
       makes: ["Audi", "VW", "Volkswagen", "Skoda", "Volvo", "Renault", "Peugeot", "Seat", "Maserati"],
@@ -174,6 +177,7 @@
       name: "Euroline",
       priority: 100,
       near: false,
+      wrecker: true,
       groups: ["euro"],
       conditions: ["new", "used"],
       makes: ["Audi", "VW", "Volkswagen", "Skoda", "Peugeot"],
@@ -181,7 +185,7 @@
       address: "60 Firth Street, Drury",
       hours: "Mon–Fri 8am–5pm, Sat 9am–12pm by appointment",
       email: "info@euroline.co.nz",
-      web: "https://partsconnection.co.nz/branches/euroline-",
+      web: "https://www.euroline.co.nz/",
       phones: [{ label: "Drury", display: "09 294 7635", tel: "092947635" }],
       note: "",
     },
@@ -247,6 +251,7 @@
       name: "Parts Connection · Onehunga",
       priority: 140,
       near: true,
+      wrecker: true,
       groups: ["japan"],
       conditions: ["new", "used"],
       makes: ["Nissan", "Mazda", "Suzuki", "Honda", "Subaru", "Isuzu", "Nisbits", "Mazbits", "Suzibits"],
@@ -272,6 +277,7 @@
       name: "Auckland Japanese Car Parts Centre",
       priority: 150,
       near: true,
+      wrecker: true,
       groups: ["japan", "euro"],
       conditions: ["used"],
       makes: ["Toyota", "Nissan", "Honda", "Mazda", "Mitsubishi", "Subaru", "Suzuki", "panels", "doors", "lights", "bumpers", "Audi", "BMW", "VW", "Peugeot"],
@@ -291,6 +297,7 @@
       name: "Toyotaz Galore",
       priority: 160,
       near: false,
+      wrecker: true,
       groups: ["japan"],
       conditions: ["used"],
       makes: ["Toyota", "Hilux", "Prado"],
@@ -307,6 +314,7 @@
       name: "Mitsi Galore",
       priority: 170,
       near: false,
+      wrecker: true,
       groups: ["japan"],
       conditions: ["new", "used"],
       makes: ["Mitsubishi", "Lancer", "Pajero", "Outlander", "Delica"],
@@ -314,7 +322,7 @@
       address: "Parts Connection lists: 118a Sunnybrae Road, Glenfield",
       hours: "Mon–Fri 8am–5pm",
       email: "sales@mitsigalore.co.nz",
-      web: "https://partsconnection.co.nz/branches/mitsi-galore",
+      web: "https://mitsigalore.co.nz/",
       phones: [{ label: "Mitsubishi", display: "09 269 0255", tel: "092690255" }],
       note: "Call before you drive there. Older listings say 21B Spartan Road, Takanini. Their current listing says Glenfield, the same address as used Toyota. They are a Capricorn supplier. For genuine new Mitsubishi parts, call Manukau Autos.",
     },
@@ -323,6 +331,7 @@
       name: "Dodson's Autospares",
       priority: 180,
       near: false,
+      wrecker: true,
       groups: ["japan", "euro"],
       conditions: ["new", "used"],
       makes: ["Toyota", "Nissan", "Honda", "Mazda", "Subaru", "Suzuki", "Mitsubishi", "Lexus", "VW", "Audi", "BMW", "Volvo"],
@@ -443,6 +452,7 @@
       name: "Eastern for Korean",
       priority: 250,
       near: true,
+      wrecker: true,
       groups: ["korea"],
       conditions: ["used"],
       makes: ["Hyundai", "Kia", "SsangYong", "Daewoo"],
@@ -455,10 +465,65 @@
       note: "A Parts Connection member, with nationwide delivery.",
     },
     {
+      id: "all-china",
+      name: "All China",
+      priority: 145,
+      near: true,
+      wrecker: true,
+      groups: [],
+      conditions: ["used"],
+      makes: ["Chery", "Great Wall", "LDV", "Foton", "MG", "Haval"],
+      summary: "Used parts for Chery, Great Wall, LDV, and Foton. Same Onehunga yard as the Japanese Parts Connection counters.",
+      address: "75 Captain Springs Road, Onehunga",
+      hours: "Mon–Fri 8am–5pm, Sat 9am–1pm",
+      email: "parts@strongparts.net",
+      web: "https://www.allchinaparts.co.nz/",
+      phones: [{ label: "Onehunga", display: "09 634 0065", tel: "096340065" }],
+      note: "Same phone as Strong for Subaru. Ask for Chinese-brand parts.",
+    },
+    {
+      id: "fhm",
+      name: "FHM Automotive",
+      priority: 255,
+      near: false,
+      wrecker: true,
+      groups: [],
+      conditions: ["used"],
+      makes: ["Ford", "Holden", "Mazda BT-50", "D-Max", "Isuzu"],
+      summary: "Used Ford and Holden parts, plus Mazda BT-50 and D-Max. West Auckland.",
+      address: "15 Old North Road, Kumeu",
+      hours: "Mon–Fri 8am–5pm, closed weekends",
+      email: "admin@fhmautomotive.co.nz",
+      web: "https://www.fhmautomotive.co.nz/",
+      phones: [{ label: "Kumeu", display: "09 834 6095", tel: "098346095" }],
+      note: "Parts Connection member for Ford and Holden.",
+    },
+    {
+      id: "national-car-parts",
+      name: "National Car Parts",
+      priority: 265,
+      near: true,
+      wrecker: true,
+      groups: ["euro", "japan"],
+      conditions: ["used"],
+      makes: ["all makes", "Toyota", "Honda", "Mazda", "Nissan", "Ford", "Holden", "BMW", "Audi", "Subaru"],
+      summary: "Used parts for European, Japanese, and Australian cars. Call the parts line before you visit.",
+      address: "22 Ormiston Road, Otara",
+      hours: "Parts enquiries Mon–Sat",
+      email: "parts@ncp.co.nz",
+      web: "https://nationalcarparts.co.nz/",
+      phones: [
+        { label: "Parts", display: "09 579 5152", tel: "095795152" },
+        { label: "Selling a car", display: "0800 88 44 55", tel: "0800884455" },
+      ],
+      note: "Not a self-serve yard. 0800 88 44 55 is for selling a vehicle. Parts phone is 09 579 5152.",
+    },
+    {
       id: "pickapart",
       name: "Pick a Part",
-      priority: 260,
+      priority: 280,
       near: true,
+      wrecker: true,
       groups: ["euro", "japan"],
       conditions: ["used"],
       makes: ["self serve", "European", "Japanese", "panels", "cheap parts"],
@@ -490,7 +555,9 @@
   }
 
   function matches(row, query) {
-    if (group !== "all" && !(row.groups || []).includes(group)) return false;
+    if (group === "wreckers") {
+      if (!row.wrecker) return false;
+    } else if (group !== "all" && !(row.groups || []).includes(group)) return false;
     if (condition !== "all" && !(row.conditions || []).includes(condition)) return false;
     const q = String(query || "").trim().toLowerCase();
     if (!q) return true;
@@ -500,6 +567,7 @@
   function tags(row) {
     const items = [];
     if (row.near) items.push({ label: "Near the workshop", kind: "near" });
+    if (row.wrecker) items.push({ label: "Wrecker", kind: "used" });
     for (const id of row.groups || []) {
       if (GROUP_LABEL[id]) items.push({ label: GROUP_LABEL[id], kind: "" });
     }
@@ -532,8 +600,14 @@
     const address = row.address
       ? `<p class="muted small"><a href="${Admin.escapeAttr(mapsHref(row.address))}" target="_blank" rel="noopener">${Admin.escapeHtml(row.address)}</a></p>`
       : "";
+    let site = "Website";
+    try {
+      site = new URL(row.web).host.replace(/^www\./, "");
+    } catch {
+      site = "Website";
+    }
     const web = row.web
-      ? `<p class="muted small"><a href="${Admin.escapeAttr(row.web)}" target="_blank" rel="noopener">Website</a></p>`
+      ? `<p class="muted small"><a href="${Admin.escapeAttr(row.web)}" target="_blank" rel="noopener">${Admin.escapeHtml(site)}</a></p>`
       : "";
     return `<article class="parts-guide-card">
       <div class="parts-guide-tags">${tagHtml}</div>
