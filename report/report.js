@@ -122,22 +122,31 @@ function render(report, meta) {
   }
 
   const actionLabels = [
+    ...(meta.actions.basic || []),
     ...(meta.actions.standard || []),
     ...(meta.actions.premiumExtra || meta.actions.fullExtra || []),
     ...(meta.actions.either || []),
   ];
-  const done = actionLabels.filter((a) => report.actionsDone?.[a.id]);
+  const seenAction = new Set();
+  const done = actionLabels.filter((a) => {
+    if (!report.actionsDone?.[a.id] || seenAction.has(a.id)) return false;
+    seenAction.add(a.id);
+    return true;
+  });
   const photos = Array.isArray(report.vehiclePhotos)
     ? report.vehiclePhotos.filter(Boolean)
     : report.vehiclePhoto
       ? [report.vehiclePhoto]
       : [];
   const coverPhoto = photos[0] || "";
+  const printPhotos = photos.slice(0, 2);
 
   document.body.classList.add("has-cover");
+  const printBar = document.getElementById("print-bar");
+  if (printBar) printBar.hidden = false;
 
   reportEl.innerHTML = `
-    <section class="report-cover" aria-label="Report cover">
+    <section class="report-cover no-print" aria-label="Report cover">
       <div class="cover-inner">
         <p class="cover-brand">
           <img class="cover-logo" src="/images/deane-auto-logo.jpg" alt="Deane Auto Repairs" />
@@ -165,111 +174,140 @@ function render(report, meta) {
           63 Hayr Road, Three Kings, Auckland<br />
           <a href="tel:08006259827">0800 625 9827</a> ·
           <a href="mailto:deaneautonz@gmail.com">deaneautonz@gmail.com</a><br />
-          Mon–Sat 8:30am – 5:00pm
+          Mon–Sat 8:30am – 5:30pm · Sunday closed
         </div>
       </div>
     </section>
 
-    <section class="hero-card">
-      <div>
-        <h1>${escapeHtml(report.registration)} · ${escapeHtml(report.vehicle)}</h1>
-        <p class="meta">${escapeHtml(jobLabel(report))} · ${escapeHtml(formatDateShort(report.serviceDate) || "")}</p>
-        <p class="meta">Job ${escapeHtml(report.jobNumber)} · ${escapeHtml(report.odometer ? report.odometer + " km" : "")}</p>
-        <p class="meta">Customer: ${escapeHtml(report.customerName || "—")}</p>
-        <p class="meta">Technician: ${escapeHtml(report.technicianName || "—")}</p>
-        <div class="counts">
-          <span class="pill ok">${counts.ok} OK</span>
-          <span class="pill watch">${counts.watch} Watch</span>
-          <span class="pill attention">${counts.attention} Attention</span>
+    <section class="print-sheet">
+      <header class="print-header print-only">
+        <div class="print-brand">
+          <span class="script">Deane</span>
+          <span class="sans">AUTO REPAIRS</span>
         </div>
-      </div>
-      ${
-        photos.length
-          ? `<div class="photo-gallery">${photos
-              .map(
-                (src) =>
-                  `<img class="photo" src="${escapeHtml(src)}" alt="Vehicle photo" />`
-              )
-              .join("")}</div>`
-          : ""
-      }
-    </section>
+        <div class="print-header-meta">
+          <strong>Service report</strong><br />
+          63 Hayr Road, Three Kings · 0800 625 9827
+        </div>
+      </header>
 
-    ${
-      attentionItems.length || watchItems.length
-        ? `<section class="panel">
-            <h2>What needs your attention</h2>
-            ${attentionItems
-              .map(
-                ({ item, state }) => `
-              <div class="alert attention">
-                <strong>Attention — ${escapeHtml(item.label)}</strong>
-                <div>${escapeHtml(state.note || "Needs attention soon.")}</div>
-              </div>`
-              )
-              .join("")}
-            ${watchItems
-              .map(
-                ({ item, state }) => `
-              <div class="alert watch">
-                <strong>Watch — ${escapeHtml(item.label)}</strong>
-                <div>${escapeHtml(state.note || "Monitor / plan for next service.")}</div>
-              </div>`
-              )
-              .join("")}
-          </section>`
-        : `<section class="panel"><h2>What needs your attention</h2><div class="alert ok-note">No Attention or Watch items recorded on this visit.</div></section>`
-    }
+      <section class="hero-card">
+        <div>
+          <h1>${escapeHtml(report.registration)} · ${escapeHtml(report.vehicle)}</h1>
+          <p class="meta">${escapeHtml(jobLabel(report))} · ${escapeHtml(formatDateShort(report.serviceDate) || "")}</p>
+          <p class="meta">Job ${escapeHtml(report.jobNumber)} · ${escapeHtml(report.odometer ? report.odometer + " km" : "")}</p>
+          <p class="meta">Customer: ${escapeHtml(report.customerName || "—")}</p>
+          <p class="meta">Technician: ${escapeHtml(report.technicianName || "—")}</p>
+          <div class="counts">
+            <span class="pill ok">${counts.ok} OK</span>
+            <span class="pill watch">${counts.watch} Watch</span>
+            <span class="pill attention">${counts.attention} Attention</span>
+          </div>
+        </div>
+        ${
+          photos.length
+            ? `<div class="photo-gallery screen-photos">${photos
+                .map(
+                  (src) =>
+                    `<img class="photo" src="${escapeHtml(src)}" alt="Vehicle photo" />`
+                )
+                .join("")}</div>`
+            : ""
+        }
+        ${
+          printPhotos.length
+            ? `<div class="photo-gallery print-photos print-only">${printPhotos
+                .map(
+                  (src) =>
+                    `<img class="photo" src="${escapeHtml(src)}" alt="Vehicle photo" />`
+                )
+                .join("")}</div>`
+            : ""
+        }
+      </section>
 
-    <section class="panel">
-      <h2>Work completed</h2>
-      ${report.summary ? `<p>${escapeHtml(report.summary)}</p>` : ""}
       ${
-        done.length
-          ? `<ul class="actions">${done
-              .map((a) => `<li>${escapeHtml(a.label)}</li>`)
-              .join("")}</ul>`
-          : "<p>No action ticks recorded.</p>"
+        attentionItems.length || watchItems.length
+          ? `<section class="panel findings-panel">
+              <h2>What needs your attention</h2>
+              ${attentionItems
+                .map(
+                  ({ item, state }) => `
+                <div class="alert attention">
+                  <strong>Attention — ${escapeHtml(item.label)}</strong>
+                  <div>${escapeHtml(state.note || "Needs attention soon.")}</div>
+                </div>`
+                )
+                .join("")}
+              ${watchItems
+                .map(
+                  ({ item, state }) => `
+                <div class="alert watch">
+                  <strong>Watch — ${escapeHtml(item.label)}</strong>
+                  <div>${escapeHtml(state.note || "Monitor / plan for next service.")}</div>
+                </div>`
+                )
+                .join("")}
+            </section>`
+          : `<section class="panel findings-panel"><h2>What needs your attention</h2><div class="alert ok-note">No Attention or Watch items recorded on this visit.</div></section>`
       }
-      ${report.actionsOther ? `<p>${escapeHtml(report.actionsOther)}</p>` : ""}
-      ${
-        report.oilSpec || report.oilFilter
-          ? `<p class="meta">Oil: ${escapeHtml(report.oilSpec || "—")} · Filter: ${escapeHtml(report.oilFilter || "—")}</p>`
-          : ""
-      }
-      ${
-        report.nextServiceDue
-          ? `<p><strong>Next service due:</strong> ${escapeHtml(report.nextServiceDue)}</p>`
-          : ""
-      }
-      ${
-        report.technicianComments
-          ? `<p>${escapeHtml(report.technicianComments)}</p>`
-          : ""
-      }
-    </section>
 
-    <section class="panel">
-      <h2>Inspection checklist</h2>
-      ${meta.groups
-        .map((group) => {
-          const rows = group.items
-            .map((item) => {
-              const state = checks[item.code] || { status: "na", note: "" };
-              return `<div class="row">
-                <div>${escapeHtml(item.label)}</div>
-                <div class="tag ${state.status}">${STATUS_LABEL[state.status] || state.status}</div>
-                ${state.note ? `<div class="note">${escapeHtml(state.note)}</div>` : ""}
-              </div>`;
+      <section class="panel work-panel">
+        <h2>Work completed</h2>
+        ${report.summary ? `<p>${escapeHtml(report.summary)}</p>` : ""}
+        ${
+          done.length
+            ? `<ul class="actions">${done
+                .map((a) => `<li>${escapeHtml(a.label)}</li>`)
+                .join("")}</ul>`
+            : "<p>No action ticks recorded.</p>"
+        }
+        ${report.actionsOther ? `<p>${escapeHtml(report.actionsOther)}</p>` : ""}
+        ${
+          report.oilSpec || report.oilFilter
+            ? `<p class="meta">Oil: ${escapeHtml(report.oilSpec || "—")} · Filter: ${escapeHtml(report.oilFilter || "—")}</p>`
+            : ""
+        }
+        ${
+          report.nextServiceDue
+            ? `<p><strong>Next service due:</strong> ${escapeHtml(report.nextServiceDue)}</p>`
+            : ""
+        }
+        ${
+          report.technicianComments
+            ? `<p>${escapeHtml(report.technicianComments)}</p>`
+            : ""
+        }
+      </section>
+
+      <section class="panel checklist-panel">
+        <h2>Inspection checklist</h2>
+        <div class="checklist-grid">
+          ${meta.groups
+            .map((group) => {
+              const rows = group.items
+                .map((item) => {
+                  const state = checks[item.code] || { status: "na", note: "" };
+                  return `<div class="row">
+                    <div>${escapeHtml(item.label)}</div>
+                    <div class="tag ${state.status}">${STATUS_LABEL[state.status] || state.status}</div>
+                    ${state.note ? `<div class="note">${escapeHtml(state.note)}</div>` : ""}
+                  </div>`;
+                })
+                .join("");
+              return `<div class="group"><h3>${escapeHtml(group.title)}</h3>${rows}</div>`;
             })
-            .join("");
-          return `<div class="group"><h3>${escapeHtml(group.title)}</h3>${rows}</div>`;
-        })
-        .join("")}
+            .join("")}
+        </div>
+      </section>
     </section>
   `;
 
   document.title = `${report.registration} service report · Deane Auto Repairs`;
 }
+
+document.getElementById("btn-print")?.addEventListener("click", () => {
+  window.print();
+});
 
 load();
