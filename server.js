@@ -5011,7 +5011,7 @@ app.post("/api/booking", async (req, res) => {
       const mailer = createMailer();
       await mailer.sendMail({
         from: MAIL_FROM,
-        to: business.email,
+        to: business.notifyEmail || business.email,
         replyTo: email,
         subject,
         text,
@@ -7644,7 +7644,7 @@ async function notifyWorkshopQuoteAccepted(quote, invoice, job, req) {
   const mailer = createMailer();
   await mailer.sendMail({
     from: MAIL_FROM,
-    to: business.email,
+    to: business.notifyEmail || business.email,
     replyTo: quote.customerEmail || business.email,
     subject,
     text,

@@ -180,7 +180,7 @@ function render(doc) {
     .join(", ");
   const shopPhone = shop.phoneDisplay || "0800 625 9827";
   const shopPhoneTel = shop.phoneTel || "08006259827";
-  const shopEmail = shop.email || "deaneautonz@gmail.com";
+  const shopEmail = shop.email || "admin@deaneauto.co.nz";
 
   const letterhead = `
     <header class="letterhead">

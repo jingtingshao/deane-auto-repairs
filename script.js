@@ -292,7 +292,7 @@
         );
       } catch (error) {
         setStatus(
-          'Sorry — we couldn’t send that just now. Please call <a href="tel:08006259827">0800 625 9827</a> or email <a href="mailto:deaneautonz@gmail.com">deaneautonz@gmail.com</a>.',
+          'Sorry — we couldn’t send that just now. Please call <a href="tel:08006259827">0800 625 9827</a> or email <a href="mailto:admin@deaneauto.co.nz">admin@deaneauto.co.nz</a>.',
           "is-error",
           true
         );

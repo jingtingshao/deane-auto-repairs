@@ -4,7 +4,7 @@
 Not a substitute for a job-specific quote. Confirm extras before work starts.
 
 **Deane Auto Repairs** · (Next to BP Petrol Station) · 63 Hayr Road, Three Kings, Auckland  
-**Phone:** 0800 625 9827 · **Email:** deaneautonz@gmail.com  
+**Phone:** 0800 625 9827 · **Email:** admin@deaneauto.co.nz  
 **Hours:** Mon–Sat 8:30am – 5:00pm · Sunday closed  
 GST included unless noted. GST 96-650-434.
 

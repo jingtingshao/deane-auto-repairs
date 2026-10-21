@@ -32,7 +32,7 @@ On Render, set `ADMIN_PIN` in Environment (not in Git). If it is missing or too 
 - **Name:** Deane Auto Repairs
 - **Address:** Deane Auto Repairs (Next to BP Petrol Station), 63 Hayr Road, Three Kings, Auckland
 - **Phone:** 0800 625 9827
-- **Email:** deaneautonz@gmail.com
+- **Email:** admin@deaneauto.co.nz
 - **Hours:** Mon–Sat 8:30am–5:00pm (Sunday closed)
 - **Services:** Standard / Full service, WOF
 - **Courtesy cars:** No
