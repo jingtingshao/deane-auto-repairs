@@ -10,17 +10,28 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Kaushan+Script&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/report/report.css?v=20260901logo" />
+    <link rel="stylesheet" href="/report/report.css?v=20261021print" />
   </head>
   <body>
     <header class="top">
       <div class="wrap">
         <p class="brand">
           <img class="brand-logo" src="/images/deane-auto-logo.jpg" alt="Deane Auto Repairs" width="200" height="102" />
+          <span class="brand-print-text" aria-hidden="true">
+            <span class="script">Deane</span>
+            <span class="sans">AUTO REPAIRS</span>
+          </span>
         </p>
         <p class="sub">Digital service report</p>
       </div>
     </header>
+
+    <div class="print-bar no-print" id="print-bar" hidden>
+      <div class="wrap print-bar-inner">
+        <span>Print-ready layout (about 1–2 A4 pages)</span>
+        <button type="button" class="print-btn" id="btn-print">Print / Save PDF</button>
+      </div>
+    </div>
 
     <main class="wrap">
       <p id="loading">Loading report…</p>
@@ -42,6 +53,6 @@
       </p>
     </footer>
 
-    <script src="/report/report.js?v=20260906basicna"></script>
+    <script src="/report/report.js?v=20261021print"></script>
   </body>
 </html>
