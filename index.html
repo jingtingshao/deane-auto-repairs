@@ -144,17 +144,17 @@
 
             <article class="service-card service-card-dark">
               <h3>Car Service</h3>
-              <p class="service-card-note">Standard · Premium · European</p>
+              <p class="service-card-note">Basic · Standard · Premium · European</p>
               <ul class="service-includes">
                 <li>Engine oil and filter change</li>
-                <li>Essential safety checks</li>
-                <li>Digital service report</li>
+                <li>Safety checks (Standard &amp; Premium)</li>
+                <li>Digital service report (Standard &amp; Premium)</li>
               </ul>
               <a class="see-details" href="#full-checklist" data-open-checklist aria-expanded="false" aria-controls="full-checklist">See details</a>
               <p class="service-diesel-note">Diesel &amp; 4WD servicing available</p>
               <div class="service-price">
                 <span class="from">From</span>
-                <strong>$199</strong>
+                <strong>$99</strong>
               </div>
               <a class="service-cta" href="#book" data-booking-type="Standard Service">Book now <span aria-hidden="true">→</span></a>
             </article>
@@ -299,13 +299,15 @@
               class="compare-wrap"
               tabindex="0"
               role="region"
-              aria-label="Standard and Premium service comparison"
+              aria-label="Basic, Standard and Premium service comparison"
             >
               <table class="compare-table">
                 <thead>
                   <tr>
                     <th scope="col">What’s included</th>
+                    <th scope="col">Basic<br />$99</th>
                     <th scope="col" class="is-featured">
+                      <span class="compare-tag">Most popular</span>
                       Standard<br />$199
                     </th>
                     <th scope="col">Premium / Euro<br />$279</th>
@@ -314,13 +316,55 @@
                 <tbody>
                   <tr>
                     <th scope="row">Engine oil &amp; filter change *</th>
+                    <td><span class="tick" aria-label="Included">✓</span></td>
                     <td class="is-featured">
                       <span class="tick" aria-label="Included">✓</span>
                     </td>
                     <td><span class="tick" aria-label="Included">✓</span></td>
                   </tr>
                   <tr>
-                    <th scope="row">Fluid levels, battery, lights &amp; tyre condition checks</th>
+                    <th scope="row">Washer fluid top-up</th>
+                    <td><span class="dash" aria-label="Not included">—</span></td>
+                    <td class="is-featured">
+                      <span class="tick" aria-label="Included">✓</span>
+                    </td>
+                    <td><span class="tick" aria-label="Included">✓</span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Service light reset (where possible)</th>
+                    <td><span class="dash" aria-label="Not included">—</span></td>
+                    <td class="is-featured">
+                      <span class="tick" aria-label="Included">✓</span>
+                    </td>
+                    <td><span class="tick" aria-label="Included">✓</span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Brake fluid, coolant &amp; other fluid levels, oil leak check</th>
+                    <td><span class="dash" aria-label="Not included">—</span></td>
+                    <td class="is-featured">
+                      <span class="tick" aria-label="Included">✓</span>
+                    </td>
+                    <td><span class="tick" aria-label="Included">✓</span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Battery test, lights &amp; dashboard warning lights</th>
+                    <td><span class="dash" aria-label="Not included">—</span></td>
+                    <td class="is-featured">
+                      <span class="tick" aria-label="Included">✓</span>
+                    </td>
+                    <td><span class="tick" aria-label="Included">✓</span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Tyre pressures &amp; condition, steering &amp; CV boots</th>
+                    <td><span class="dash" aria-label="Not included">—</span></td>
+                    <td class="is-featured">
+                      <span class="tick" aria-label="Included">✓</span>
+                    </td>
+                    <td><span class="tick" aria-label="Included">✓</span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Air filter, belts, wipers &amp; exhaust check</th>
+                    <td><span class="dash" aria-label="Not included">—</span></td>
                     <td class="is-featured">
                       <span class="tick" aria-label="Included">✓</span>
                     </td>
@@ -328,16 +372,19 @@
                   </tr>
                   <tr>
                     <th scope="row">Brakes, suspension &amp; road test</th>
-                    <td class="is-featured"><span class="dash">—</span></td>
+                    <td><span class="dash" aria-label="Not included">—</span></td>
+                    <td class="is-featured"><span class="dash" aria-label="Not included">—</span></td>
                     <td><span class="tick" aria-label="Included">✓</span></td>
                   </tr>
                   <tr>
                     <th scope="row">Diagnostic scan</th>
-                    <td class="is-featured"><span class="dash">—</span></td>
+                    <td><span class="dash" aria-label="Not included">—</span></td>
+                    <td class="is-featured"><span class="dash" aria-label="Not included">—</span></td>
                     <td><span class="tick" aria-label="Included">✓</span></td>
                   </tr>
                   <tr>
-                    <th scope="row">Written report with photos</th>
+                    <th scope="row">Digital service report</th>
+                    <td><span class="dash" aria-label="Not included">—</span></td>
                     <td class="is-featured">
                       <span class="tick" aria-label="Included">✓</span>
                     </td>
@@ -347,6 +394,11 @@
               </table>
             </div>
             <ul class="compare-notes">
+              <li>
+                Basic $99 is for petrol vehicles: engine oil and filter change
+                only. It does not include safety checks, fluid top-ups, service
+                light reset or a digital service report.
+              </li>
               <li>Diesel &amp; 4WD servicing available.</li>
               <li>
                 Includes engine oil and standard oil filter, up to 4L of

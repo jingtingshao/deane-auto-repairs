@@ -714,7 +714,7 @@ button.see-details {
 
 .compare-table {
   width: 100%;
-  min-width: 420px;
+  min-width: 540px;
   border-collapse: collapse;
   font-size: 0.95rem;
 }
@@ -744,6 +744,18 @@ button.see-details {
 .compare-table thead th.is-featured {
   background: #fff8e1;
   box-shadow: inset 0 4px 0 var(--sign-yellow, #f5c518);
+}
+
+.compare-tag {
+  display: block;
+  width: max-content;
+  margin: 0 auto 0.4rem;
+  padding: 0.2rem 0.5rem;
+  background: var(--sign-yellow, #f5c518);
+  color: var(--sign-navy, #0d2b5c);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  border-radius: 999px;
 }
 
 .compare-table tbody th {

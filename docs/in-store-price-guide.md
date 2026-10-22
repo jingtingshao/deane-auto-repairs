@@ -18,7 +18,7 @@ This list matches the internal service price list (FINAL). Premium, Diesel / 4WD
 |---------|-------|------|------------------|
 | WOF inspection | $79 | — | WOF items on the job |
 | WOF recheck (repairs done here) | Free | — | — |
-| Basic (petrol oil & filter) | $99 | — | Oil, filter, washer, service light, digital report |
+| Basic (petrol oil & filter) | $99 | — | Oil & filter change only — no safety checks, top-ups, service light reset or digital report |
 | Standard (petrol) | $199 | ~1 hour | Standard |
 | Premium (petrol) | $279 | ~1.5 hours | Premium |
 | Diesel / 4WD | $299 | ~1.5 hours | Premium + diesel / 4WD checks |
@@ -42,7 +42,7 @@ Oil & filter included up to **4L** (Standard / Premium) or **5L** (Diesel / 4WD)
 | Coolant — level & condition | — | ✓ | ✓ |
 | Radiator cap & hoses | — | ✓ | ✓ |
 | Power steering fluid † | — | ✓ | ✓ |
-| Washer fluid top-up | ✓ | ✓ | ✓ |
+| Washer fluid top-up | — | ✓ | ✓ |
 | Transmission / gearbox fluid † | — | ✓ | ✓ |
 | Differential fluid † | — | ✓ | ✓ |
 | Engine / transmission oil leak inspection | — | ✓ | ✓ |
@@ -70,7 +70,7 @@ Oil & filter included up to **4L** (Standard / Premium) or **5L** (Diesel / 4WD)
 | Battery condition test | — | ✓ | ✓ |
 | Exterior lights & indicators | — | ✓ | ✓ |
 | Dashboard warning lights | — | ✓ | ✓ |
-| Service light reset | ✓ | ✓ | ✓ |
+| Service light reset | — | ✓ | ✓ |
 | Air filter visual | — | ✓ | ✓ |
 | Cabin / pollen filter check | — | — | ✓ |
 | Drive belts | — | ✓ | ✓ |
@@ -79,7 +79,7 @@ Oil & filter included up to **4L** (Standard / Premium) or **5L** (Diesel / 4WD)
 | Wiper blades | — | ✓ | ✓ |
 | Diagnostic scan | — | — | ✓ |
 | Road test (up to 50 km/h) | — | — | ✓ |
-| Digital service report | ✓ | ✓ | ✓ |
+| Digital service report | — | ✓ | ✓ |
 
 \* Oil and filter up to the standard quantity / spec for that service. Extra or specialised oil is quoted first.  
 † Where fitted.
