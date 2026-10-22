@@ -9940,8 +9940,13 @@ app.get("/api/inventory/:id/history", requireOwnerAdmin, (req, res) => {
     takenByJob.set(key, (takenByJob.get(key) || 0) - (Number(row.qtyDelta) || 0));
   }
   const roundQty = (value) => Math.round(value * 1000) / 1000;
-  const movements = itemMovements
-    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+  const writeOrder = new Map(itemMovements.map((row, index) => [row, index]));
+  const movements = [...itemMovements]
+    .sort(
+      (a, b) =>
+        String(b.createdAt || "").localeCompare(String(a.createdAt || "")) ||
+        writeOrder.get(b) - writeOrder.get(a)
+    )
     .slice(0, 60)
     .map((row) => {
       const note = String(row.note || "");
