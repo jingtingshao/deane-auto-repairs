@@ -10,6 +10,12 @@ const express = require("express");
 const multer = require("multer");
 const pdfParseModule = require("pdf-parse");
 const Tesseract = require("tesseract.js");
+let sharp = null;
+try {
+  sharp = require("sharp");
+} catch {
+  sharp = null;
+}
 const nodemailer = require("nodemailer");
 const { randomUUID, randomBytes, createHash, timingSafeEqual } = require("crypto");
 const { AsyncLocalStorage } = require("async_hooks");
@@ -1715,11 +1721,12 @@ function classifyTopstarLine(item) {
   return { ...item, decision: "consumable", confidence: 0.9 };
 }
 
-function parseTopstarRows(lines) {
+function parseTopstarRows(lines, { allowNoHeader = false } = {}) {
   const headerIndex = lines.findIndex(
     (line) => /description/i.test(line) && /\bcode\b/i.test(line) && /qty/i.test(line)
   );
-  if (headerIndex < 0) return [];
+  if (headerIndex < 0 && !allowNoHeader) return [];
+  const maxBuffer = headerIndex < 0 ? 3 : Infinity;
   const items = [];
   let buffer = [];
   const flush = (joined) => {
@@ -1750,6 +1757,7 @@ function parseTopstarRows(lines) {
     }
     if (/^(notes|shipping address|bill to)\b/i.test(line)) continue;
     buffer.push(line);
+    if (buffer.length > maxBuffer) buffer.shift();
     const joined = buffer.join(" ");
     if (flush(joined)) buffer = [];
   }
@@ -1812,14 +1820,14 @@ function parseStatementPartLines(lines) {
   return items;
 }
 
-function parseSupplierInvoiceText(rawText) {
+function parseSupplierInvoiceText(rawText, options = {}) {
   const text = String(rawText || "");
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const topstar = /top\s*star/i.test(text);
+  const topstar = /top\s*star/i.test(text) || /top\s*star/i.test(String(options.supplierHint || ""));
   const fromSupplier = statementSupplierName(text);
   const supplierLine = topstar
     ? "Topstar New Zealand"
@@ -1863,7 +1871,7 @@ function parseSupplierInvoiceText(rawText) {
   const tyreOrder = inventoryLib.parseTyreOrderLines(lines);
   const tyreOrderHasFee = tyreOrder.some((row) => inventoryLib.isStewardshipCandidate(row));
   if (tyreOrderHasFee) candidates = tyreOrder;
-  else if (topstar) candidates = parseTopstarRows(lines);
+  else if (topstar) candidates = parseTopstarRows(lines, { allowNoHeader: options.continuationPage });
   const headerIndex = topstar
     ? -1
     : lines.findIndex((line) =>
@@ -1935,12 +1943,99 @@ async function extractTextFromImportFile(file) {
     }
   }
   if (file.mimetype.startsWith("image/")) {
-    const result = await Tesseract.recognize(file.buffer, "eng", {
-      logger: () => {},
-    });
-    return String(result?.data?.text || "").trim();
+    return ocrInvoiceImage(file.buffer);
   }
   return "";
+}
+
+async function prepareInvoiceImageForOcr(buffer) {
+  if (!sharp) return buffer;
+  try {
+    const base = sharp(buffer, { failOn: "none" }).rotate();
+    const meta = await base.metadata();
+    const longSide = Math.max(Number(meta.width) || 0, Number(meta.height) || 0);
+    const target = longSide && longSide < 2400 ? 2400 : Math.min(longSide || 3600, 3600);
+    return await base
+      .resize({ width: target, height: target, fit: "inside", withoutEnlargement: false })
+      .grayscale()
+      .normalize()
+      .sharpen()
+      .png()
+      .toBuffer();
+  } catch (err) {
+    console.warn("Invoice image preprocessing skipped:", err.message);
+    return buffer;
+  }
+}
+
+async function ocrInvoiceImage(buffer) {
+  const prepared = await prepareInvoiceImageForOcr(buffer);
+  const cachePath = path.join(require("os").tmpdir(), "deane-tesseract");
+  fs.mkdirSync(cachePath, { recursive: true });
+  const worker = await Tesseract.createWorker("eng", 1, { logger: () => {}, cachePath });
+  try {
+    await worker.setParameters({
+      tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+      preserve_interword_spaces: "1",
+    });
+    const result = await worker.recognize(prepared, { rotateAuto: true });
+    return String(result?.data?.text || "").trim();
+  } finally {
+    await worker.terminate().catch(() => {});
+  }
+}
+
+function saveImportFileToUploads(file) {
+  if (!file?.buffer) return "";
+  const mime = String(file.mimetype || "");
+  const ext =
+    UPLOAD_MIME_EXT[mime] ||
+    (mime === "application/pdf" ? ".pdf" : mime.startsWith("image/") ? ".jpg" : "");
+  if (!ext) return "";
+  const filename = `${Date.now()}-${randomUUID().slice(0, 8)}${ext}`;
+  fs.writeFileSync(path.join(UPLOADS_DIR, filename), file.buffer);
+  return `/uploads/${filename}`;
+}
+
+async function readSupplierInvoicePages(files, supplierHint = "", continuation = false) {
+  const pages = [];
+  let hint = String(supplierHint || "").trim();
+  for (let i = 0; i < files.length; i += 1) {
+    const rawText = await extractTextFromImportFile(files[i]);
+    const parsed = parseSupplierInvoiceText(rawText, {
+      supplierHint: hint,
+      continuationPage: continuation || i > 0,
+    });
+    if (!hint && parsed.supplier) hint = parsed.supplier;
+    pages.push({ rawText, parsed });
+  }
+  const pick = (key) => {
+    for (const page of pages) {
+      const value = page.parsed[key];
+      if (value) return value;
+    }
+    return typeof pages[0]?.parsed[key] === "number" ? 0 : "";
+  };
+  const supplier = String(supplierHint || "").trim() || pick("supplier");
+  const candidates = [];
+  for (const page of pages) {
+    for (const row of page.parsed.candidates || []) {
+      candidates.push({ ...row, supplierCandidate: row.supplierCandidate || supplier });
+    }
+  }
+  const rawText = pages
+    .map((page, idx) => (pages.length > 1 ? `[Page ${idx + 1}]\n${page.rawText}` : page.rawText))
+    .join("\n\n");
+  return {
+    supplier,
+    invoiceNo: pick("invoiceNo"),
+    invoiceDate: pick("invoiceDate"),
+    subtotal: pick("subtotal"),
+    tax: pick("tax"),
+    total: pick("total"),
+    rawText,
+    candidates,
+  };
 }
 
 function suggestCandidateMatch(candidate, jobs, invoice) {
@@ -4488,6 +4583,8 @@ const invoiceEvidenceUpload = multer({
     cb(null, true);
   },
 });
+const SUPPLIER_INVOICE_MAX_PAGES = 8;
+const SUPPLIER_INVOICE_RAW_TEXT_MAX = 40000;
 const ocrImportUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -8993,13 +9090,19 @@ app.post("/api/jobs/:jobId/invoices/:invoiceId/attach-parts", requireAdmin, (req
 app.post(
   "/api/supplier-invoices/import-file",
   requireOwnerAdmin,
-  ocrImportUpload.single("file"),
+  ocrImportUpload.fields([
+    { name: "file", maxCount: 1 },
+    { name: "files", maxCount: SUPPLIER_INVOICE_MAX_PAGES },
+  ]),
   async (req, res) => {
     try {
-      const file = req.file;
-      if (!file) return res.status(400).json({ error: "No file uploaded" });
-      const rawText = await extractTextFromImportFile(file);
-      const parsedInvoice = parseSupplierInvoiceText(rawText);
+      const files = [...(req.files?.file || []), ...(req.files?.files || [])].slice(
+        0,
+        SUPPLIER_INVOICE_MAX_PAGES
+      );
+      if (!files.length) return res.status(400).json({ error: "No file uploaded" });
+      const parsedInvoice = await readSupplierInvoicePages(files, req.body?.supplier);
+      const rawText = parsedInvoice.rawText;
       const supplier = String(req.body?.supplier || parsedInvoice.supplier || "").trim();
       const invoiceNo = String(req.body?.invoiceNo || parsedInvoice.invoiceNo || "").trim();
       const lineCount = parsedInvoice.candidates?.length || 0;
@@ -9028,18 +9131,7 @@ app.post(
       }
 
       const now = nowIso();
-      const imageRefs = [];
-      if (file.buffer) {
-        const mime = String(file.mimetype || "");
-        const ext =
-          UPLOAD_MIME_EXT[mime] ||
-          (mime === "application/pdf" ? ".pdf" : mime.startsWith("image/") ? ".jpg" : "");
-        if (ext) {
-          const filename = `${Date.now()}-${randomUUID().slice(0, 8)}${ext}`;
-          fs.writeFileSync(path.join(UPLOADS_DIR, filename), file.buffer);
-          imageRefs.push(`/uploads/${filename}`);
-        }
-      }
+      const imageRefs = files.map((file) => saveImportFileToUploads(file)).filter(Boolean);
       const created = normalizeSupplierInvoice({
         id: randomUUID(),
         supplier,
@@ -9053,7 +9145,7 @@ app.post(
         notes: String(req.body?.notes || "").trim(),
         status: lineCount ? "parsed" : "uploaded",
         imageRefs,
-        ocrRawTextRef: String(rawText || "").slice(0, 12000),
+        ocrRawTextRef: String(rawText || "").slice(0, SUPPLIER_INVOICE_RAW_TEXT_MAX),
         parseVersion: "pdf-v1",
         createdAt: now,
         createdBy: nowActor(req),
@@ -9064,11 +9156,11 @@ app.post(
       writeSupplierInvoices(invoices);
 
       const allCandidates = readInvoiceCandidates();
-      const parsedCandidates = (parsedInvoice.candidates || []).slice(0, 200).map((line) =>
+      const parsedCandidates = (parsedInvoice.candidates || []).slice(0, 200).map((line, idx) =>
         normalizeCandidate({
           id: randomUUID(),
           supplierInvoiceId: created.id,
-          lineNo: line.lineNo,
+          lineNo: files.length > 1 ? idx + 1 : line.lineNo,
           rawLineText: line.rawLineText,
           partNumberCandidate: line.partNumberCandidate,
           descriptionCandidate: line.descriptionCandidate,
@@ -9099,7 +9191,8 @@ app.post(
         invoice: invoiceAfter,
         candidates: rematched,
         parsed: {
-          sourceType: file.mimetype === "application/pdf" ? "pdf" : "image",
+          sourceType: files.every((f) => f.mimetype === "application/pdf") ? "pdf" : "image",
+          pages: files.length,
           supplier: parsedInvoice.supplier,
           invoiceNo: parsedInvoice.invoiceNo,
           invoiceDate: parsedInvoice.invoiceDate,
@@ -9109,6 +9202,91 @@ app.post(
     } catch (err) {
       console.error("Could not import supplier invoice file:", err);
       res.status(err.status || 400).json({ error: err.message || "Failed to import file." });
+    }
+  }
+);
+
+app.post(
+  "/api/supplier-invoices/:invoiceId/import-pages",
+  requireOwnerAdmin,
+  ocrImportUpload.array("files", SUPPLIER_INVOICE_MAX_PAGES),
+  async (req, res) => {
+    try {
+      const files = req.files || [];
+      if (!files.length) return res.status(400).json({ error: "No file uploaded" });
+      const existing = readSupplierInvoices().find((row) => row.id === req.params.invoiceId);
+      if (!existing) return res.status(404).json({ error: "Supplier invoice not found" });
+      const parsedPages = await readSupplierInvoicePages(files, existing.supplier, true);
+
+      const invoices = readSupplierInvoices();
+      const index = invoices.findIndex((row) => row.id === req.params.invoiceId);
+      if (index < 0) return res.status(404).json({ error: "Supplier invoice not found" });
+      const prev = normalizeSupplierInvoice(invoices[index]);
+      const now = nowIso();
+      const added = files.map((file) => saveImportFileToUploads(file)).filter(Boolean);
+      const keepOrParsed = (current, parsed) => current || parsed;
+      const rawText = [prev.ocrRawTextRef, parsedPages.rawText].filter(Boolean).join("\n\n");
+      const next = normalizeSupplierInvoice({
+        ...invoices[index],
+        supplier: keepOrParsed(prev.supplier, parsedPages.supplier),
+        invoiceNo: keepOrParsed(prev.invoiceNo, parsedPages.invoiceNo),
+        invoiceDate: keepOrParsed(prev.invoiceDate, normalizeInvoiceDateInput(parsedPages.invoiceDate)),
+        subtotal: keepOrParsed(prev.subtotal, toMoney(parsedPages.subtotal)),
+        tax: keepOrParsed(prev.tax, toMoney(parsedPages.tax)),
+        total: keepOrParsed(prev.total, toMoney(parsedPages.total)),
+        imageRefs: [...(invoices[index].imageRefs || []), ...added].slice(0, 12),
+        ocrRawTextRef: rawText.slice(0, SUPPLIER_INVOICE_RAW_TEXT_MAX),
+        updatedAt: now,
+        updatedBy: nowActor(req),
+      });
+      invoices[index] = next;
+      writeSupplierInvoices(invoices);
+
+      const allCandidates = readInvoiceCandidates();
+      let lineNo = nextCandidateLineNo(allCandidates, next.id);
+      const newRows = (parsedPages.candidates || []).slice(0, 200).map((line) =>
+        normalizeCandidate({
+          id: randomUUID(),
+          supplierInvoiceId: next.id,
+          lineNo: lineNo++,
+          rawLineText: line.rawLineText,
+          partNumberCandidate: line.partNumberCandidate,
+          descriptionCandidate: line.descriptionCandidate,
+          qtyCandidate: line.qtyCandidate,
+          costPriceCandidate: line.costPriceCandidate,
+          supplierCandidate: line.supplierCandidate || next.supplier,
+          confidence: line.confidence ?? 0.7,
+          decision: line.decision === "consumable" ? "consumable" : "pending",
+          createdAt: now,
+          updatedAt: now,
+        })
+      );
+      for (const row of newRows) allCandidates.push(row);
+      writeInvoiceCandidates(allCandidates);
+
+      const rematched = rematchCandidatesForInvoice(next.id).map((row) => normalizeCandidate(row));
+      const invoiceAfter = refreshSupplierInvoiceStatus(next.id) || next;
+      writePartAudit(
+        "supplierInvoice",
+        invoiceAfter.id,
+        "update",
+        prev,
+        invoiceAfter,
+        req,
+        `added ${files.length} page(s), ${newRows.length} line(s) read`
+      );
+      res.json({
+        invoice: invoiceAfter,
+        candidates: rematched,
+        linesAdded: newRows.length,
+        pages: files.length,
+        warning: newRows.length
+          ? ""
+          : "Page saved, but no part lines were read. Use Add line to type them in.",
+      });
+    } catch (err) {
+      console.error("Could not add supplier invoice pages:", err);
+      res.status(err.status || 400).json({ error: err.message || "Failed to read pages." });
     }
   }
 );

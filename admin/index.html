@@ -460,7 +460,7 @@
             <div class="line-actions supplier-invoice-actions">
               <button type="button" id="btn-supplier-invoice-new" class="primary">+ New supplier invoice</button>
               <button type="button" id="btn-supplier-invoice-import" class="ghost">Import PDF / Image</button>
-              <input id="supplier-invoice-import-file" type="file" accept=".pdf,application/pdf,image/*" hidden />
+              <input id="supplier-invoice-import-file" type="file" accept=".pdf,application/pdf,image/*" multiple hidden />
               <button type="button" id="btn-supplier-invoice-refresh" class="ghost">Refresh</button>
             </div>
             <div id="supplier-invoices-list" class="report-list"></div>
@@ -479,11 +479,11 @@
             <form id="supplier-invoice-form" class="report-form">
               <fieldset>
                 <legend>① Upload Supplier Invoice</legend>
-                <p class="muted small">Upload PDF or photo. We read the supplier, invoice number, total, and part lines. If something is missed, type it in. Company name, address, and email are ignored.</p>
+                <p class="muted small">Upload PDF or photo. For a multi-page invoice, choose all pages together or add the next page after. Every page is read. We read the supplier, invoice number, total, and part lines. If something is missed, type it in. Company name, address, and email are ignored.</p>
                 <div class="photo-row">
                   <label class="file-label">
                     Choose files
-                    <input id="supplier-invoice-import-file-inline" type="file" accept=".pdf,application/pdf,image/*" />
+                    <input id="supplier-invoice-import-file-inline" type="file" accept=".pdf,application/pdf,image/*" multiple />
                   </label>
                   <span class="muted small">or</span>
                   <button type="button" id="btn-supplier-invoice-import-inline" class="ghost">Take photo</button>

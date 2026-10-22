@@ -610,34 +610,52 @@ function renderInvoicePreview(invoice) {
   });
 }
 
-async function attachOriginalFile(file) {
-  if (!current?.id) throw new Error("Open a supplier invoice first.");
-  if (!file) return;
-  const body = new FormData();
-  body.append("images", file);
-  current = await Admin.api(`/api/supplier-invoices/${current.id}/images`, {
-    method: "POST",
-    body,
-  });
-  renderPhotos(current);
-  await loadList();
-  showStatus("Original file attached for preview");
+function showReadingStatus(pageCount) {
+  const text = pageCount > 1 ? `Reading ${pageCount} pages…` : "Reading invoice…";
+  if (ocrStatusLine) {
+    ocrStatusLine.textContent = text;
+    ocrStatusLine.className = "muted small supplier-ocr-status pending";
+  }
+  showStatus(text, 120000);
 }
 
-async function importInvoiceFile(file) {
-  if (!file) return;
+async function addInvoicePages(files) {
+  if (!current?.id) throw new Error("Open a supplier invoice first.");
+  if (!files.length) return;
+  readingInvoice = true;
+  showReadingStatus(files.length);
+  const body = new FormData();
+  files.forEach((file) => body.append("files", file));
+  let result;
+  try {
+    result = await Admin.api(`/api/supplier-invoices/${current.id}/import-pages`, {
+      method: "POST",
+      body,
+    });
+  } finally {
+    readingInvoice = false;
+  }
+  await loadInvoice(current.id);
+  await loadList();
+  const added = Number(result?.linesAdded) || 0;
+  const pages = files.length === 1 ? "Page" : `${files.length} pages`;
+  showStatus(
+    result?.warning || `${pages} added: ${added} more part line${added === 1 ? "" : "s"} read.`,
+    result?.warning ? 9000 : 7000
+  );
+}
+
+async function importInvoiceFile(fileList) {
+  const files = Array.from(fileList || []).filter(Boolean);
+  if (!files.length) return;
   if (current?.id) {
-    await attachOriginalFile(file);
+    await addInvoicePages(files);
     return;
   }
   readingInvoice = true;
-  if (ocrStatusLine) {
-    ocrStatusLine.textContent = "Reading invoice…";
-    ocrStatusLine.className = "muted small supplier-ocr-status pending";
-  }
-  showStatus("Reading invoice…");
+  showReadingStatus(files.length);
   const body = new FormData();
-  body.append("file", file);
+  files.forEach((file) => body.append("files", file));
   let result;
   try {
     result = await Admin.api("/api/supplier-invoices/import-file", {
@@ -657,9 +675,10 @@ async function importInvoiceFile(file) {
   const lineCount = Number(result.candidates?.length) || candidates.length || 0;
   const supplier = current.supplier || result.parsed?.supplier || "Supplier";
   const topstarNote = /topstar/i.test(supplier) ? " Topstar lines are parts from the Description column." : "";
+  const pageNote = files.length > 1 ? ` from ${files.length} pages` : "";
   showStatus(
     result.warning ||
-      `${supplier} imported: ${lineCount} part line${lineCount === 1 ? "" : "s"} read.${topstarNote} Use Add to stock only for shelf quantity.`,
+      `${supplier} imported: ${lineCount} part line${lineCount === 1 ? "" : "s"} read${pageNote}.${topstarNote} Use Add to stock only for shelf quantity.`,
     result.warning ? 9000 : 7000
   );
 }
@@ -1699,10 +1718,10 @@ document.getElementById("btn-supplier-invoice-auto-match")?.addEventListener("cl
 });
 importFileInput?.addEventListener("change", async () => {
   try {
-    const file = importFileInput.files?.[0];
-    if (!file) return;
+    const files = Array.from(importFileInput.files || []);
+    if (!files.length) return;
     current = null;
-    await importInvoiceFile(file);
+    await importInvoiceFile(files);
   } catch (err) {
     alert(err.message);
   } finally {
@@ -1711,9 +1730,9 @@ importFileInput?.addEventListener("change", async () => {
 });
 importFileInputInline?.addEventListener("change", async () => {
   try {
-    const file = importFileInputInline.files?.[0];
-    if (!file) return;
-    await importInvoiceFile(file);
+    const files = Array.from(importFileInputInline.files || []);
+    if (!files.length) return;
+    await importInvoiceFile(files);
   } catch (err) {
     alert(err.message);
   } finally {
@@ -1722,9 +1741,9 @@ importFileInputInline?.addEventListener("change", async () => {
 });
 cameraFileInput?.addEventListener("change", async () => {
   try {
-    const file = cameraFileInput.files?.[0];
-    if (!file) return;
-    await importInvoiceFile(file);
+    const files = Array.from(cameraFileInput.files || []);
+    if (!files.length) return;
+    await importInvoiceFile(files);
   } catch (err) {
     alert(err.message);
   } finally {
