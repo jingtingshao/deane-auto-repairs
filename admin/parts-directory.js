@@ -645,6 +645,66 @@
     document.getElementById("parts-guide-search")?.focus();
   }
 
+  function printRows() {
+    const query = document.getElementById("parts-guide-search")?.value || "";
+    const rows = SUPPLIERS.filter((row) => matches(row, query)).sort((a, b) => a.priority - b.priority);
+    const body = rows
+      .map((row) => {
+        const phones = (row.phones || []).filter((phone) => phone.display);
+        const phoneLines = phones.length
+          ? phones
+              .map(
+                (phone) =>
+                  `<tr><td class="label">${Admin.escapeHtml(phone.label || "Phone")}</td><td class="phone">${Admin.escapeHtml(phone.display)}</td></tr>`
+              )
+              .join("")
+          : `<tr><td class="label" colspan="2">No phone — see website / visit in person</td></tr>`;
+        return `<section class="supplier">
+          <h2>${Admin.escapeHtml(row.name)}</h2>
+          <table>${phoneLines}</table>
+        </section>`;
+      })
+      .join("");
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Parts suppliers — names &amp; phones</title>
+  <style>
+    @page { margin: 12mm; }
+    body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0; padding: 12px; }
+    h1 { font-size: 18pt; margin: 0 0 4px; }
+    .meta { font-size: 9pt; color: #444; margin: 0 0 14px; }
+    .supplier { break-inside: avoid; margin: 0 0 10px; padding: 0 0 8px; border-bottom: 1px solid #ccc; }
+    h2 { font-size: 12pt; margin: 0 0 4px; }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 2px 0; font-size: 11pt; vertical-align: baseline; }
+    td.label { width: 48%; color: #333; }
+    td.phone { width: 52%; font-weight: 700; font-size: 12pt; text-align: right; letter-spacing: 0.02em; }
+    @media print {
+      body { padding: 0; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <button class="no-print" type="button" onclick="window.print()" style="margin:0 0 12px;padding:8px 14px;font-size:14px;">Print</button>
+  <h1>Deane Auto Repairs — parts supplier phones</h1>
+  <p class="meta">${rows.length} supplier${rows.length === 1 ? "" : "s"} · names and phones only · checked 20 Oct 2026</p>
+  ${body || "<p>No matching suppliers.</p>"}
+  <script>window.addEventListener("load", () => setTimeout(() => window.print(), 250));<\/script>
+</body>
+</html>`;
+    const win = window.open("", "_blank", "noopener,noreferrer,width=720,height=900");
+    if (!win) {
+      window.alert("Allow pop-ups for this site, then try Print names & phones again.");
+      return;
+    }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+  }
+
   document.getElementById("parts-guide-groups")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-parts-group]");
     if (!button) return;
@@ -660,6 +720,7 @@
   });
 
   document.getElementById("parts-guide-search")?.addEventListener("input", render);
+  document.getElementById("btn-parts-guide-print")?.addEventListener("click", printRows);
 
-  window.DeanePartsGuide = { show, suppliers: SUPPLIERS, matches };
+  window.DeanePartsGuide = { show, suppliers: SUPPLIERS, matches, printRows };
 })();

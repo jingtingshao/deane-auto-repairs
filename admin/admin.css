@@ -2992,6 +2992,19 @@ label.check input {
   margin: 0 0 0.65rem;
 }
 
+.parts-guide-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0 0.65rem;
+}
+
+.parts-guide-toolbar #parts-guide-count {
+  margin: 0;
+}
+
 .parts-guide-filters button.active {
   background: var(--ink);
   color: #fff;
