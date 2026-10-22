@@ -165,7 +165,7 @@ function render(report, meta) {
           63 Hayr Road, Three Kings, Auckland<br />
           <a href="tel:08006259827">0800 625 9827</a> ·
           <a href="mailto:admin@deaneauto.co.nz">admin@deaneauto.co.nz</a><br />
-          Mon–Sat 8:30am – 5:00pm
+          Mon–Sat 9:30am – 5:00pm
         </div>
       </div>
     </section>

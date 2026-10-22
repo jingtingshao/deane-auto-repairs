@@ -133,7 +133,7 @@ function unitTests() {
     assert.equal(row.helpWith, "WOF");
     assert.equal(row.handledAt, "");
     assert.equal(bookingRequestsLib.startTimeFromPreferred("Afternoon drop-off"), "13:00");
-    assert.equal(bookingRequestsLib.startTimeFromPreferred("Morning drop-off"), "09:00");
+    assert.equal(bookingRequestsLib.startTimeFromPreferred("Morning drop-off"), "09:30");
     assert.equal(bookingRequestsLib.startTimeFromPreferred("8:00"), "08:00");
     assert.equal(bookingRequestsLib.startTimeFromPreferred("16:00"), "16:00");
     pass("website booking request normalizes blank dashes");

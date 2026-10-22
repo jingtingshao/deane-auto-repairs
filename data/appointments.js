@@ -104,7 +104,7 @@ function normalizeAppointment(row = {}, idFallback = "") {
   const status = isAppointmentStatus(row.status) ? String(row.status).trim() : "booked";
   const sourceRaw = String(row.source || "manual").trim().toLowerCase();
   const source = APPOINTMENT_SOURCES.includes(sourceRaw) ? sourceRaw : "manual";
-  const startTime = normalizeTime(row.startTime) || "09:00";
+  const startTime = normalizeTime(row.startTime) || "09:30";
   const date = normalizeDate(row.date);
 
   return {

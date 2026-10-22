@@ -8,7 +8,7 @@ module.exports = {
   phoneDisplay: "0800 625 9827",
   phoneTel: "08006259827",
   email: "admin@deaneauto.co.nz",
-  hoursShort: "Mon–Sat 8:30am – 5:00pm",
+  hoursShort: "Mon–Sat 9:30am – 5:00pm",
   hoursSunday: "Sunday closed",
   gstNumber: "96-650-434",
   website: "https://www.deaneauto.co.nz",

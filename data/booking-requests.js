@@ -10,7 +10,7 @@ function startTimeFromPreferred(value) {
   const raw = blank(value).toLowerCase();
   if (!raw) return "";
   if (raw.includes("afternoon")) return "13:00";
-  if (raw.includes("morning")) return "09:00";
+  if (raw.includes("morning")) return "09:30";
   const match = raw.match(/(\d{1,2})\s*:\s*(\d{2})/);
   if (!match) return "";
   let hour = Number(match[1]);

@@ -192,9 +192,9 @@
   function fillStartTimeSelect(selected) {
     if (!startTimeSelect) return;
     if (!startTimeSelect.dataset.ready) {
-      // Workshop hours Mon–Sat 8:30–17:00, 15-minute steps, 24-hour labels.
+      // Workshop hours Mon–Sat 9:30–17:00, 15-minute steps, 24-hour labels.
       const options = [];
-      for (let minutes = 8 * 60 + 30; minutes <= 17 * 60; minutes += 15) {
+      for (let minutes = 9 * 60 + 30; minutes <= 17 * 60; minutes += 15) {
         const h = Math.floor(minutes / 60);
         const m = minutes % 60;
         const value = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
@@ -203,7 +203,7 @@
       startTimeSelect.innerHTML = options.join("");
       startTimeSelect.dataset.ready = "1";
     }
-    const want = String(selected || "09:00").slice(0, 5);
+    const want = String(selected || "09:30").slice(0, 5);
     if ([...startTimeSelect.options].some((o) => o.value === want)) {
       startTimeSelect.value = want;
     } else {
@@ -632,7 +632,7 @@
   function fillForm(row) {
     fillStatusSelect(row.status || "booked");
     fillDurationSelect(row.durationMinutes || 120);
-    fillStartTimeSelect(row.startTime || "09:00");
+    fillStartTimeSelect(row.startTime || "09:30");
     const set = (name, value) => {
       const el = form?.elements?.namedItem?.(name);
       if (el) el.value = value ?? "";
@@ -732,7 +732,7 @@
     current = {
       id: "",
       date: nextBookableDate(partial.date || anchorDate || Admin.todayIso()),
-      startTime: partial.startTime || "09:00",
+      startTime: partial.startTime || "09:30",
       durationMinutes: partial.durationMinutes || 120,
       status: "booked",
       customerId: partial.customerId || "",
@@ -843,7 +843,7 @@
     const preferred = String(row.preferredDate || "").slice(0, 10);
     const timeRaw = String(row.preferredTime || "").toLowerCase();
     const clockMatch = timeRaw.match(/(\d{1,2})\s*:\s*(\d{2})/);
-    let startTime = "09:00";
+    let startTime = "09:30";
     if (clockMatch) {
       const hour = Number(clockMatch[1]);
       if (hour >= 0 && hour <= 23) {
