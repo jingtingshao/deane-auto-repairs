@@ -47,6 +47,7 @@ let jobRows = [];
 let partRows = [];
 let jobFilter = "active";
 let jobYear = String(new Date().getFullYear());
+let listScrollY = null;
 let jobMonth = "";
 
 function statusLabel(id) {
@@ -297,7 +298,10 @@ function renderJobList() {
     </div>`;
 
   jobsList.querySelectorAll(".job-row").forEach((row) => {
-    row.addEventListener("click", () => openJob(row.dataset.id));
+    row.addEventListener("click", () => {
+      listScrollY = window.scrollY;
+      openJob(row.dataset.id);
+    });
   });
 }
 
@@ -991,8 +995,10 @@ async function showList(opts = {}) {
   }
   jobAutosave.cancel();
   currentJob = null;
+  const restoreScroll = opts.keepPlace ? listScrollY : null;
+  listScrollY = null;
   if (opts.filter) jobFilter = opts.filter;
-  else jobFilter = "active";
+  else if (!opts.keepPlace) jobFilter = "active";
   if (opts.year) jobYear = String(opts.year);
   if (opts.month) jobMonth = String(opts.month);
   else if (jobFilter === "collected_month") jobMonth = Admin.todayIso().slice(0, 7);
@@ -1004,6 +1010,7 @@ async function showList(opts = {}) {
   } catch (err) {
     alert(err.message);
   }
+  if (restoreScroll != null) window.scrollTo(0, restoreScroll);
 }
 
 jobsSearch?.addEventListener("input", renderJobList);
@@ -1014,7 +1021,7 @@ jobsYearSelect?.addEventListener("change", () => {
   renderJobList();
 });
 
-document.getElementById("btn-jobs-back")?.addEventListener("click", showList);
+document.getElementById("btn-jobs-back")?.addEventListener("click", () => showList({ keepPlace: true }));
 
 document.getElementById("btn-add-part")?.addEventListener("click", () => {
   partRows.push(newPart());

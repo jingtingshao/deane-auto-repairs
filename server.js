@@ -983,6 +983,7 @@ function issueJobStock(job, previousParts) {
       now
     );
     if (!movement.id) movement.id = randomUUID();
+    if (job.id) movement.jobId = job.id;
     movements.push(movement);
   };
 
@@ -8322,7 +8323,11 @@ app.get("/api/jobs/meta", requireAdmin, (_req, res) => {
 app.get("/api/jobs", requireAdmin, (_req, res) => {
   const jobs = readJobs()
     .map(summarizeJob)
-    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    .sort(
+      (a, b) =>
+        String(b.number || "").localeCompare(String(a.number || ""), "en", { numeric: true }) ||
+        String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+    );
   res.json(jobs);
 });
 
@@ -9737,14 +9742,33 @@ app.get("/api/inventory/:id/history", requireOwnerAdmin, (req, res) => {
   const jobs = readJobs();
   const docs = readBilling();
   const jobsByNumber = new Map(jobs.map((job) => [String(job.number || "").toUpperCase(), job]));
-  const movements = readInventoryMovements()
-    .filter((row) => row.itemId === item.id)
+  const stockItems = readInventoryItems();
+  const jobsById = new Map(jobs.map((job) => [job.id, job]));
+  const itemMovements = readInventoryMovements().filter((row) => row.itemId === item.id);
+  // Job numbers can be renumbered to match the invoice later; prefer the jobId stored on newer movements.
+  const movementJob = (row) => {
+    const recordedNumber = (String(row.note || "").match(/\bJob\s+(JC-\d{4}-\d+)/i) || [])[1] || "";
+    const job =
+      (row.jobId && jobsById.get(row.jobId)) ||
+      (recordedNumber ? jobsByNumber.get(recordedNumber.toUpperCase()) : null) ||
+      null;
+    const key = job ? job.id : recordedNumber ? `#${recordedNumber.toUpperCase()}` : "";
+    return { recordedNumber, job, key };
+  };
+  const takenByJob = new Map();
+  for (const row of itemMovements) {
+    const { key } = movementJob(row);
+    if (!key) continue;
+    takenByJob.set(key, (takenByJob.get(key) || 0) - (Number(row.qtyDelta) || 0));
+  }
+  const roundQty = (value) => Math.round(value * 1000) / 1000;
+  const movements = itemMovements
     .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
     .slice(0, 60)
     .map((row) => {
       const note = String(row.note || "");
-      const jobNumber = (note.match(/\bJob\s+(JC-\d{4}-\d+)/i) || [])[1] || "";
-      const job = jobNumber ? jobsByNumber.get(jobNumber.toUpperCase()) : null;
+      const { recordedNumber, job, key } = movementJob(row);
+      const jobNumber = job?.number || recordedNumber;
       const invoice = job?.invoiceId ? docs.find((d) => d.id === job.invoiceId) : null;
       const usedQty = job
         ? (job.parts || [])
@@ -9761,11 +9785,25 @@ app.get("/api/inventory/:id/history", requireOwnerAdmin, (req, res) => {
         invoiceNo: row.invoiceNo || "",
         supplierInvoiceId: row.supplierInvoiceId || "",
         jobNumber,
+        recordedJobNumber: recordedNumber,
         jobId: job?.id || "",
         jobMissing: Boolean(jobNumber && !job),
         registration: job?.registration || "",
         customerName: job?.customerName || "",
-        jobUsesQty: usedQty,
+        jobUsesQty: roundQty(usedQty),
+        jobTakenQty: key ? roundQty(takenByJob.get(key) || 0) : 0,
+        invoiceUsesQty:
+          invoice && invoice.status !== "void"
+            ? roundQty(
+                (invoice.lines || [])
+                  .filter(
+                    (line) =>
+                      String(line.stockItemId || "").trim() === item.id ||
+                      resolveJobStockItem(stockItems, line)?.id === item.id
+                  )
+                  .reduce((sum, line) => sum + (Number(line.qty) || 0), 0)
+              )
+            : null,
         invoiceId: invoice?.id || "",
         invoiceNumber: invoice?.number || "",
         invoiceStatus: invoice?.status || "",

@@ -480,6 +480,9 @@
           ? `<button type="button" class="link-button" data-open-job="${Admin.escapeAttr(row.jobId)}">${Admin.escapeHtml(row.jobNumber)}</button>`
           : `${Admin.escapeHtml(row.jobNumber)}${row.jobMissing ? ' <span class="muted small">(job deleted)</span>' : ""}`
       );
+      if (row.recordedJobNumber && row.recordedJobNumber.toUpperCase() !== String(row.jobNumber).toUpperCase()) {
+        bits[0] += ` <span class="muted small">(was ${Admin.escapeHtml(row.recordedJobNumber)})</span>`;
+      }
       if (row.registration) bits.push(Admin.escapeHtml(row.registration));
       if (row.customerName) bits.push(Admin.escapeHtml(row.customerName));
       if (row.invoiceId) {
@@ -514,11 +517,21 @@
         titleEl.textContent = [item.name, item.partNumber].filter(Boolean).join(" · ") || "Stock history";
       }
       const rows = data.movements || [];
-      const jobUse = new Map();
-      for (const row of rows) {
-        if (!row.jobNumber || !(row.qtyDelta < 0)) continue;
-        jobUse.set(row.jobNumber, (jobUse.get(row.jobNumber) || 0) + 1);
-      }
+      const warnedJobs = new Set();
+      const mismatchWarning = (row) => {
+        if (!row.jobNumber || warnedJobs.has(row.jobNumber)) return "";
+        warnedJobs.add(row.jobNumber);
+        const expected = row.jobMissing
+          ? 0
+          : row.invoiceUsesQty != null
+            ? row.invoiceUsesQty
+            : row.jobUsesQty;
+        if (Math.abs((row.jobTakenQty || 0) - expected) < 0.001) return "";
+        const taken = formatQty(row.jobTakenQty || 0, item.unit);
+        const want = formatQty(expected, item.unit);
+        const where = row.jobMissing ? "job deleted" : row.invoiceUsesQty != null ? "invoice has" : "job card has";
+        return `Stock taken ${taken} · ${where}${row.jobMissing ? " — should be 0" : ` ${want}`}. Check this job.`;
+      };
       if (!bodyEl) return;
       bodyEl.innerHTML = rows.length
         ? `<p class="muted small">On hand now: <strong>${Admin.escapeHtml(formatQty(item.qtyOnHand, item.unit))}</strong>. Newest first.</p>
@@ -526,14 +539,14 @@
             <thead><tr><th>Date</th><th>Change</th><th>After</th><th>Where</th></tr></thead>
             <tbody>${rows
               .map((row) => {
-                const repeated = row.jobNumber && (jobUse.get(row.jobNumber) || 0) > 1 && row.qtyDelta < 0;
+                const warning = mismatchWarning(row);
                 const delta = `${row.qtyDelta > 0 ? "+" : ""}${row.qtyDelta}`;
-                return `<tr class="${repeated ? "stock-history-repeat" : ""}">
+                return `<tr class="${warning ? "stock-history-repeat" : ""}">
                   <td>${Admin.escapeHtml(Admin.formatDateShort(row.createdAt) || "—")}</td>
                   <td class="${row.qtyDelta < 0 ? "stock-out" : "stock-in"}"><strong>${Admin.escapeHtml(delta)}</strong></td>
                   <td>${Admin.escapeHtml(String(row.qtyAfter))}</td>
                   <td>${historySourceHtml(row)}${
-                    repeated ? '<div class="small stock-history-warn">Used more than once on this job — check for a duplicate line.</div>' : ""
+                    warning ? `<div class="small stock-history-warn">${Admin.escapeHtml(warning)}</div>` : ""
                   }</td>
                 </tr>`;
               })
