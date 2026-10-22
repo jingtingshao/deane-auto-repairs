@@ -190,6 +190,32 @@ function partsFromQuoteLines(lines, newId) {
     );
 }
 
+function partMatchKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/** Job card stock picks store name + partNumber separately; invoice stock picks join them in the description. */
+function findMatchingPart(parts, incoming, taken) {
+  const open = parts.filter((p) => !taken.has(p));
+  const stockId = String(incoming.stockItemId || "").trim();
+  if (stockId) {
+    const byStock = open.find((p) => String(p.stockItemId || "").trim() === stockId);
+    if (byStock) return byStock;
+  }
+  const key = partMatchKey(incoming.description);
+  if (!key) return null;
+  return (
+    open.find(
+      (p) =>
+        partMatchKey(p.description) === key ||
+        partMatchKey(`${p.description} ${p.partNumber}`) === key
+    ) || null
+  );
+}
+
 function mergeNewParts(job, incoming) {
   if (!job) return false;
   const extra = (incoming || []).filter((p) => {
@@ -198,14 +224,17 @@ function mergeNewParts(job, incoming) {
   });
   if (!extra.length) return false;
   const parts = Array.isArray(job.parts) ? [...job.parts] : [];
+  const taken = new Set();
   let changed = false;
   for (const part of extra) {
-    const key = String(part.description || "").trim().toLowerCase();
-    if (!key) continue;
-    const existing = parts.find(
-      (p) => String(p.description || "").trim().toLowerCase() === key
-    );
+    if (!String(part.description || "").trim()) continue;
+    const existing = findMatchingPart(parts, part, taken);
     if (existing) {
+      taken.add(existing);
+      if (!existing.stockItemId && part.stockItemId) {
+        existing.stockItemId = part.stockItemId;
+        changed = true;
+      }
       const qty = Math.max(0, Number(part.qty) || 0) || existing.qty;
       if (Number(existing.qty) !== Number(qty)) {
         existing.qty = qty;
@@ -214,6 +243,7 @@ function mergeNewParts(job, incoming) {
       continue;
     }
     parts.push(part);
+    taken.add(part);
     changed = true;
   }
   if (!changed) return false;
