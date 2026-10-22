@@ -254,6 +254,20 @@ const MAIL_FROM =
   process.env.SMTP_USER ||
   business.email;
 
+/** BCC workshop mailbox on customer emails; skip if already the To address. */
+function workshopBcc(to) {
+  const shop = String(business.email || "")
+    .trim()
+    .toLowerCase();
+  if (!shop) return undefined;
+  const recipients = String(to || "")
+    .split(",")
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
+  if (recipients.includes(shop)) return undefined;
+  return business.email;
+}
+
 function smtpPass() {
   return String(process.env.SMTP_PASS || "")
     .replace(/\s+/g, "")
@@ -5083,6 +5097,7 @@ async function sendBookingReceivedEmail({ name, email, vehicle, registration, pr
   await mailer.sendMail({
     from: MAIL_FROM,
     to: email,
+    bcc: workshopBcc(email),
     replyTo: business.email,
     subject: `Booking request received — ${business.name}`,
     text,
@@ -6656,6 +6671,7 @@ async function sendWofReminderEmail({ customerId, vehicleId = "" }) {
     await mailer.sendMail({
       from: MAIL_FROM,
       to,
+      bcc: workshopBcc(to),
       replyTo: process.env.SMTP_USER || MAIL_FROM,
       subject,
       text,
@@ -6738,6 +6754,7 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
     const info = await mailer.sendMail({
       from: MAIL_FROM,
       to,
+      bcc: workshopBcc(to),
       replyTo: process.env.SMTP_USER || MAIL_FROM,
       subject,
       text,
@@ -7403,6 +7420,7 @@ app.post("/api/billing/:id/email", requireAdmin, requireCurrentBillingIfTech, as
     const info = await mailer.sendMail({
       from: MAIL_FROM,
       to,
+      bcc: workshopBcc(to),
       replyTo: process.env.SMTP_USER || MAIL_FROM,
       subject,
       text,
