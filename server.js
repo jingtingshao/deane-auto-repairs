@@ -4947,6 +4947,52 @@ app.get("/api/sms-inbox", requireOwnerAdmin, (_req, res) => {
   }
 });
 
+const BOOKING_RECEIVED_MESSAGE =
+  "Booking request received. We will contact you shortly to confirm the booking or discuss any changes.";
+
+async function sendBookingReceivedEmail({ name, email, vehicle, registration, preferredDate, preferredTime, helpWith }) {
+  // Name comes from a public form; keep it short so the auto-reply can't carry a spam message.
+  const firstName = String(name || "").trim().split(/\s+/)[0].slice(0, 40) || "there";
+  const vehicleBit = [vehicle, registration].filter(Boolean).join(" · ");
+  const when = [preferredDate, preferredTime].filter(Boolean).join(", ");
+  const details = [
+    ["Service", helpWith],
+    ["Vehicle", vehicleBit],
+    ["Preferred time", when],
+  ].filter(([, value]) => value);
+
+  const text =
+    `Hi ${firstName},\n\n` +
+    `${BOOKING_RECEIVED_MESSAGE}\n\n` +
+    (details.length ? details.map(([label, value]) => `${label}: ${value}`).join("\n") + "\n\n" : "") +
+    `${business.fullAddress()}\n${business.phoneDisplay}\n${business.email}\n` +
+    `${business.hoursShort}; ${business.hoursSunday}\n`;
+
+  const html = `
+    <p>Hi ${escapeHtml(firstName)},</p>
+    <p>${escapeHtml(BOOKING_RECEIVED_MESSAGE)}</p>
+    ${
+      details.length
+        ? `<p>${details
+            .map(([label, value]) => `${escapeHtml(label)}: <strong>${escapeHtml(value)}</strong>`)
+            .join("<br/>")}</p>`
+        : ""
+    }
+    ${emailContactHtml()}
+  `;
+
+  const mailer = createMailer();
+  await mailer.sendMail({
+    from: MAIL_FROM,
+    to: email,
+    replyTo: business.email,
+    subject: `Booking request received — ${business.name}`,
+    text,
+    html: withCustomerEmailHtml(html),
+    attachments: withLogoAttachments(),
+  });
+}
+
 app.post("/api/booking", async (req, res) => {
   if (String(req.body?._gotcha || "").trim()) {
     return res.json({ ok: true });
@@ -5018,6 +5064,12 @@ app.post("/api/booking", async (req, res) => {
       });
     } catch (err) {
       console.error("Booking email failed (request saved for admin):", err);
+    }
+
+    try {
+      await sendBookingReceivedEmail({ name, email, vehicle, registration, preferredDate, preferredTime, helpWith });
+    } catch (err) {
+      console.error("Booking confirmation to customer failed:", err);
     }
   }
 

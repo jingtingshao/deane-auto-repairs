@@ -287,7 +287,7 @@
 
         form.reset();
         setStatus(
-          "Your email has been sent. We’ll get back to you soon to confirm a time.",
+          "Booking request received. We will contact you shortly to confirm the booking or discuss any changes.",
           "is-success"
         );
       } catch (error) {
