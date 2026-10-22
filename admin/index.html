@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20261022printphones" />
+    <link rel="stylesheet" href="admin.css?v=20261022phonesheet" />
     <link rel="stylesheet" href="admin-refresh.css?v=20261021capricorn" />
   </head>
   <body>
@@ -583,9 +583,22 @@
           </div>
           <div class="parts-guide-toolbar">
             <p id="parts-guide-count" class="muted small"></p>
-            <button type="button" id="btn-parts-guide-print" class="ghost">Print names &amp; phones</button>
+            <button type="button" id="btn-parts-guide-phones" class="ghost">Names &amp; phones only</button>
           </div>
           <div id="parts-guide-list" class="report-list"></div>
+          <section id="parts-guide-phones-view" class="parts-guide-phones-view" hidden>
+            <div class="parts-guide-phones-actions no-print">
+              <button type="button" id="btn-parts-guide-phones-back" class="ghost">← Back</button>
+              <button type="button" id="btn-parts-guide-phones-copy" class="ghost">Copy all</button>
+              <button type="button" id="btn-parts-guide-phones-print">Print / Save PDF</button>
+            </div>
+            <p class="muted small no-print" id="parts-guide-phones-hint">
+              Phone: tap <strong>Copy all</strong>, paste into Notes, then Share → Print. Or use the browser menu → Print / Save PDF.
+            </p>
+            <h1 class="parts-guide-phones-title">Parts supplier phones</h1>
+            <p class="muted small parts-guide-phones-meta" id="parts-guide-phones-meta"></p>
+            <div id="parts-guide-phones-list" class="parts-guide-phones-list"></div>
+          </section>
         </section>
 
         <section id="suppliers-section" hidden>
@@ -1195,7 +1208,7 @@
     <script src="inventory.js?v=20261020stockhistory"></script>
     <script src="supplier-invoices.js?v=20261019pickaccept"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>
-    <script src="parts-directory.js?v=20261021wreckers"></script>
+    <script src="parts-directory.js?v=20261022phonesheet"></script>
     <script src="customers.js?v=20260906techcustomers"></script>
     <script src="referrals.js?v=20260906usedon"></script>
     <script src="sms-inbox.js?v=20260830yesno"></script>

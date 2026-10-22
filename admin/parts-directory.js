@@ -640,75 +640,97 @@
     });
   }
 
-  function show() {
-    render();
-    document.getElementById("parts-guide-search")?.focus();
+  function filteredRows() {
+    const query = document.getElementById("parts-guide-search")?.value || "";
+    return SUPPLIERS.filter((row) => matches(row, query)).sort((a, b) => a.priority - b.priority);
   }
 
-  function printRows() {
-    const query = document.getElementById("parts-guide-search")?.value || "";
-    const rows = SUPPLIERS.filter((row) => matches(row, query)).sort((a, b) => a.priority - b.priority);
-    const body = rows
+  function phonesPlainText(rows) {
+    return rows
       .map((row) => {
         const phones = (row.phones || []).filter((phone) => phone.display);
-        const phoneLines = phones.length
-          ? phones
-              .map(
-                (phone) =>
-                  `<tr><td class="label">${Admin.escapeHtml(phone.label || "Phone")}</td><td class="phone">${Admin.escapeHtml(phone.display)}</td></tr>`
-              )
-              .join("")
-          : `<tr><td class="label" colspan="2">No phone — see website / visit in person</td></tr>`;
-        return `<section class="supplier">
-          <h2>${Admin.escapeHtml(row.name)}</h2>
-          <table>${phoneLines}</table>
-        </section>`;
+        const lines = phones.length
+          ? phones.map((phone) => `${phone.label || "Phone"}: ${phone.display}`).join("\n")
+          : "(no phone)";
+        return `${row.name}\n${lines}`;
       })
-      .join("");
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Parts suppliers — names &amp; phones</title>
-  <style>
-    @page { margin: 12mm; }
-    body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0; padding: 12px; }
-    h1 { font-size: 18pt; margin: 0 0 4px; }
-    .meta { font-size: 9pt; color: #444; margin: 0 0 14px; }
-    .supplier { break-inside: avoid; margin: 0 0 10px; padding: 0 0 8px; border-bottom: 1px solid #ccc; }
-    h2 { font-size: 12pt; margin: 0 0 4px; }
-    table { width: 100%; border-collapse: collapse; }
-    td { padding: 2px 0; font-size: 11pt; vertical-align: baseline; }
-    td.label { width: 48%; color: #333; }
-    td.phone { width: 52%; font-weight: 700; font-size: 12pt; text-align: right; letter-spacing: 0.02em; }
-    @media print {
-      body { padding: 0; }
-      .no-print { display: none !important; }
+      .join("\n\n");
+  }
+
+  function showPhonesView() {
+    const rows = filteredRows();
+    const list = document.getElementById("parts-guide-phones-list");
+    const meta = document.getElementById("parts-guide-phones-meta");
+    const phonesView = document.getElementById("parts-guide-phones-view");
+    const guideList = document.getElementById("parts-guide-list");
+    if (!list || !phonesView) return;
+    if (meta) {
+      meta.textContent = `${rows.length} supplier${rows.length === 1 ? "" : "s"} · names and phones only · checked 20 Oct 2026`;
     }
-  </style>
-</head>
-<body>
-  <button class="no-print" type="button" onclick="window.print()" style="margin:0 0 12px;padding:8px 14px;font-size:14px;">Print</button>
-  <h1>Deane Auto Repairs — parts supplier phones</h1>
-  <p class="meta">${rows.length} supplier${rows.length === 1 ? "" : "s"} · names and phones only · checked 20 Oct 2026</p>
-  ${body || "<p>No matching suppliers.</p>"}
-  <script>window.addEventListener("load", () => setTimeout(() => window.print(), 250));<\/script>
-</body>
-</html>`;
-    const win = window.open("", "_blank", "noopener,noreferrer,width=720,height=900");
-    if (!win) {
-      window.alert("Allow pop-ups for this site, then try Print names & phones again.");
-      return;
+    list.innerHTML = rows.length
+      ? rows
+          .map((row) => {
+            const phones = (row.phones || []).filter((phone) => phone.display);
+            const phoneHtml = phones.length
+              ? phones
+                  .map(
+                    (phone) => `<div class="phone-row">
+                      <span class="label">${Admin.escapeHtml(phone.label || "Phone")}</span>
+                      <a class="phone" href="tel:${Admin.escapeAttr(phone.tel || phone.display.replace(/\s+/g, ""))}">${Admin.escapeHtml(phone.display)}</a>
+                    </div>`
+                  )
+                  .join("")
+              : `<div class="phone-row"><span class="label">No phone — visit in person</span></div>`;
+            return `<section class="supplier"><h2>${Admin.escapeHtml(row.name)}</h2>${phoneHtml}</section>`;
+          })
+          .join("")
+      : '<p class="muted">No matching suppliers.</p>';
+    phonesView.hidden = false;
+    if (guideList) guideList.hidden = true;
+    document.getElementById("parts-guide-phones-copy")?.focus();
+  }
+
+  function hidePhonesView() {
+    const phonesView = document.getElementById("parts-guide-phones-view");
+    const guideList = document.getElementById("parts-guide-list");
+    if (phonesView) phonesView.hidden = true;
+    if (guideList) guideList.hidden = false;
+    document.body.classList.remove("parts-guide-printing");
+  }
+
+  async function copyPhones() {
+    const text = phonesPlainText(filteredRows());
+    try {
+      await navigator.clipboard.writeText(text);
+      window.alert("Copied. Paste into Notes, then Share → Print.");
+    } catch {
+      window.prompt("Copy this text:", text);
     }
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
+  }
+
+  function printPhones() {
+    const phonesView = document.getElementById("parts-guide-phones-view");
+    if (!phonesView || phonesView.hidden) showPhonesView();
+    document.body.classList.add("parts-guide-printing");
+    const cleanup = () => {
+      document.body.classList.remove("parts-guide-printing");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.setTimeout(() => window.print(), 50);
+  }
+
+  function show() {
+    hidePhonesView();
+    render();
+    document.getElementById("parts-guide-search")?.focus();
   }
 
   document.getElementById("parts-guide-groups")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-parts-group]");
     if (!button) return;
     group = button.dataset.partsGroup || "all";
+    hidePhonesView();
     render();
   });
 
@@ -716,11 +738,18 @@
     const button = event.target.closest("[data-parts-condition]");
     if (!button) return;
     condition = button.dataset.partsCondition || "all";
+    hidePhonesView();
     render();
   });
 
-  document.getElementById("parts-guide-search")?.addEventListener("input", render);
-  document.getElementById("btn-parts-guide-print")?.addEventListener("click", printRows);
+  document.getElementById("parts-guide-search")?.addEventListener("input", () => {
+    hidePhonesView();
+    render();
+  });
+  document.getElementById("btn-parts-guide-phones")?.addEventListener("click", showPhonesView);
+  document.getElementById("btn-parts-guide-phones-back")?.addEventListener("click", hidePhonesView);
+  document.getElementById("btn-parts-guide-phones-copy")?.addEventListener("click", copyPhones);
+  document.getElementById("btn-parts-guide-phones-print")?.addEventListener("click", printPhones);
 
-  window.DeanePartsGuide = { show, suppliers: SUPPLIERS, matches, printRows };
+  window.DeanePartsGuide = { show, suppliers: SUPPLIERS, matches, showPhonesView, copyPhones, printPhones };
 })();

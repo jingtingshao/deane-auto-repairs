@@ -3005,6 +3005,112 @@ label.check input {
   margin: 0;
 }
 
+.parts-guide-phones-view {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.9rem 1rem 1.1rem;
+}
+
+.parts-guide-phones-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 0 0.65rem;
+}
+
+.parts-guide-phones-title {
+  margin: 0 0 0.2rem;
+  font-size: 1.35rem;
+}
+
+.parts-guide-phones-meta {
+  margin: 0 0 0.85rem;
+}
+
+.parts-guide-phones-list .supplier {
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.parts-guide-phones-list .supplier:last-child {
+  border-bottom: 0;
+}
+
+.parts-guide-phones-list h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+}
+
+.parts-guide-phones-list .phone-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.15rem 0;
+}
+
+.parts-guide-phones-list .phone-row .label {
+  color: var(--muted, #555);
+  font-size: 0.92rem;
+}
+
+.parts-guide-phones-list .phone-row .phone {
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+  text-align: right;
+}
+
+.parts-guide-phones-list .phone-row a {
+  color: inherit;
+  text-decoration: none;
+}
+
+body.parts-guide-printing #app-shell > header,
+body.parts-guide-printing #app-shell > nav,
+body.parts-guide-printing .parts-guide-intro,
+body.parts-guide-printing .list-search,
+body.parts-guide-printing .parts-guide-filters,
+body.parts-guide-printing .parts-guide-toolbar,
+body.parts-guide-printing #parts-guide-list,
+body.parts-guide-printing .no-print {
+  display: none !important;
+}
+
+body.parts-guide-printing #parts-guide-section,
+body.parts-guide-printing #parts-guide-phones-view {
+  display: block !important;
+}
+
+body.parts-guide-printing #parts-guide-phones-view {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+@media print {
+  body.parts-guide-printing #app-shell > header,
+  body.parts-guide-printing #app-shell > nav,
+  body.parts-guide-printing .parts-guide-intro,
+  body.parts-guide-printing .list-search,
+  body.parts-guide-printing .parts-guide-filters,
+  body.parts-guide-printing .parts-guide-toolbar,
+  body.parts-guide-printing #parts-guide-list,
+  body.parts-guide-printing .no-print {
+    display: none !important;
+  }
+
+  body.parts-guide-printing #parts-guide-phones-view {
+    border: 0;
+    padding: 0;
+  }
+
+  .parts-guide-phones-list .supplier {
+    break-inside: avoid;
+  }
+}
+
 .parts-guide-filters button.active {
   background: var(--ink);
   color: #fff;
