@@ -8,9 +8,6 @@ module.exports = {
   phoneDisplay: "0800 625 9827",
   phoneTel: "08006259827",
   email: "admin@deaneauto.co.nz",
-  // Workshop inbox for booking / quote-accepted alerts. Kept on Gmail: SMTP sends from this
-  // account, and Gmail hides its own mail when admin@ forwards it back.
-  notifyEmail: "deaneautonz@gmail.com",
   hoursShort: "Mon–Sat 8:30am – 5:00pm",
   hoursSunday: "Sunday closed",
   gstNumber: "96-650-434",

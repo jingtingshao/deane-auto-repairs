@@ -18,9 +18,9 @@ console.log("FILE_HAS_BOM=" + (raw.charCodeAt(0) === 0xfeff));
 (async () => {
   try {
     const t = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
+      host: process.env.SMTP_HOST || "mail.1stdomains.co.nz",
+      port: Number(process.env.SMTP_PORT || 465),
+      secure: String(process.env.SMTP_SECURE || "true") !== "false",
       auth: { user, pass: cleaned },
     });
     await t.verify();

@@ -4273,7 +4273,7 @@ function siteLockGateHtml() {
   <main>
     <p class="mark">Deane<span>AUTO REPAIRS</span></p>
     <h1>Open soon</h1>
-    <p class="hours">Mon–Sat 8:30am – 5:30pm · Sunday closed</p>
+    <p class="hours">${business.hoursShort} · ${business.hoursSunday}</p>
     <a class="phone" href="tel:${phoneTel}">${phoneDisplay}</a>
     <p class="addr">${business.addressLine2}<br>${business.street}, ${business.suburb}, ${business.city}</p>
     <button type="button" class="staff" id="staff">Staff preview</button>
@@ -5011,7 +5011,7 @@ app.post("/api/booking", async (req, res) => {
       const mailer = createMailer();
       await mailer.sendMail({
         from: MAIL_FROM,
-        to: business.notifyEmail || business.email,
+        to: business.email,
         replyTo: email,
         subject,
         text,
@@ -7644,7 +7644,7 @@ async function notifyWorkshopQuoteAccepted(quote, invoice, job, req) {
   const mailer = createMailer();
   await mailer.sendMail({
     from: MAIL_FROM,
-    to: business.notifyEmail || business.email,
+    to: business.email,
     replyTo: quote.customerEmail || business.email,
     subject,
     text,
@@ -9938,7 +9938,7 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(
     smtpConfigured()
       ? `Email: SMTP ready (from ${MAIL_FROM})`
-      : "Email: not configured — copy .env.example to .env and add Gmail App Password"
+      : "Email: not configured — copy .env.example to .env and add the admin@ mailbox password"
   );
   console.log(
     websms.websmsConfigured()
