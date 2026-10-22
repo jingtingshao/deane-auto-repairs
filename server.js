@@ -254,18 +254,47 @@ const MAIL_FROM =
   process.env.SMTP_USER ||
   business.email;
 
-/** BCC workshop mailbox on customer emails; skip if already the To address. */
-function workshopBcc(to) {
+/** Workshop copy address for customer emails; skip if already the To address. */
+function workshopCopyTo(to) {
   const shop = String(business.email || "")
     .trim()
     .toLowerCase();
-  if (!shop) return undefined;
+  if (!shop) return "";
   const recipients = String(to || "")
     .split(",")
     .map((part) => part.trim().toLowerCase())
     .filter(Boolean);
-  if (recipients.includes(shop)) return undefined;
+  if (recipients.includes(shop)) return "";
   return business.email;
+}
+
+/**
+ * Send to the customer, then a separate To: workshop copy.
+ * BCC to the same mailbox as SMTP From often never lands in the inbox
+ * (1st Domains / many hosts); a second sendMail is reliable.
+ */
+async function sendCustomerMailWithWorkshopCopy(mailer, options) {
+  const info = await mailer.sendMail(options);
+  const copyTo = workshopCopyTo(options.to);
+  if (!copyTo) return info;
+  const subject = String(options.subject || "");
+  const copySubject = subject.startsWith("Copy — ")
+    ? subject
+    : `Copy — ${subject || "customer email"}`;
+  try {
+    await mailer.sendMail({
+      from: options.from,
+      to: copyTo,
+      replyTo: options.replyTo || business.email,
+      subject: copySubject,
+      text: options.text,
+      html: options.html,
+      attachments: options.attachments,
+    });
+  } catch (err) {
+    console.error("Workshop email copy failed:", err);
+  }
+  return info;
 }
 
 function smtpPass() {
@@ -5094,10 +5123,9 @@ async function sendBookingReceivedEmail({ name, email, vehicle, registration, pr
   `;
 
   const mailer = createMailer();
-  await mailer.sendMail({
+  await sendCustomerMailWithWorkshopCopy(mailer, {
     from: MAIL_FROM,
     to: email,
-    bcc: workshopBcc(email),
     replyTo: business.email,
     subject: `Booking request received — ${business.name}`,
     text,
@@ -6668,10 +6696,9 @@ async function sendWofReminderEmail({ customerId, vehicleId = "" }) {
 
   try {
     const mailer = createMailer();
-    await mailer.sendMail({
+    await sendCustomerMailWithWorkshopCopy(mailer, {
       from: MAIL_FROM,
       to,
-      bcc: workshopBcc(to),
       replyTo: process.env.SMTP_USER || MAIL_FROM,
       subject,
       text,
@@ -6751,10 +6778,9 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
 
   try {
     const mailer = createMailer();
-    const info = await mailer.sendMail({
+    const info = await sendCustomerMailWithWorkshopCopy(mailer, {
       from: MAIL_FROM,
       to,
-      bcc: workshopBcc(to),
       replyTo: process.env.SMTP_USER || MAIL_FROM,
       subject,
       text,
@@ -7417,10 +7443,9 @@ app.post("/api/billing/:id/email", requireAdmin, requireCurrentBillingIfTech, as
 
   try {
     const mailer = createMailer();
-    const info = await mailer.sendMail({
+    const info = await sendCustomerMailWithWorkshopCopy(mailer, {
       from: MAIL_FROM,
       to,
-      bcc: workshopBcc(to),
       replyTo: process.env.SMTP_USER || MAIL_FROM,
       subject,
       text,
