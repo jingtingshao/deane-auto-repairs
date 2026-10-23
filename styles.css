@@ -11,7 +11,7 @@
   --display: "Barlow Condensed", sans-serif;
   --body: "Source Sans 3", sans-serif;
   --mono: "DM Mono", monospace;
-  --header-h: 70px;
+  --header-h: 84px;
 }
 
 *,
@@ -113,7 +113,7 @@ a[href^="tel:"] {
   position: sticky;
   top: 0;
   z-index: 10;
-  height: 70px;
+  height: var(--header-h);
   background: var(--sign-navy);
   border-bottom: 0;
 }
@@ -134,24 +134,10 @@ a[href^="tel:"] {
   text-decoration: none;
 }
 
-.brand-deane {
-  color: #fff;
-  font: 29px "Kaushan Script", cursive;
-}
-
-.brand strong {
+.brand-logo {
   display: block;
-  font: 800 26px/1.05 var(--display);
-  letter-spacing: 0.06em;
-  color: var(--sign-yellow);
-}
-
-.brand small {
-  display: block;
-  margin-top: 4px;
-  font: 11px/1.2 var(--mono);
-  letter-spacing: 0.12em;
-  color: #fff;
+  width: auto;
+  height: calc(var(--header-h) - 12px);
 }
 
 .site-nav {
@@ -540,6 +526,15 @@ p {
 .service-price strong {
   font: 800 clamp(40px, 3vw, 52px) / 0.9 var(--display);
   color: var(--svc-ink);
+}
+
+.service-price-sub {
+  display: block;
+  margin-top: 10px;
+  font: 700 11px / 1.25 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--svc-muted);
 }
 
 .service-price-quote {
@@ -1155,11 +1150,7 @@ footer {
   :root {
     /* Keep side gutters on phones; calc() so width never falls back to full bleed */
     --shell: min(1180px, calc(100% - 48px));
-    --header-h: 70px;
-  }
-
-  .site-header {
-    height: 70px;
+    --header-h: 76px;
   }
 
   .nav-toggle {
@@ -1168,7 +1159,7 @@ footer {
 
   .site-nav {
     position: absolute;
-    top: calc(34px + 70px);
+    top: calc(34px + var(--header-h));
     left: 0;
     right: 0;
     display: none;
@@ -1303,10 +1294,6 @@ footer {
 
   .site-header .nav-cta {
     padding: 11px;
-  }
-
-  .brand strong {
-    font-size: 22px;
   }
 
   .booking h2,

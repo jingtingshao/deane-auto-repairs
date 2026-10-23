@@ -109,12 +109,85 @@ def make_sticker(qr_path: Path, out_path: Path) -> None:
     print(f"sticker {out_path.name}")
 
 
+TYRE_POSTER = "deane-tyre-99-poster.jpg"
+TYRE_SCALE = 2
+# Coordinates measured on the 725×1024 source poster.
+TYRE_QR_BOX = (535, 818, 697, 990)
+TYRE_PHONE_BAND = (20, 900, 506, 972)
+TYRE_PHONE_TEXT = (36, 908, 501, 964)
+TYRE_ADDRESS_CAP_H = 32
+TYRE_PHONE_TOP = 922
+TYRE_SUBLINE_XY = (47, 893)
+TYRE_SUBLINE_SIZE = 20
+TYRE_SUBLINE = "(NEXT TO BP PETROL STATION)"
+YELLOW = (255, 214, 0)
+
+
+def make_box_card(qr_path: Path, width: int, height: int, s: int) -> Image.Image:
+    card = Image.new("RGB", (width, height), NAVY)
+    draw = ImageDraw.Draw(card)
+    draw.rounded_rectangle((0, 0, width - 1, height - 1), radius=10 * s, fill=WHITE, outline=YELLOW, width=3 * s)
+    title = "SCAN TO BOOK"
+    url = "deaneauto.co.nz/book"
+    title_font = font(14 * s, bold=True)
+    url_font = font(10 * s, bold=True)
+    qr_px = 118 * s
+    qr = Image.open(qr_path).convert("RGB").resize((qr_px, qr_px), Image.Resampling.NEAREST)
+    t_box = draw.textbbox((0, 0), title, font=title_font)
+    u_box = draw.textbbox((0, 0), url, font=url_font)
+    title_h = t_box[3] - t_box[1]
+    url_h = u_box[3] - u_box[1]
+    gap = 5 * s
+    top = (height - (title_h + gap + qr_px + gap + url_h)) // 2
+    draw.text(((width - (t_box[2] - t_box[0])) / 2 - t_box[0], top - t_box[1]), title, fill=NAVY, font=title_font)
+    card.paste(qr, ((width - qr_px) // 2, top + title_h + gap))
+    url_y = top + title_h + gap + qr_px + gap
+    draw.text(((width - (u_box[2] - u_box[0])) / 2 - u_box[0], url_y - u_box[1]), url, fill=NAVY, font=url_font)
+    return card
+
+
+def tyre_poster(qr_path: Path) -> None:
+    s = TYRE_SCALE
+    src = Image.open(ADS_DIR / TYRE_POSTER).convert("RGB")
+    poster = src.resize((src.width * s, src.height * s), Image.Resampling.LANCZOS)
+    px = poster.load()
+
+    phone = poster.crop(tuple(v * s for v in TYRE_PHONE_TEXT))
+    # Yellow phone digits vs. navy background: the red channel works as an alpha mask.
+    mask = phone.getchannel("R").point(lambda v: max(0, min(255, (v - 20) * 255 // 190)))
+    ratio = TYRE_ADDRESS_CAP_H / (TYRE_PHONE_TEXT[3] - TYRE_PHONE_TEXT[1])
+    size = (round(phone.width * ratio), round(phone.height * ratio))
+    phone = phone.resize(size, Image.Resampling.LANCZOS)
+    mask = mask.resize(size, Image.Resampling.LANCZOS)
+
+    x0, y0, x1, y1 = (v * s for v in TYRE_PHONE_BAND)
+    draw = ImageDraw.Draw(poster)
+    for y in range(y0, y1):
+        row = sorted(px[x, y] for x in range(506 * s, 530 * s, 2))
+        draw.line((x0, y, x1, y), fill=row[len(row) // 2])
+    poster.paste(phone, (TYRE_PHONE_TEXT[0] * s, TYRE_PHONE_TOP * s), mask)
+
+    sx, sy = TYRE_SUBLINE_XY
+    sub_font = font(TYRE_SUBLINE_SIZE * s, bold=True)
+    box = draw.textbbox((0, 0), TYRE_SUBLINE, font=sub_font)
+    draw.text((sx * s - box[0], sy * s - box[1]), TYRE_SUBLINE, fill=WHITE, font=sub_font)
+
+    bx0, by0, bx1, by1 = (v * s for v in TYRE_QR_BOX)
+    card = make_box_card(qr_path, bx1 - bx0, by1 - by0, s)
+    poster.paste(card, (bx0, by0))
+
+    out = ADS_DIR / TYRE_POSTER.replace(".jpg", "-qr.png")
+    poster.save(out, "PNG")
+    print(f"poster {out.name} ({poster.width}x{poster.height})")
+
+
 def main() -> None:
     QR_DIR.mkdir(parents=True, exist_ok=True)
     general = QR_DIR / "book.png"
     make_sticker(general, QR_DIR / "scan-to-book-sticker.png")
     for poster_name, qr_name, place in POSTERS:
         overlay_poster(ADS_DIR / poster_name, QR_DIR / qr_name, ADS_DIR / poster_name.replace(".png", "-qr.png"), place)
+    tyre_poster(QR_DIR / "book-tyres.png")
 
 
 if __name__ == "__main__":
