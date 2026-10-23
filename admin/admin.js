@@ -1074,7 +1074,10 @@ const ACTIONS_FALLBACK = {
   standard: [
     { id: "oil", label: "Engine oil replaced (full synthetic as quoted)" },
     { id: "oil_filter", label: "Oil filter replaced" },
-    { id: "fluids", label: "Fluids checked / topped up" },
+    { id: "brake_fluid_topup", label: "Brake fluid topped up" },
+    { id: "coolant_topup", label: "Coolant topped up" },
+    { id: "power_steering_topup", label: "Power steering fluid topped up" },
+    { id: "washer", label: "Washer fluid topped up" },
     { id: "battery", label: "Battery tested" },
     { id: "air_filter", label: "Air filter checked" },
     { id: "exterior_lights", label: "Exterior lights & indicators checked" },

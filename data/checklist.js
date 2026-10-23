@@ -10,12 +10,12 @@ const GROUPS = [
     id: "service_basics",
     title: "Oil, fluids & filters",
     items: [
-      { code: "SVC-03", label: "Check / top-up brake fluid", packages: STD, wofFlag: true },
+      { code: "SVC-03", label: "Inspected brake fluid level", packages: STD, wofFlag: true },
       { code: "SVC-04", label: "Check brake fluid condition", packages: STD, wofFlag: true },
-      { code: "SVC-05", label: "Check / top-up coolant", packages: STD },
+      { code: "SVC-05", label: "Inspected coolant level", packages: STD },
       { code: "SVC-06", label: "Visual check radiator cap & hoses", packages: STD },
-      { code: "SVC-07", label: "Check / top-up power steering fluid", packages: STD },
-      { code: "SVC-08", label: "Check / top-up washer fluid", packages: STD },
+      { code: "SVC-07", label: "Inspected power steering fluid level", packages: STD },
+      { code: "SVC-08", label: "Inspected washer fluid level", packages: STD },
       { code: "SVC-09", label: "Visual check air filter", packages: STD },
       { code: "SVC-10", label: "Check transmission / gearbox fluid", packages: STD },
       { code: "SVC-11", label: "Check differential fluid", packages: STD },
@@ -80,7 +80,10 @@ const ACTIONS = {
   standard: [
     { id: "oil", label: "Engine oil replaced (full synthetic as quoted)" },
     { id: "oil_filter", label: "Oil filter replaced" },
-    { id: "fluids", label: "Fluids checked / topped up" },
+    { id: "brake_fluid_topup", label: "Brake fluid topped up" },
+    { id: "coolant_topup", label: "Coolant topped up" },
+    { id: "power_steering_topup", label: "Power steering fluid topped up" },
+    { id: "washer", label: "Washer fluid topped up" },
     { id: "battery", label: "Battery tested" },
     { id: "air_filter", label: "Air filter checked" },
     { id: "exterior_lights", label: "Exterior lights & indicators checked" },
@@ -110,6 +113,8 @@ const ACTIONS = {
     { id: "transmission", label: "Transmission service" },
     { id: "spark_plugs_replaced", label: "Spark plugs replaced" },
   ],
+  /** No longer offered in admin; kept so older reports still show these ticks */
+  legacy: [{ id: "fluids", label: "Fluids checked / topped up" }],
 };
 
 // Back-compat alias used by admin/report UIs

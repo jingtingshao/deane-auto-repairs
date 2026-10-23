@@ -5359,6 +5359,7 @@ app.get("/api/checklist", (req, res) => {
       premiumExtra: pkg === "premium" ? ACTIONS.premiumExtra : [],
       fullExtra: pkg === "premium" ? ACTIONS.premiumExtra : [],
       either: pkg === "basic" ? [] : ACTIONS.either,
+      legacy: ACTIONS.legacy,
     },
   });
 });

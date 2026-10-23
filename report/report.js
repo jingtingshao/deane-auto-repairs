@@ -123,6 +123,7 @@ function render(report, meta) {
     ...(meta.actions.standard || []),
     ...(meta.actions.premiumExtra || meta.actions.fullExtra || []),
     ...(meta.actions.either || []),
+    ...(meta.actions.legacy || []),
   ];
   const done = actionLabels.filter((a) => report.actionsDone?.[a.id]);
   const photos = Array.isArray(report.vehiclePhotos)
