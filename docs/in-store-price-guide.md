@@ -3,7 +3,7 @@
 **Internal / counter use.** Printable sheet: `preview/service-price-list.html`  
 Not a substitute for a job-specific quote. Confirm extras before work starts.
 
-**Deane Auto Repairs** · (Next to BP Petrol Station) · 63 Hayr Road, Three Kings, Auckland  
+**Deane Auto Repairs** · (Next to BP Petrol Station) · 63 Hayr Road, Mt Roskill, Auckland  
 **Phone:** 0800 625 9827 · **Email:** admin@deaneauto.co.nz  
 **Hours:** Mon–Sat 9:30am – 5:00pm · Sunday closed  
 GST included unless noted. GST 96-650-434.

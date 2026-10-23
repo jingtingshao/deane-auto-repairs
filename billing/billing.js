@@ -175,7 +175,7 @@ function render(doc) {
       </div>`;
 
   const shopName = shop.name || "Deane Auto Repairs";
-  const shopStreet = [shop.street || "63 Hayr Road", shop.suburb || "Three Kings", shop.city || "Auckland"]
+  const shopStreet = [shop.street || "63 Hayr Road", shop.suburb || "Mt Roskill", shop.city || "Auckland"]
     .filter(Boolean)
     .join(", ");
   const shopPhone = shop.phoneDisplay || "0800 625 9827";

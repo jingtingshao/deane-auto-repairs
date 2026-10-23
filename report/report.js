@@ -162,7 +162,7 @@ function render(report, meta) {
         </dl>
         <div class="cover-shop">
           <strong>Deane Auto Repairs</strong><br />
-          63 Hayr Road, Three Kings, Auckland<br />
+          63 Hayr Road, Mt Roskill, Auckland<br />
           <a href="tel:08006259827">0800 625 9827</a> ·
           <a href="mailto:admin@deaneauto.co.nz">admin@deaneauto.co.nz</a><br />
           Mon–Sat 9:30am – 5:00pm

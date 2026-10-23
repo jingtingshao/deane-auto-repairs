@@ -7481,7 +7481,7 @@ app.post("/api/billing/:id/email", requireAdmin, requireCurrentBillingIfTech, as
       replyTo: process.env.SMTP_USER || MAIL_FROM,
       subject,
       text,
-      html: withCustomerEmailHtml(html, { logoWidth: 134 }),
+      html: withCustomerEmailHtml(html),
       attachments: withLogoAttachments([pdfAttachment]),
     });
 

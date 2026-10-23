@@ -3,7 +3,7 @@ module.exports = {
   name: "Deane Auto Repairs",
   addressLine2: "(Next to BP Petrol Station)",
   street: "63 Hayr Road",
-  suburb: "Three Kings",
+  suburb: "Mt Roskill",
   city: "Auckland",
   phoneDisplay: "0800 625 9827",
   phoneTel: "08006259827",
@@ -15,7 +15,7 @@ module.exports = {
   logoPath: "/images/deane-auto-logo.jpg",
   // Street pin only — do not search "Deane Auto Repairs" (Google matches competitor Dean Auto Repairs).
   mapsUrl:
-    "https://www.google.com/maps/place/63+Hayr+Road,+Three+Kings,+Auckland/@-36.9140797,174.7542951,18z",
+    "https://www.google.com/maps/place/63+Hayr+Road,+Mt+Roskill,+Auckland/@-36.9140797,174.7542951,18z",
   mapsLat: -36.9140797,
   mapsLng: 174.7542951,
   // Google review link for invoice QR / email button (GBP → Get more reviews).
