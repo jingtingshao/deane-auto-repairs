@@ -90,14 +90,35 @@ a[href^="tel:"] {
 }
 
 .top-strip-inner {
-  height: 34px;
+  min-height: 34px;
+  padding: 6px 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+}
+
+.top-strip-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.top-strip-hours,
+.top-strip-address {
+  display: block;
+  line-height: 1.25;
+}
+
+.top-strip-address {
+  padding-left: 14px;
+  opacity: 0.88;
 }
 
 .top-strip a {
   color: #fff;
+  flex-shrink: 0;
 }
 
 .top-strip i {
