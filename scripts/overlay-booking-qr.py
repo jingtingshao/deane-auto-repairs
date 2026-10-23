@@ -17,6 +17,15 @@ POSTERS = [
     ("deane-brake-pads-before-after-poster.png", "book-brakes.png", "photo-br"),
 ]
 
+# Tyre flyer: dashed QR slot on the source JPG (128×181 design coords), then upscaled.
+TYRE_FLYER = {
+    "src": "deane-tyre-from-99-poster.jpg",
+    "qr": "book-tyres.png",
+    "out": "deane-tyre-from-99-poster-qr.png",
+    "box": (93, 144, 30),  # x, y, size on original
+    "scale": 8,
+}
+
 
 def font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     names = (
@@ -109,12 +118,38 @@ def make_sticker(qr_path: Path, out_path: Path) -> None:
     print(f"sticker {out_path.name}")
 
 
+def overlay_tyre_flyer() -> None:
+    """Fill the dashed QR slot on the tyre flyer (coords on the low-res source)."""
+    src = ADS_DIR / TYRE_FLYER["src"]
+    qr_path = QR_DIR / TYRE_FLYER["qr"]
+    out_path = ADS_DIR / TYRE_FLYER["out"]
+    if not src.exists() or not qr_path.exists():
+        print(f"skip tyre flyer (missing {src.name if not src.exists() else qr_path.name})")
+        return
+    x, y, size = TYRE_FLYER["box"]
+    scale = int(TYRE_FLYER["scale"])
+    poster = Image.open(src).convert("RGB")
+    poster = poster.resize((poster.width * scale, poster.height * scale), Image.Resampling.LANCZOS)
+    inset = scale
+    qr_px = size * scale - inset * 2
+    left = x * scale + inset
+    top = y * scale + inset
+    plate_pad = max(1, scale * 3 // 4)
+    plate = Image.new("RGB", (qr_px + plate_pad * 2, qr_px + plate_pad * 2), WHITE)
+    qr = Image.open(qr_path).convert("RGB").resize((qr_px, qr_px), Image.Resampling.NEAREST)
+    poster.paste(plate, (left - plate_pad, top - plate_pad))
+    poster.paste(qr, (left, top))
+    poster.save(out_path, "PNG")
+    print(f"poster {out_path.name} (tyre-dashed-box)")
+
+
 def main() -> None:
     QR_DIR.mkdir(parents=True, exist_ok=True)
     general = QR_DIR / "book.png"
     make_sticker(general, QR_DIR / "scan-to-book-sticker.png")
     for poster_name, qr_name, place in POSTERS:
         overlay_poster(ADS_DIR / poster_name, QR_DIR / qr_name, ADS_DIR / poster_name.replace(".png", "-qr.png"), place)
+    overlay_tyre_flyer()
 
 
 if __name__ == "__main__":

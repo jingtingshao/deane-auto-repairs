@@ -14,6 +14,7 @@ const TARGETS = [
   { file: "book.png", path: "/book" },
   { file: "book-service-wof.png", path: "/book?help=service-wof" },
   { file: "book-brakes.png", path: "/book?help=brakes" },
+  { file: "book-tyres.png", path: "/book?help=tyres" },
 ];
 
 const QR_OPTS = {
