@@ -13,6 +13,7 @@ const BASE = String(business.website || "https://www.deaneauto.co.nz").replace(/
 const TARGETS = [
   { file: "book.png", path: "/book" },
   { file: "book-service-wof.png", path: "/book?help=service-wof" },
+  { file: "book-wof.png", path: "/book?help=wof" },
   { file: "book-brakes.png", path: "/book?help=brakes" },
   { file: "book-tyres.png", path: "/book?help=tyres" },
 ];
