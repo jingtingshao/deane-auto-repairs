@@ -1992,8 +1992,9 @@ document.getElementById("btn-billing-email").addEventListener("click", async () 
     });
     currentBill = result.doc || currentBill;
     fillForm(currentBill);
-    Admin.showBillingStatus(`Email sent to ${result.to}`);
-    alert(`Email sent to ${result.to}`);
+    const copyNote = Admin.workshopCopyMessage?.(result.workshopCopy) || "";
+    Admin.showBillingStatus(`Email sent to ${result.to}${copyNote ? ` · ${copyNote}` : ""}`);
+    alert(`Email sent to ${result.to}${copyNote ? `\n${copyNote}` : ""}`);
   } catch (err) {
     alert(err.message);
   } finally {

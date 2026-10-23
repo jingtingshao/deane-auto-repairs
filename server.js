@@ -254,47 +254,74 @@ const MAIL_FROM =
   process.env.SMTP_USER ||
   business.email;
 
-/** Workshop copy address for customer emails; skip if already the To address. */
-function workshopCopyTo(to) {
-  const shop = String(business.email || "")
-    .trim()
-    .toLowerCase();
-  if (!shop) return "";
+/**
+ * Where workshop filing copies go.
+ * Override on Render with MAIL_COPY_TO (comma-separated) if admin@ self-copies
+ * do not appear in the inbox — e.g. a personal Gmail used only for copies.
+ */
+function workshopCopyRecipients(to) {
+  const configured = String(process.env.MAIL_COPY_TO || business.email || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
   const recipients = String(to || "")
     .split(",")
     .map((part) => part.trim().toLowerCase())
     .filter(Boolean);
-  if (recipients.includes(shop)) return "";
-  return business.email;
+  return configured.filter((addr) => !recipients.includes(addr.toLowerCase()));
 }
 
 /**
- * Send to the customer, then a separate To: workshop copy.
- * BCC to the same mailbox as SMTP From often never lands in the inbox
- * (1st Domains / many hosts); a second sendMail is reliable.
+ * Send to the customer, then a separate filing copy To the workshop.
+ * Returns { info, workshopCopy } so the admin UI can confirm the copy.
  */
 async function sendCustomerMailWithWorkshopCopy(mailer, options) {
   const info = await mailer.sendMail(options);
-  const copyTo = workshopCopyTo(options.to);
-  if (!copyTo) return info;
-  const subject = String(options.subject || "");
-  const copySubject = subject.startsWith("Copy — ")
-    ? subject
-    : `Copy — ${subject || "customer email"}`;
+  const copies = workshopCopyRecipients(options.to);
+  if (!copies.length) {
+    return { info, workshopCopy: { ok: false, skipped: true, to: [] } };
+  }
+  const customerTo = String(options.to || "").trim();
+  const subject = String(options.subject || "customer email");
+  const copySubject = `Copy — sent to ${customerTo} — ${subject}`;
+  const copyText =
+    `This is a copy of the email sent to ${customerTo}.\n` +
+    `Subject: ${subject}\n\n` +
+    String(options.text || "");
+  const copyHtml =
+    `<p style="margin:0 0 12px;padding:10px 12px;background:#f3f6fa;border:1px solid #d7e0ea;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1a2332;">` +
+    `<strong>Copy</strong> of email sent to <strong>${escapeHtml(customerTo)}</strong>` +
+    `</p>` +
+    String(options.html || "");
   try {
-    await mailer.sendMail({
+    const copyInfo = await mailer.sendMail({
       from: options.from,
-      to: copyTo,
-      replyTo: options.replyTo || business.email,
+      to: copies.join(", "),
+      replyTo: customerTo || options.replyTo || business.email,
       subject: copySubject,
-      text: options.text,
-      html: options.html,
+      text: copyText,
+      html: copyHtml,
       attachments: options.attachments,
     });
+    return {
+      info,
+      workshopCopy: {
+        ok: true,
+        to: copies,
+        messageId: copyInfo.messageId || "",
+      },
+    };
   } catch (err) {
     console.error("Workshop email copy failed:", err);
+    return {
+      info,
+      workshopCopy: {
+        ok: false,
+        to: copies,
+        error: err.response || err.message || "Workshop copy failed",
+      },
+    };
   }
-  return info;
 }
 
 function smtpPass() {
@@ -4734,6 +4761,9 @@ app.use(express.static(ROOT, {
 }));
 
 app.get("/api/health", (_req, res) => {
+  const gitCommit = String(
+    process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || ""
+  ).trim();
   res.json({
     ok: true,
     shop: business.name,
@@ -4741,6 +4771,7 @@ app.get("/api/health", (_req, res) => {
     restoreWorkshop: true,
     siteLocked: Boolean(SITE_PIN),
     googleReviewConfigured: reviewConfigured(),
+    gitCommit: gitCommit ? gitCommit.slice(0, 7) : null,
   });
 });
 
@@ -5131,7 +5162,7 @@ async function sendBookingReceivedEmail({ name, email, vehicle, registration, pr
     text,
     html: withCustomerEmailHtml(html),
     attachments: withLogoAttachments(),
-  });
+  }); // workshop copy best-effort; booking flow continues either way
 }
 
 app.post("/api/booking", async (req, res) => {
@@ -6778,7 +6809,7 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
 
   try {
     const mailer = createMailer();
-    const info = await sendCustomerMailWithWorkshopCopy(mailer, {
+    const { info, workshopCopy } = await sendCustomerMailWithWorkshopCopy(mailer, {
       from: MAIL_FROM,
       to,
       replyTo: process.env.SMTP_USER || MAIL_FROM,
@@ -6802,6 +6833,7 @@ app.post("/api/reports/:id/email", requireAdmin, async (req, res) => {
       messageId: info.messageId,
       reportUrl: url,
       report: updated || report,
+      workshopCopy,
     });
   } catch (err) {
     console.error("Email send failed:", err);
@@ -7443,7 +7475,7 @@ app.post("/api/billing/:id/email", requireAdmin, requireCurrentBillingIfTech, as
 
   try {
     const mailer = createMailer();
-    const info = await sendCustomerMailWithWorkshopCopy(mailer, {
+    const { info, workshopCopy } = await sendCustomerMailWithWorkshopCopy(mailer, {
       from: MAIL_FROM,
       to,
       replyTo: process.env.SMTP_USER || MAIL_FROM,
@@ -7502,6 +7534,7 @@ app.post("/api/billing/:id/email", requireAdmin, requireCurrentBillingIfTech, as
       messageId: info.messageId,
       url,
       doc: withBillingTotals(updated || doc, true),
+      workshopCopy,
     });
   } catch (err) {
     console.error("Billing email failed:", err);

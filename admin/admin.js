@@ -336,6 +336,20 @@ function formatDateTimeShort(value) {
   return `${date} ${time}`;
 }
 
+function workshopCopyMessage(workshopCopy) {
+  if (!workshopCopy || workshopCopy.skipped) return "";
+  if (workshopCopy.ok) {
+    const to = Array.isArray(workshopCopy.to)
+      ? workshopCopy.to.join(", ")
+      : workshopCopy.to || "workshop";
+    return `Copy emailed to ${to}`;
+  }
+  if (workshopCopy.error) {
+    return `Workshop copy failed: ${workshopCopy.error}`;
+  }
+  return "";
+}
+
 window.DeaneAdmin = {
   api,
   showStatus,
@@ -343,6 +357,7 @@ window.DeaneAdmin = {
   escapeAttr,
   setSection,
   confirmPublicCustomerLink,
+  workshopCopyMessage,
   formatDateShort,
   formatDateTimeShort,
   sentenceCase,
@@ -1272,8 +1287,11 @@ document.getElementById("btn-email").addEventListener("click", async () => {
     });
     current = result.report || current;
     reportForm.elements.namedItem("status").value = current.status;
-    showStatus(`Email sent to ${result.to}`);
-    alert(`Email sent to ${result.to}\n\nReport link:\n${result.reportUrl}`);
+    const copyNote = window.DeaneAdmin.workshopCopyMessage(result.workshopCopy);
+    showStatus(`Email sent to ${result.to}${copyNote ? ` · ${copyNote}` : ""}`);
+    alert(
+      `Email sent to ${result.to}${copyNote ? `\n${copyNote}` : ""}\n\nReport link:\n${result.reportUrl}`
+    );
   } catch (err) {
     alert(err.message);
   } finally {
