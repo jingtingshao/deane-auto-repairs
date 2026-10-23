@@ -4673,6 +4673,17 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: false }));
 
+const NOINDEX_PREFIXES = ["/r", "/b", "/report", "/billing", "/uploads", "/admin", "/tech", "/api"];
+
+// Customer reports / quotes / invoices are private links; keep them out of search results.
+app.use((req, res, next) => {
+  const p = String(req.path || "");
+  if (NOINDEX_PREFIXES.some((prefix) => p === prefix || p.startsWith(`${prefix}/`))) {
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  }
+  next();
+});
+
 app.get("/api/site-lock/status", (_req, res) => {
   res.json({ locked: Boolean(SITE_PIN) });
 });

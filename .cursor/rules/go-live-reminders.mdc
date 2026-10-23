@@ -17,7 +17,9 @@ Remind the user to check whether Google has indexed the site:
 
 Done 24 Oct: site "Open in Google Maps" + `data/business.js` `mapsUrl` + JSON-LD `hasMap` now use the official GBP share link `https://maps.app.goo.gl/sbM5hQmmw5oGgNY77` (place ID `ChIJpcEa575HDW0RftiwMHU8Cf8`). GBP website / phone / hours checked and correct. Google review link already in `data/business.js` (`googleReviewUrl`, used on invoices / reports) — do not ask the user for it again.
 
-Still open: more GBP photos (listing has 2), optional `Disallow: /r/`, phone test of admin + SMTP test email.
+Also done 24 Oct: `server.js` sends `X-Robots-Tag: noindex, nofollow` on `/r`, `/b`, `/report`, `/billing`, `/uploads`, `/admin`, `/tech`, `/api` (private customer links stay out of Google; no `robots.txt` Disallow needed for `/r/`).
+
+Still open: more GBP photos (listing has 2), phone test of admin + SMTP test email.
 
 Once the user confirms indexing is OK, remove this "Pending reminder" section.
 
