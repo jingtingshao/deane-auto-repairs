@@ -13,14 +13,13 @@ module.exports = {
   gstNumber: "96-650-434",
   website: "https://www.deaneauto.co.nz",
   logoPath: "/images/deane-auto-logo.jpg",
-  // Street pin only — do not search "Deane Auto Repairs" (Google matches competitor Dean Auto Repairs).
-  mapsUrl:
-    "https://www.google.com/maps/place/63+Hayr+Road,+Mt+Roskill,+Auckland/@-36.9140797,174.7542951,18z",
+  // Official GBP share link — a plain "Deane Auto Repairs" search also matches competitor Dean Auto Repairs (Carr Rd).
+  mapsUrl: "https://maps.app.goo.gl/sbM5hQmmw5oGgNY77",
   mapsLat: -36.9140797,
   mapsLng: 174.7542951,
   // Google review link for invoice QR / email button (GBP → Get more reviews).
   // Override on Render with GOOGLE_REVIEW_URL if the share link changes.
-  googlePlaceId: "",
+  googlePlaceId: "ChIJpcEa575HDW0RftiwMHU8Cf8",
   googleReviewUrl: "https://g.page/r/CX7YsDB1PAn_ECE/review",
   bankAccountName: "Dreamworld Investments Limited",
   bankAccount: "02-0216-0104554-002",
