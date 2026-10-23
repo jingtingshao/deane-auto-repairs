@@ -14,6 +14,8 @@ const TARGETS = [
   { file: "book.png", path: "/book" },
   { file: "book-service-wof.png", path: "/book?help=service-wof" },
   { file: "book-wof.png", path: "/book?help=wof" },
+  { file: "book-basic-service.png", path: "/book?help=Basic%20Service" },
+  { file: "book-service.png", path: "/book?help=service" },
   { file: "book-brakes.png", path: "/book?help=brakes" },
   { file: "book-tyres.png", path: "/book?help=tyres" },
 ];
