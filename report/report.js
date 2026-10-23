@@ -106,9 +106,6 @@ function render(report, meta) {
   const defaults = meta.defaults || {};
   const checks = { ...defaults, ...(report.checks || {}) };
   const counts = { ok: 0, watch: 0, attention: 0, na: 0 };
-  Object.values(checks).forEach((c) => {
-    if (counts[c.status] != null) counts[c.status] += 1;
-  });
 
   const attentionItems = [];
   const watchItems = [];
@@ -116,6 +113,7 @@ function render(report, meta) {
     for (const item of group.items) {
       const state = checks[item.code];
       if (!state) continue;
+      if (counts[state.status] != null) counts[state.status] += 1;
       if (state.status === "attention") attentionItems.push({ item, state });
       else if (state.status === "watch") watchItems.push({ item, state });
     }

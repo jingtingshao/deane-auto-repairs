@@ -2,15 +2,14 @@
 
 const STD = ["standard", "premium"];
 const PREMIUM = ["premium"];
-const BASIC_CHECK_CODES = ["SVC-01", "SVC-02", "SVC-08"];
+const BASIC_CHECK_CODES = ["SVC-08"];
 
+/** Inspection items only (OK / Watch / Attention). Work performed (oil, filter, service light reset) lives in ACTIONS. */
 const GROUPS = [
   {
     id: "service_basics",
     title: "Oil, fluids & filters",
     items: [
-      { code: "SVC-01", label: "Change engine oil", packages: STD },
-      { code: "SVC-02", label: "Change engine oil filter", packages: STD },
       { code: "SVC-03", label: "Check / top-up brake fluid", packages: STD, wofFlag: true },
       { code: "SVC-04", label: "Check brake fluid condition", packages: STD, wofFlag: true },
       { code: "SVC-05", label: "Check / top-up coolant", packages: STD },
@@ -33,7 +32,6 @@ const GROUPS = [
       { code: "ELC-03", label: "Exterior lights & indicators", packages: STD, wofFlag: true },
       { code: "ELC-08", label: "Dashboard warning lights", packages: STD, wofFlag: true },
       { code: "ELC-04", label: "Check wiper blades", packages: STD, wofFlag: true },
-      { code: "ELC-05", label: "Service light reset (where possible)", packages: STD },
       { code: "ELC-06", label: "Visual check spark plugs", packages: PREMIUM },
       { code: "ELC-07", label: "Diagnostic scan", packages: PREMIUM },
     ],
