@@ -305,14 +305,75 @@
                 Close
               </button>
             </div>
-            <p class="checklist-swipe-hint">
-              On phones, swipe sideways to compare packages.
-            </p>
+            <div
+              class="compare-plans"
+              role="region"
+              aria-label="Basic, Standard and Premium service packages"
+            >
+              <article class="compare-plan">
+                <header class="compare-plan-head">
+                  <h3 class="compare-plan-name">Basic</h3>
+                  <p class="compare-plan-price">$99</p>
+                </header>
+                <ul class="compare-plan-list">
+                  <li>Engine oil &amp; filter change *</li>
+                </ul>
+                <a
+                  class="service-cta compare-plan-cta"
+                  href="#book"
+                  data-booking-type="Basic Service"
+                  >Book Basic <span aria-hidden="true">→</span></a
+                >
+              </article>
+
+              <article class="compare-plan is-featured">
+                <span class="compare-tag">Most popular</span>
+                <header class="compare-plan-head">
+                  <h3 class="compare-plan-name">Standard</h3>
+                  <p class="compare-plan-price">$199</p>
+                </header>
+                <ul class="compare-plan-list">
+                  <li>Engine oil &amp; filter change *</li>
+                  <li>Washer fluid top-up</li>
+                  <li>Service light reset (where possible)</li>
+                  <li>Brake fluid, coolant &amp; other fluid levels, oil leak check</li>
+                  <li>Battery test, lights &amp; dashboard warning lights</li>
+                  <li>Tyre pressures &amp; condition, steering &amp; CV boots</li>
+                  <li>Air filter, belts, wipers &amp; exhaust check</li>
+                  <li>Digital service report</li>
+                </ul>
+                <a
+                  class="service-cta compare-plan-cta"
+                  href="#book"
+                  data-booking-type="Standard Service"
+                  >Book Standard <span aria-hidden="true">→</span></a
+                >
+              </article>
+
+              <article class="compare-plan">
+                <header class="compare-plan-head">
+                  <h3 class="compare-plan-name">Premium / Euro</h3>
+                  <p class="compare-plan-price">$279</p>
+                </header>
+                <p class="compare-plan-lead">Everything in Standard, plus:</p>
+                <ul class="compare-plan-list">
+                  <li>Brakes, suspension &amp; road test</li>
+                  <li>Diagnostic scan</li>
+                </ul>
+                <a
+                  class="service-cta compare-plan-cta"
+                  href="#book"
+                  data-booking-type="Premium / European Service"
+                  >Book Premium <span aria-hidden="true">→</span></a
+                >
+              </article>
+            </div>
+
             <div
               class="compare-wrap"
               tabindex="0"
               role="region"
-              aria-label="Basic, Standard and Premium service comparison"
+              aria-label="Basic, Standard and Premium service comparison table"
             >
               <table class="compare-table">
                 <thead>

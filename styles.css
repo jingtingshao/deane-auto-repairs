@@ -717,8 +717,97 @@ button.see-details {
   font-size: 0.95rem;
 }
 
-.checklist-swipe-hint {
+/* Mobile package stack — shown below 900px; table stays for desktop */
+.compare-plans {
   display: none;
+  gap: 14px;
+}
+
+.compare-plan {
+  padding: 1rem 1.05rem 1.1rem;
+  border: 1px solid rgba(13, 43, 92, 0.15);
+  background: #fff;
+}
+
+.compare-plan.is-featured {
+  border-color: rgba(233, 163, 5, 0.55);
+  box-shadow: inset 0 4px 0 var(--sign-yellow, #e9a305);
+  background: #fffdf6;
+}
+
+.compare-plan .compare-tag {
+  margin: 0 0 0.55rem;
+}
+
+.compare-plan-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 0.75rem;
+}
+
+.compare-plan-name {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.55rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--sign-navy, #0d2b5c);
+  line-height: 1;
+}
+
+.compare-plan-price {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.85rem;
+  line-height: 1;
+  color: var(--sign-navy, #0d2b5c);
+}
+
+.compare-plan-lead {
+  margin: 0 0 0.45rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #687481;
+}
+
+.compare-plan-list {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.compare-plan-list li {
+  display: grid;
+  grid-template-columns: 1.1rem 1fr;
+  gap: 0.45rem;
+  align-items: start;
+}
+
+.compare-plan-list li::before {
+  content: "✓";
+  color: var(--sign-navy, #0d2b5c);
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.compare-plan-cta {
+  margin-top: 1rem;
+  --svc-cta-bg: var(--sign-navy, #0d2b5c);
+  --svc-cta-ink: #fff;
+}
+
+.compare-plan.is-featured .compare-plan-cta {
+  --svc-cta-bg: var(--sign-yellow, #e9a305);
+  --svc-cta-ink: var(--sign-navy, #0d2b5c);
 }
 
 .compare-wrap {
@@ -1267,18 +1356,12 @@ footer {
     padding: 22px 16px;
   }
 
-  .checklist-swipe-hint {
-    display: block;
-    margin: 0 0 0.75rem;
-    padding: 0.65rem 0.8rem;
-    background: rgba(13, 43, 92, 0.06);
-    color: var(--sign-navy, #0d2b5c);
-    font-size: 0.92rem;
-    font-weight: 600;
+  .compare-plans {
+    display: grid;
   }
 
   .checklist-details .compare-wrap {
-    box-shadow: inset -16px 0 14px -14px rgba(26, 35, 50, 0.2);
+    display: none;
   }
 
   .booking-form {
