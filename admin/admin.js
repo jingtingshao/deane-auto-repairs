@@ -1067,12 +1067,12 @@ function renderActions(r) {
 
 const ACTIONS_FALLBACK = {
   basic: [
-    { id: "oil", label: "Engine oil replaced (as quoted)" },
+    { id: "oil", label: "Engine oil replaced" },
     { id: "oil_filter", label: "Oil filter replaced" },
     { id: "washer", label: "Washer fluid topped up" },
   ],
   standard: [
-    { id: "oil", label: "Engine oil replaced (full synthetic as quoted)" },
+    { id: "oil", label: "Engine oil replaced" },
     { id: "oil_filter", label: "Oil filter replaced" },
     { id: "brake_fluid_topup", label: "Brake fluid topped up" },
     { id: "coolant_topup", label: "Coolant topped up" },
