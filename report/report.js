@@ -104,7 +104,8 @@ function render(report, meta) {
   reportEl.hidden = false;
 
   const defaults = meta.defaults || {};
-  const checks = { ...defaults, ...(report.checks || {}) };
+  const saved = report.checks || {};
+  const checks = Object.keys(saved).length ? saved : defaults;
   const counts = { ok: 0, watch: 0, attention: 0, na: 0 };
 
   const attentionItems = [];

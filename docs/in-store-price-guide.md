@@ -38,27 +38,29 @@ Oil & filter included up to **4L** (Standard / Premium) or **5L** (Diesel / 4WD)
 |-------|:-----:|:--------:|:---------------------------:|
 | Engine oil change * | ✓ | ✓ | ✓ |
 | Engine oil filter * | ✓ | ✓ | ✓ |
-| Brake fluid — level & condition | — | ✓ | ✓ |
+| Brake fluid level | — | ✓ | ✓ |
+| Brake fluid condition | — | — | ✓ |
 | Coolant — level & condition | — | ✓ | ✓ |
-| Radiator cap & hoses | — | ✓ | ✓ |
+| Radiator cap & hoses | — | — | ✓ |
 | Power steering fluid † | — | ✓ | ✓ |
 | Washer fluid top-up | — | ✓ | ✓ |
-| Transmission / gearbox fluid † | — | ✓ | ✓ |
-| Differential fluid † | — | ✓ | ✓ |
+| Transmission / gearbox fluid † | — | — | ✓ |
+| Differential fluid † | — | — | ✓ |
 | Engine / transmission oil leak inspection | — | ✓ | ✓ |
 
 ### Brakes, tyres & suspension
 | Check | Basic | Standard | Premium / Diesel / European |
 |-------|:-----:|:--------:|:---------------------------:|
-| Tyre pressure & condition | — | ✓ | ✓ |
-| Steering & CV boots | — | ✓ | ✓ |
-| Suspension inspection | — | — | ✓ |
+| Tyre pressures & tyre condition | — | ✓ | ✓ |
+| Steering system, including rack & linkages | — | ✓ | ✓ |
+| Suspension components — wear, damage & excessive play | — | — | ✓ |
 | Wheel bearings — excessive play | — | — | ✓ |
+| CV boots | — | — | ✓ |
 | Brake warning / ABS lights | — | ✓ | ✓ |
-| Brake inspection (wheels on) | — | — | ✓ |
+| Brake inspection (wheels on) — pads / discs visual check | — | ✓ | ✓ |
 | Detailed brake inspection (wheels off) | — | — | ✓ |
-| Front pads inspect / measure | — | — | ✓ |
-| Rear pads / shoes inspect / measure | — | — | ✓ |
+| Front pads inspect | — | — | ✓ |
+| Rear pads / shoes inspect | — | — | ✓ |
 | Front discs / rotors | — | — | ✓ |
 | Rear discs / drums | — | — | ✓ |
 | Brake lines / hoses (wheels off) | — | — | ✓ |
@@ -72,10 +74,8 @@ Oil & filter included up to **4L** (Standard / Premium) or **5L** (Diesel / 4WD)
 | Dashboard warning lights | — | ✓ | ✓ |
 | Service light reset | — | ✓ | ✓ |
 | Air filter visual | — | ✓ | ✓ |
-| Cabin / pollen filter check | — | — | ✓ |
 | Drive belts | — | ✓ | ✓ |
 | Exhaust visual | — | ✓ | ✓ |
-| Spark plug inspection † | — | — | ✓ |
 | Wiper blades | — | ✓ | ✓ |
 | Diagnostic scan | — | — | ✓ |
 | Road test (up to 50 km/h) | — | — | ✓ |
