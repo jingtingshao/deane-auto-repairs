@@ -19,7 +19,7 @@ Oil & filter change, top-ups and service light reset are **Work completed** tick
 - Brake fluid level; coolant, power steering and washer fluid levels  
 - Air filter; engine / transmission oil leak inspection  
 - Battery test, drive belts, exterior lights & indicators, dashboard warning lights, wiper blades  
-- Brake inspection (**wheels on**) — pads & discs visually checked; brake warning / ABS lights  
+- Brake inspection (**wheels on**) - pads & disc visually check; brake warning / ABS lights  
 - Tyre pressures set & tyre condition inspected  
 - Steering system, including rack & linkages  
 - Exhaust system  

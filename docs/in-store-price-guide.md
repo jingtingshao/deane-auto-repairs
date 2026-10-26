@@ -57,7 +57,7 @@ Oil & filter included up to **4L** (Standard / Premium) or **5L** (Diesel / 4WD)
 | Wheel bearings — excessive play | — | — | ✓ |
 | CV boots | — | — | ✓ |
 | Brake warning / ABS lights | — | ✓ | ✓ |
-| Brake inspection (wheels on) — pads & discs visually checked | — | ✓ | ✓ |
+| Brake inspection (wheels on) - pads & disc visually check | — | ✓ | ✓ |
 | Detailed brake inspection (wheels off) | — | — | ✓ |
 | Front pads inspect | — | — | ✓ |
 | Rear pads / shoes inspect | — | — | ✓ |

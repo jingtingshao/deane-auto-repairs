@@ -38,7 +38,7 @@ const GROUPS = [
     id: "brakes",
     title: "Brakes",
     items: [
-      { code: "BRK-01", label: "Brake inspection (wheels on) — pads & discs visually checked", packages: STD, wofFlag: true },
+      { code: "BRK-01", label: "Brake inspection (wheels on) - pads & disc visually check", packages: STD, wofFlag: true },
       { code: "BRK-02", label: "Brake warning / ABS lights", packages: STD, wofFlag: true },
       { code: "BRK-03", label: "Brake inspection (wheels off)", packages: PREMIUM, wofFlag: true },
       { code: "BRK-04", label: "Inspected front brake pads", packages: PREMIUM, wofFlag: true },
