@@ -1,4 +1,4 @@
-/** Checklist aligned to in-store price list — Basic $99 / Standard $199 / Premium $279 / Diesel & European $299 */
+/** Checklist aligned to in-store price list — Basic $99 / Standard $199 / Premium / Diesel / European $299 */
 
 const STD = ["standard", "premium"];
 const PREMIUM = ["premium"];
@@ -31,14 +31,14 @@ const GROUPS = [
       { code: "ELC-03", label: "Exterior lights & indicators", packages: STD, wofFlag: true },
       { code: "ELC-08", label: "Dashboard warning lights", packages: STD, wofFlag: true },
       { code: "ELC-04", label: "Inspected wiper blades", packages: STD, wofFlag: true },
-      { code: "ELC-07", label: "Diagnostic scan", packages: PREMIUM },
+      { code: "ELC-07", label: "Diagnostic scan — check for stored fault codes", packages: PREMIUM },
     ],
   },
   {
     id: "brakes",
     title: "Brakes",
     items: [
-      { code: "BRK-01", label: "Brake inspection (wheels on): pads / discs visually checked", packages: STD, wofFlag: true },
+      { code: "BRK-01", label: "Brake inspection (wheels on) — pads & discs visually checked", packages: STD, wofFlag: true },
       { code: "BRK-02", label: "Brake warning / ABS lights", packages: STD, wofFlag: true },
       { code: "BRK-03", label: "Brake inspection (wheels off)", packages: PREMIUM, wofFlag: true },
       { code: "BRK-04", label: "Inspected front brake pads", packages: PREMIUM, wofFlag: true },

@@ -1,8 +1,8 @@
 /** Fixed-price packages aligned to the public website.
- * Advertised package prices ($79 / $99 / $199 / $279 / $299 / $125) are GST-inclusive.
+ * Advertised package prices ($79 / $99 / $199 / $299 / $125) are GST-inclusive.
  * Line unitPriceIncl fields are stored excl. GST.
  * GST on advertised packages uses IRD 3/23 of the inclusive amount so totals
- * match the website ($79, $99, $125, $199, $279, $299, $278, $358, $378).
+ * match the website ($79, $99, $125, $199, $299, $278, $378).
  */
 
 const GST_RATE = 0.15;
@@ -13,13 +13,16 @@ const ADVERTISED_INCL = {
   wof: 79,
   basic: 99,
   standard: 199,
-  premium: 279,
+  premium: 299,
   diesel: 299,
   european: 299,
   labourHour: 125,
 };
 
-const ADVERTISED_INCL_LIST = Object.values(ADVERTISED_INCL);
+/** 279 = Premium price before 26 Oct 2026; still recognised so older invoices keep exact totals. */
+const LEGACY_ADVERTISED_INCL = [279];
+
+const ADVERTISED_INCL_LIST = [...new Set([...Object.values(ADVERTISED_INCL), ...LEGACY_ADVERTISED_INCL])];
 
 function toCents(n) {
   const value = Number(n);
@@ -225,7 +228,7 @@ const PRESETS = [
   {
     id: "premium",
     kind: "invoice",
-    label: "Premium / European $279",
+    label: "Premium / European $299",
     title: "Premium / European Service",
     lines: [
       { description: "Premium / European Service", qty: 1, unitPriceIncl: PRICE.premium },
@@ -271,7 +274,7 @@ const PRESETS = [
   {
     id: "premium_wof",
     kind: "invoice",
-    label: "Premium / European + WOF $358",
+    label: "Premium / European + WOF $378",
     title: "Premium / European Service + WOF",
     lines: [
       { description: "Premium / European Service", qty: 1, unitPriceIncl: PRICE.premium },
@@ -341,7 +344,7 @@ const QUICK_ADDS = [
     unitPriceIncl: PRICE.standard,
   },
   {
-    label: "+ Premium / European $279",
+    label: "+ Premium / European $299",
     description: "Premium / European Service",
     qty: 1,
     unitPriceIncl: PRICE.premium,

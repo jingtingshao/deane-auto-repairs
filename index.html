@@ -29,7 +29,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20261023logo" />
+    <link rel="stylesheet" href="styles.css?v=20261026header" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -81,21 +81,36 @@
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
 
-    <div class="top-strip">
-      <div class="shell top-strip-inner">
-        <span class="top-strip-meta">
-          <span class="top-strip-hours"><i></i> Open today · Mon–Sat 9:30am – 5:00pm</span>
-          <span class="top-strip-address">63 Hayr Road, Mt Roskill (next to BP service station)</span>
-        </span>
-        <a href="tel:08006259827">0800 625 9827</a>
-      </div>
-    </div>
-
     <header class="site-header" data-header>
       <div class="shell header-inner">
         <a class="brand" href="#top" aria-label="Deane Auto Repairs home">
           <img class="brand-logo" src="assets/logo-deane.png" alt="Deane Auto Repairs" width="473" height="334" />
         </a>
+        <a class="header-location" href="#location">
+          <svg class="header-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z" />
+          </svg>
+          <span>
+            <strong>63 Hayr Road, Mt Roskill</strong>
+            <small>(Next to BP service station)</small>
+          </span>
+        </a>
+        <nav class="site-nav" id="site-nav" aria-label="Main navigation" data-nav>
+          <a href="#wof">WOF</a>
+          <a href="#services">Services</a>
+          <a href="#tyres">Tyres</a>
+          <a href="#about">About</a>
+          <a href="#location">Contact</a>
+        </nav>
+        <div class="header-actions">
+          <a class="header-call" href="tel:08006259827" aria-label="Call 0800 625 9827">
+            <svg class="header-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1Z" />
+            </svg>
+            <span class="header-call-number">0800 625 9827</span>
+          </a>
+          <a class="header-book" href="#book">BOOK NOW</a>
+        </div>
         <button
           class="nav-toggle"
           type="button"
@@ -106,14 +121,6 @@
           <span class="sr-only">Menu</span>
           <span></span><span></span><span></span>
         </button>
-        <nav class="site-nav" id="site-nav" aria-label="Main navigation" data-nav>
-          <a href="#wof">WOF</a>
-          <a href="#services">Services</a>
-          <a href="#tyres">Tyres</a>
-          <a href="#about">About</a>
-          <a href="#location">Contact</a>
-          <a class="nav-cta" href="#book">BOOK NOW</a>
-        </nav>
       </div>
     </header>
 
@@ -339,7 +346,7 @@
                   <li>Brake fluid, coolant &amp; other fluid levels, oil leak check</li>
                   <li>Battery test, lights &amp; dashboard warning lights</li>
                   <li>Tyre pressures &amp; condition, steering system</li>
-                  <li>Brake check (wheels on) — pads &amp; discs visual</li>
+                  <li>Brake inspection (wheels on) — pads &amp; discs visually checked</li>
                   <li>Air filter, belts, wipers &amp; exhaust check</li>
                   <li>Digital service report</li>
                 </ul>
@@ -354,15 +361,15 @@
               <article class="compare-plan">
                 <header class="compare-plan-head">
                   <h3 class="compare-plan-name">Premium / Euro</h3>
-                  <p class="compare-plan-price">$279</p>
+                  <p class="compare-plan-price">$299</p>
                 </header>
                 <p class="compare-plan-lead">Everything in Standard, plus:</p>
                 <ul class="compare-plan-list">
-                  <li>Wheels-off brakes, suspension, wheel bearings &amp; CV boots</li>
+                  <li>Wheels-off brake inspection, suspension &amp; wheel bearing checks</li>
                   <li>Brake fluid condition, radiator cap &amp; hoses</li>
-                  <li>Transmission / gearbox &amp; differential fluid</li>
+                  <li>Transmission / gearbox &amp; differential fluid checks (where applicable)</li>
                   <li>Road test</li>
-                  <li>Diagnostic scan</li>
+                  <li>Diagnostic scan — check for stored fault codes</li>
                 </ul>
                 <a
                   class="service-cta compare-plan-cta"
@@ -388,7 +395,7 @@
                       <span class="compare-tag">Most popular</span>
                       Standard<br />$199
                     </th>
-                    <th scope="col">Premium / Euro<br />$279</th>
+                    <th scope="col">Premium / Euro<br />$299</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -449,7 +456,7 @@
                     <td><span class="tick" aria-label="Included">✓</span></td>
                   </tr>
                   <tr>
-                    <th scope="row">Brake check (wheels on) — pads &amp; discs visual</th>
+                    <th scope="row">Brake inspection (wheels on) — pads &amp; discs visually checked</th>
                     <td><span class="dash" aria-label="Not included">—</span></td>
                     <td class="is-featured">
                       <span class="tick" aria-label="Included">✓</span>
@@ -457,7 +464,7 @@
                     <td><span class="tick" aria-label="Included">✓</span></td>
                   </tr>
                   <tr>
-                    <th scope="row">Wheels-off brakes, suspension, wheel bearings, CV boots &amp; road test</th>
+                    <th scope="row">Wheels-off brake inspection, suspension &amp; wheel bearing checks</th>
                     <td><span class="dash" aria-label="Not included">—</span></td>
                     <td class="is-featured"><span class="dash" aria-label="Not included">—</span></td>
                     <td><span class="tick" aria-label="Included">✓</span></td>
@@ -469,13 +476,19 @@
                     <td><span class="tick" aria-label="Included">✓</span></td>
                   </tr>
                   <tr>
-                    <th scope="row">Transmission / gearbox &amp; differential fluid</th>
+                    <th scope="row">Transmission / gearbox &amp; differential fluid checks (where applicable)</th>
                     <td><span class="dash" aria-label="Not included">—</span></td>
                     <td class="is-featured"><span class="dash" aria-label="Not included">—</span></td>
                     <td><span class="tick" aria-label="Included">✓</span></td>
                   </tr>
                   <tr>
-                    <th scope="row">Diagnostic scan</th>
+                    <th scope="row">Road test</th>
+                    <td><span class="dash" aria-label="Not included">—</span></td>
+                    <td class="is-featured"><span class="dash" aria-label="Not included">—</span></td>
+                    <td><span class="tick" aria-label="Included">✓</span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Diagnostic scan — check for stored fault codes</th>
                     <td><span class="dash" aria-label="Not included">—</span></td>
                     <td class="is-featured"><span class="dash" aria-label="Not included">—</span></td>
                     <td><span class="tick" aria-label="Included">✓</span></td>

@@ -217,6 +217,83 @@ a[href^="tel:"] {
   background: #fff;
 }
 
+.header-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  fill: var(--sign-yellow);
+}
+
+.header-location {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 18px;
+  border-left: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff;
+  line-height: 1.25;
+  text-decoration: none;
+}
+
+.header-location strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.header-location small {
+  display: block;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.site-header .site-nav {
+  margin-left: auto;
+  gap: 22px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.site-header .header-call {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 18px;
+  border-right: 1px solid rgba(255, 255, 255, 0.22);
+  color: var(--sign-yellow);
+  font: 700 24px var(--display);
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.header-book {
+  padding: 12px 20px;
+  border-radius: 2px;
+  background: var(--sign-yellow);
+  color: var(--navy);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.header-book:hover,
+.header-book:focus-visible {
+  filter: brightness(1.08);
+}
+
+@media (max-width: 1100px) {
+  .header-location {
+    display: none;
+  }
+}
+
 .hero {
   position: relative;
   display: grid;
@@ -1269,7 +1346,7 @@ footer {
 
   .site-nav {
     position: absolute;
-    top: calc(34px + var(--header-h));
+    top: 100%;
     left: 0;
     right: 0;
     display: none;
@@ -1295,6 +1372,28 @@ footer {
     margin-top: 0.5rem;
     text-align: center;
     justify-content: center;
+  }
+
+  .header-actions {
+    margin-left: auto;
+    gap: 10px;
+  }
+
+  .site-header .header-call {
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+  }
+
+  .header-call-number {
+    display: none;
+  }
+
+  .header-book {
+    padding: 11px 14px;
+    font-size: 13px;
   }
 
   .hero {
@@ -1398,6 +1497,29 @@ footer {
 
   .site-header .nav-cta {
     padding: 11px;
+  }
+
+  .header-inner {
+    gap: 0.5rem;
+  }
+
+  .brand-logo {
+    height: 52px;
+  }
+
+  .header-actions {
+    gap: 8px;
+  }
+
+  .site-header .header-call,
+  .nav-toggle {
+    width: 40px;
+    height: 40px;
+  }
+
+  .header-book {
+    padding: 10px 12px;
+    font-size: 12px;
   }
 
   .booking h2,

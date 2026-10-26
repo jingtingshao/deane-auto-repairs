@@ -20,7 +20,7 @@ This list matches the internal service price list (FINAL). Premium, Diesel / 4WD
 | WOF recheck (repairs done here) | Free | — | — |
 | Basic (petrol oil & filter) | $99 | — | Oil & filter change only — no safety checks, top-ups, service light reset or digital report |
 | Standard (petrol) | $199 | ~1 hour | Standard |
-| Premium (petrol) | $279 | ~1.5 hours | Premium |
+| Premium (petrol) | $299 | ~1.5 hours | Premium |
 | Diesel / 4WD | $299 | ~1.5 hours | Premium + diesel / 4WD checks |
 | European | $299 | ~1.5 hours | Premium + European checks |
 | Pre-purchase inspection | $199 | — | Written report with photos |
@@ -57,7 +57,7 @@ Oil & filter included up to **4L** (Standard / Premium) or **5L** (Diesel / 4WD)
 | Wheel bearings — excessive play | — | — | ✓ |
 | CV boots | — | — | ✓ |
 | Brake warning / ABS lights | — | ✓ | ✓ |
-| Brake inspection (wheels on) — pads / discs visual check | — | ✓ | ✓ |
+| Brake inspection (wheels on) — pads & discs visually checked | — | ✓ | ✓ |
 | Detailed brake inspection (wheels off) | — | — | ✓ |
 | Front pads inspect | — | — | ✓ |
 | Rear pads / shoes inspect | — | — | ✓ |
@@ -77,7 +77,7 @@ Oil & filter included up to **4L** (Standard / Premium) or **5L** (Diesel / 4WD)
 | Drive belts | — | ✓ | ✓ |
 | Exhaust visual | — | ✓ | ✓ |
 | Wiper blades | — | ✓ | ✓ |
-| Diagnostic scan | — | — | ✓ |
+| Diagnostic scan — check for stored fault codes | — | — | ✓ |
 | Road test (up to 50 km/h) | — | — | ✓ |
 | Digital service report | — | ✓ | ✓ |
 
