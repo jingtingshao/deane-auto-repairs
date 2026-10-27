@@ -92,6 +92,13 @@ body[data-role="technician"] [data-admin-only] {
   font-size: 0.92rem;
 }
 
+.login-card .button.ghost {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-weight: 600;
+}
+
 input,
 select,
 textarea,

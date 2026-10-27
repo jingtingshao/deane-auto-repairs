@@ -47,6 +47,7 @@ const {
   reviewConfigured,
 } = require("./data/google-review");
 const { readJsonArray, writeJsonArray } = require("./data/json-store");
+const deviceAuth = require("./data/device-auth");
 const { blockedStaticPath, safeUploadPath, UPLOAD_EXTS } = require("./data/static-guard");
 const {
   todayIso,
@@ -241,6 +242,7 @@ const PART_AUDIT_FILE = path.join(DATA_DIR, "part-audit-log.json");
 const SMS_INBOUND_FILE = path.join(DATA_DIR, "sms-inbound.json");
 const SMS_LOG_FILE = path.join(DATA_DIR, "sms-log.json");
 const REFERRALS_FILE = path.join(DATA_DIR, "referrals.json");
+const TRUSTED_DEVICES_FILE = path.join(DATA_DIR, "trusted-devices.json");
 const UPLOADS_DIR = (() => {
   const raw = String(process.env.UPLOADS_DIR || "").trim();
   if (raw && isWritableDir(path.resolve(raw))) return path.resolve(raw);
@@ -369,6 +371,7 @@ for (const file of [
   SMS_INBOUND_FILE,
   SMS_LOG_FILE,
   REFERRALS_FILE,
+  TRUSTED_DEVICES_FILE,
 ]) {
   if (!fs.existsSync(file)) writeJsonArray(file, []);
 }
@@ -4276,6 +4279,123 @@ const adminSessions = new Map();
 const siteSessions = new Map();
 const loginAttempts = new Map();
 
+function deviceVerifyEnabled() {
+  const raw = String(process.env.ADMIN_DEVICE_VERIFY || "")
+    .trim()
+    .toLowerCase();
+  if (raw === "0" || raw === "false" || raw === "off" || raw === "no") return false;
+  return true;
+}
+
+function deviceCookieHeader(req, deviceId, maxAgeMs) {
+  return sessionCookieHeader(req, deviceAuth.DEVICE_COOKIE, deviceId, maxAgeMs);
+}
+
+function readDeviceId(req) {
+  return String(parseCookies(req.headers.cookie)[deviceAuth.DEVICE_COOKIE] || "").trim();
+}
+
+function setStaffCookies(res, req, { sessionToken, deviceId }) {
+  const cookies = [adminCookieHeader(req, sessionToken, ADMIN_SESSION_MS)];
+  if (deviceId) {
+    cookies.push(deviceCookieHeader(req, deviceId, deviceAuth.DEVICE_TRUST_MS));
+  }
+  res.setHeader("Set-Cookie", cookies);
+}
+
+async function sendDeviceVerifyEmail({ code, username, label, ip }) {
+  const mailer = createMailer();
+  if (!mailer) {
+    const err = new Error("Email is not configured on this server.");
+    err.status = 503;
+    throw err;
+  }
+  const to = business.email;
+  const payload = deviceAuth.buildVerifyEmail({ code, username, label, ip });
+  await mailer.sendMail({
+    from: MAIL_FROM,
+    to,
+    subject: payload.subject,
+    text: payload.text,
+    html: payload.html,
+  });
+  return to;
+}
+
+async function beginDeviceChallenge(req, res, { role, loginName }) {
+  const ip = clientIp(req);
+  const deviceId = readDeviceId(req);
+  const label = deviceAuth.browserLabel(req.get("user-agent"));
+
+  if (!smtpConfigured()) {
+    if (isProduction()) {
+      return res.status(503).json({
+        error:
+          "New device sign-in needs email, but SMTP is not configured. Set SMTP on Render, or temporarily set ADMIN_DEVICE_VERIFY=0.",
+      });
+    }
+    const trustId = deviceId || deviceAuth.newDeviceId();
+    try {
+      deviceAuth.touchTrustedDevice(TRUSTED_DEVICES_FILE, loginName, trustId, { ip, label });
+    } catch (err) {
+      console.error("Could not save trusted device:", err);
+    }
+    const token = createAdminSession(role, loginName);
+    setStaffCookies(res, req, { sessionToken: token, deviceId: trustId });
+    console.warn(
+      `Device email check skipped (SMTP off) — trusted ${loginName} on ${label} for local/dev.`
+    );
+    return res.json({ ok: true, role, username: loginName, deviceTrusted: true });
+  }
+
+  const { challenge, code } = deviceAuth.createChallenge({
+    username: loginName,
+    role,
+    deviceId,
+    ip,
+    userAgent: req.get("user-agent"),
+    emailTo: business.email,
+  });
+
+  try {
+    await sendDeviceVerifyEmail({
+      code,
+      username: loginName,
+      label: challenge.label,
+      ip,
+    });
+  } catch (err) {
+    console.error("Device verify email failed:", err);
+    return res.status(503).json({
+      error:
+        err.message ||
+        "Could not send the verification email. Check SMTP, or set ADMIN_DEVICE_VERIFY=0 temporarily.",
+    });
+  }
+
+  return res.json({
+    ok: true,
+    requiresDeviceCode: true,
+    challengeId: challenge.id,
+    emailHint: deviceAuth.maskEmail(business.email),
+    expiresInSeconds: Math.round(deviceAuth.CODE_TTL_MS / 1000),
+  });
+}
+
+function finishTrustedLogin(req, res, { role, loginName, deviceId }) {
+  const ip = clientIp(req);
+  const label = deviceAuth.browserLabel(req.get("user-agent"));
+  const trustId = deviceId || readDeviceId(req) || deviceAuth.newDeviceId();
+  try {
+    deviceAuth.touchTrustedDevice(TRUSTED_DEVICES_FILE, loginName, trustId, { ip, label });
+  } catch (err) {
+    console.error("Could not save trusted device:", err);
+  }
+  const token = createAdminSession(role, loginName);
+  setStaffCookies(res, req, { sessionToken: token, deviceId: trustId });
+  return res.json({ ok: true, role, username: loginName, deviceTrusted: true });
+}
+
 function clientIp(req) {
   return String(req.ip || req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "")
     .split(",")[0]
@@ -5368,7 +5488,7 @@ app.get("/api/checklist", (req, res) => {
   });
 });
 
-app.post("/api/admin/login", (req, res) => {
+app.post("/api/admin/login", async (req, res) => {
   const ip = clientIp(req);
   const wait = loginBlockedSeconds(ip);
   if (wait > 0) {
@@ -5400,9 +5520,83 @@ app.post("/api/admin/login", (req, res) => {
     return res.status(401).json({ error: "Wrong username or password" });
   }
   clearLoginFailures(ip);
-  const token = createAdminSession(role, loginName);
-  res.setHeader("Set-Cookie", adminCookieHeader(req, token, ADMIN_SESSION_MS));
-  res.json({ ok: true, role, username: loginName });
+
+  const deviceId = readDeviceId(req);
+  const trusted =
+    deviceVerifyEnabled() &&
+    deviceId &&
+    deviceAuth.isDeviceTrusted(TRUSTED_DEVICES_FILE, loginName, deviceId);
+
+  if (!deviceVerifyEnabled() || trusted) {
+    return finishTrustedLogin(req, res, { role, loginName, deviceId });
+  }
+  return beginDeviceChallenge(req, res, { role, loginName });
+});
+
+app.post("/api/admin/login/verify-device", (req, res) => {
+  const ip = clientIp(req);
+  const wait = loginBlockedSeconds(ip);
+  if (wait > 0) {
+    res.setHeader("Retry-After", String(wait));
+    return res.status(429).json({
+      error: "Too many sign-in attempts. Try again in 15 minutes.",
+    });
+  }
+  const challengeId = String(req.body?.challengeId || "").trim();
+  const code = String(req.body?.code || "").trim();
+  const result = deviceAuth.verifyChallengeCode(challengeId, code);
+  if (!result.ok) {
+    recordLoginFailure(ip);
+    return res.status(401).json({ error: result.error || "Wrong code" });
+  }
+  clearLoginFailures(ip);
+  return finishTrustedLogin(req, res, {
+    role: result.role,
+    loginName: result.username,
+    deviceId: result.deviceId,
+  });
+});
+
+app.post("/api/admin/login/resend-device", async (req, res) => {
+  const ip = clientIp(req);
+  const wait = loginBlockedSeconds(ip);
+  if (wait > 0) {
+    res.setHeader("Retry-After", String(wait));
+    return res.status(429).json({
+      error: "Too many sign-in attempts. Try again in 15 minutes.",
+    });
+  }
+  const challengeId = String(req.body?.challengeId || "").trim();
+  const challenge = deviceAuth.getChallenge(challengeId);
+  if (!challenge) {
+    return res.status(400).json({ error: "That code has expired. Sign in again." });
+  }
+  const cooldown = deviceAuth.canResend(challenge);
+  if (!cooldown.ok) {
+    return res.status(429).json({
+      error: `Wait ${cooldown.waitSeconds}s before resending.`,
+      waitSeconds: cooldown.waitSeconds,
+    });
+  }
+  const code = deviceAuth.refreshChallengeCode(challenge);
+  try {
+    await sendDeviceVerifyEmail({
+      code,
+      username: challenge.username,
+      label: challenge.label,
+      ip: challenge.ip || ip,
+    });
+  } catch (err) {
+    console.error("Device verify resend failed:", err);
+    return res.status(503).json({
+      error: err.message || "Could not resend the verification email.",
+    });
+  }
+  return res.json({
+    ok: true,
+    emailHint: deviceAuth.maskEmail(business.email),
+    expiresInSeconds: Math.round(deviceAuth.CODE_TTL_MS / 1000),
+  });
 });
 
 app.post("/api/admin/logout", (req, res) => {
@@ -10306,6 +10500,15 @@ app.listen(PORT, "0.0.0.0", () => {
     smtpConfigured()
       ? `Email: SMTP ready (from ${MAIL_FROM})`
       : "Email: not configured — copy .env.example to .env and add the admin@ mailbox password"
+  );
+  console.log(
+    !deviceVerifyEnabled()
+      ? "Device lock: OFF (ADMIN_DEVICE_VERIFY=0)"
+      : smtpConfigured()
+        ? "Device lock: ON — new computers need an email code (admin@)"
+        : isProduction()
+          ? "Device lock: ON but SMTP missing — new computers cannot sign in until SMTP works"
+          : "Device lock: ON (local/dev without SMTP auto-trusts this computer)"
   );
   console.log(
     websms.websmsConfigured()

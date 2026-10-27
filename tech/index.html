@@ -10,20 +10,36 @@
   <body>
     <main class="wrap">
       <section id="login-view" class="card">
-        <h1>Technician uploads</h1>
-        <p class="muted">Sign in with <strong>deane01</strong> or <strong>deane02</strong>, or admin username <strong>admin</strong> and the admin PIN.</p>
-        <form id="login-form" class="stack">
-          <label>
-            Username
-            <input id="username" name="username" type="text" autocomplete="username" placeholder="deane01, deane02, or admin" />
-          </label>
-          <label>
-            Password
-            <input id="pin" type="password" autocomplete="current-password" required />
-          </label>
-          <button type="submit">Sign in</button>
-          <p id="login-error" class="error" hidden></p>
-        </form>
+        <div id="login-password-panel">
+          <h1>Technician uploads</h1>
+          <p class="muted">Sign in with <strong>deane01</strong> or <strong>deane02</strong>, or admin username <strong>admin</strong> and the admin PIN.</p>
+          <form id="login-form" class="stack">
+            <label>
+              Username
+              <input id="username" name="username" type="text" autocomplete="username" placeholder="deane01, deane02, or admin" />
+            </label>
+            <label>
+              Password
+              <input id="pin" type="password" autocomplete="current-password" required />
+            </label>
+            <button type="submit">Sign in</button>
+            <p id="login-error" class="error" hidden></p>
+          </form>
+        </div>
+        <div id="login-device-panel" hidden>
+          <h1>Check your email</h1>
+          <p id="device-verify-hint" class="muted">This computer is new. We sent a 6-digit code to the workshop email.</p>
+          <form id="device-verify-form" class="stack">
+            <label>
+              Verification code
+              <input id="device-code" name="code" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="8" required />
+            </label>
+            <button type="submit">Verify and sign in</button>
+            <button type="button" id="device-resend" class="ghost">Resend code</button>
+            <button type="button" id="device-cancel" class="ghost">Back</button>
+            <p id="device-verify-error" class="error" hidden></p>
+          </form>
+        </div>
       </section>
 
       <section id="jobs-view" class="card" hidden>
@@ -66,6 +82,6 @@
       </section>
     </main>
 
-    <script src="tech.js?v=20260905staffrole"></script>
+    <script src="tech.js?v=20261027deviceverify"></script>
   </body>
 </html>

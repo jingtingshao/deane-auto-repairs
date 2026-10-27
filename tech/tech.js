@@ -36,10 +36,42 @@ function showStatus(text) {
   }, 2500);
 }
 
+let deviceChallengeId = "";
+
+function showPasswordLogin() {
+  const passwordPanel = document.getElementById("login-password-panel");
+  const devicePanel = document.getElementById("login-device-panel");
+  if (passwordPanel) passwordPanel.hidden = false;
+  if (devicePanel) devicePanel.hidden = true;
+  deviceChallengeId = "";
+  const codeInput = document.getElementById("device-code");
+  if (codeInput) codeInput.value = "";
+  const deviceError = document.getElementById("device-verify-error");
+  if (deviceError) deviceError.hidden = true;
+}
+
+function showDeviceVerify(data) {
+  const passwordPanel = document.getElementById("login-password-panel");
+  const devicePanel = document.getElementById("login-device-panel");
+  if (passwordPanel) passwordPanel.hidden = true;
+  if (devicePanel) devicePanel.hidden = false;
+  deviceChallengeId = String(data?.challengeId || "");
+  const hint = document.getElementById("device-verify-hint");
+  if (hint) {
+    hint.textContent = `This computer is new. We sent a 6-digit code to ${data?.emailHint || "the workshop email"}. Enter it below to finish signing in.`;
+  }
+  const codeInput = document.getElementById("device-code");
+  if (codeInput) {
+    codeInput.value = "";
+    codeInput.focus();
+  }
+}
+
 function showLogin() {
   loginView.hidden = false;
   jobsView.hidden = true;
   jobView.hidden = true;
+  showPasswordLogin();
 }
 
 function showJobs() {
@@ -151,16 +183,20 @@ async function uploadPhotos(type, files) {
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   loginError.hidden = true;
-    const username = document.getElementById("username")?.value.trim() || "";
-    const pin = document.getElementById("pin").value.trim();
-    const submit = loginForm.querySelector('button[type="submit"]');
-    submit.disabled = true;
-    submit.textContent = "Signing in…";
-    try {
-      await api("/api/admin/login", {
-        method: "POST",
-        body: JSON.stringify({ username, password: pin, pin }),
-      });
+  const username = document.getElementById("username")?.value.trim() || "";
+  const pin = document.getElementById("pin").value.trim();
+  const submit = loginForm.querySelector('button[type="submit"]');
+  submit.disabled = true;
+  submit.textContent = "Signing in…";
+  try {
+    const data = await api("/api/admin/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password: pin, pin }),
+    });
+    if (data.requiresDeviceCode) {
+      showDeviceVerify(data);
+      return;
+    }
     await loadJobs();
     showJobs();
   } catch (err) {
@@ -170,6 +206,66 @@ loginForm.addEventListener("submit", async (event) => {
     submit.disabled = false;
     submit.textContent = "Sign in";
   }
+});
+
+document.getElementById("device-verify-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const deviceError = document.getElementById("device-verify-error");
+  if (deviceError) deviceError.hidden = true;
+  const code = document.getElementById("device-code")?.value.trim() || "";
+  const form = document.getElementById("device-verify-form");
+  const submit = form?.querySelector('button[type="submit"]');
+  if (submit) {
+    submit.disabled = true;
+    submit.textContent = "Verifying…";
+  }
+  try {
+    await api("/api/admin/login/verify-device", {
+      method: "POST",
+      body: JSON.stringify({ challengeId: deviceChallengeId, code }),
+    });
+    showPasswordLogin();
+    await loadJobs();
+    showJobs();
+  } catch (err) {
+    if (deviceError) {
+      deviceError.hidden = false;
+      deviceError.textContent = err.message;
+    }
+  } finally {
+    if (submit) {
+      submit.disabled = false;
+      submit.textContent = "Verify and sign in";
+    }
+  }
+});
+
+document.getElementById("device-resend")?.addEventListener("click", async () => {
+  const deviceError = document.getElementById("device-verify-error");
+  if (deviceError) deviceError.hidden = true;
+  const btn = document.getElementById("device-resend");
+  if (btn) btn.disabled = true;
+  try {
+    const data = await api("/api/admin/login/resend-device", {
+      method: "POST",
+      body: JSON.stringify({ challengeId: deviceChallengeId }),
+    });
+    if (deviceError) {
+      deviceError.hidden = false;
+      deviceError.textContent = `Code sent again to ${data.emailHint || "workshop email"}.`;
+    }
+  } catch (err) {
+    if (deviceError) {
+      deviceError.hidden = false;
+      deviceError.textContent = err.message;
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+});
+
+document.getElementById("device-cancel")?.addEventListener("click", () => {
+  showPasswordLogin();
 });
 
 document.getElementById("btn-logout").addEventListener("click", async () => {

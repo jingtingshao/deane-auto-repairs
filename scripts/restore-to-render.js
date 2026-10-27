@@ -29,12 +29,24 @@ function readJson(file, fallback) {
   return JSON.parse(fs.readFileSync(full, "utf8"));
 }
 
-function cookieFromLogin(res) {
+function cookieJarFrom(res, previous = "") {
   const list =
     typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [];
   const header = list.length ? list.join(",") : String(res.headers.get("set-cookie") || "");
-  const match = header.match(/deane_admin=([^;]+)/);
-  return match ? `deane_admin=${match[1]}` : "";
+  const jar = new Map();
+  for (const part of String(previous || "")
+    .split(";")
+    .map((p) => p.trim())
+    .filter(Boolean)) {
+    const idx = part.indexOf("=");
+    if (idx > 0) jar.set(part.slice(0, idx), part.slice(idx + 1));
+  }
+  for (const raw of header.split(/,(?=[^;]+?=)/)) {
+    const first = String(raw || "").split(";")[0].trim();
+    const idx = first.indexOf("=");
+    if (idx > 0) jar.set(first.slice(0, idx), first.slice(idx + 1));
+  }
+  return [...jar.entries()].map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
 async function health() {
@@ -50,7 +62,32 @@ async function login() {
     body: JSON.stringify({ pin: PIN }),
   });
   const data = await res.json().catch(() => ({}));
-  return { status: res.status, data, cookie: cookieFromLogin(res) };
+  let cookie = cookieJarFrom(res);
+  if (data.requiresDeviceCode) {
+    const code = String(process.env.ADMIN_DEVICE_CODE || "").trim();
+    if (!code) {
+      return {
+        status: 401,
+        data: {
+          error:
+            "New computer — check admin@deaneauto.co.nz for the 6-digit code, set ADMIN_DEVICE_CODE=###### in .env, then re-run.",
+        },
+        cookie: "",
+      };
+    }
+    const verify = await fetch(`${BASE}/api/admin/login/verify-device`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(cookie ? { Cookie: cookie } : {}),
+      },
+      body: JSON.stringify({ challengeId: data.challengeId, code }),
+    });
+    const verifyData = await verify.json().catch(() => ({}));
+    cookie = cookieJarFrom(verify, cookie);
+    return { status: verify.status, data: verifyData, cookie };
+  }
+  return { status: res.status, data, cookie };
 }
 
 async function restore(cookie, body) {
@@ -108,9 +145,10 @@ async function main() {
   const live = await waitForRestoreEndpoint();
   console.log(`Render dataDir: ${live.dataDir}`);
   const session = await login();
-  if (session.status === 401 || session.status === 429) {
+  if (session.status === 401 || session.status === 429 || session.status === 503) {
     console.error(
-      "Could not sign in to Render. Set the same strong ADMIN_PIN in Render Environment, restart, then run this script again."
+      session.data?.error ||
+        "Could not sign in to Render. Set the same strong ADMIN_PIN in Render Environment, restart, then run this script again."
     );
     process.exit(1);
   }

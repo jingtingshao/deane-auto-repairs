@@ -19,6 +19,7 @@ const appointmentsLib = require("../data/appointments");
 const bookingRequestsLib = require("../data/booking-requests");
 const driveBackup = require("../data/drive-backup");
 const websms = require("../data/websms");
+const deviceAuth = require("../data/device-auth");
 
 const ROOT = path.join(__dirname, "..");
 const ADMIN_PIN = "smoke-test-pin-20260830";
@@ -155,6 +156,31 @@ function unitTests() {
   } catch (err) {
     fail("backup zip includes workshop json files", err);
   }
+
+  try {
+    const { challenge, code } = deviceAuth.createChallenge({
+      username: "admin",
+      role: "admin",
+      deviceId: "",
+      ip: "127.0.0.1",
+      userAgent: "Mozilla/5.0 (Windows NT 10.0) Chrome/120.0.0.0",
+      emailTo: "admin@deaneauto.co.nz",
+    });
+    assert.equal(challenge.label, "Chrome on Windows");
+    assert.match(code, /^\d{6}$/);
+    const bad = deviceAuth.verifyChallengeCode(challenge.id, "000000");
+    assert.equal(bad.ok, false);
+    const good = deviceAuth.verifyChallengeCode(challenge.id, code);
+    assert.equal(good.ok, true);
+    assert.equal(good.username, "admin");
+    assert.ok(good.deviceId);
+    const reused = deviceAuth.verifyChallengeCode(challenge.id, code);
+    assert.equal(reused.ok, false);
+    assert.equal(deviceAuth.maskEmail("admin@deaneauto.co.nz"), "ad***@deaneauto.co.nz");
+    pass("device email challenge verifies once");
+  } catch (err) {
+    fail("device email challenge verifies once", err);
+  }
 }
 
 async function integrationTests(base, dataDir) {
@@ -167,6 +193,13 @@ async function integrationTests(base, dataDir) {
   try {
     const login = await api(base, "", "POST", "/api/admin/login", { pin: ADMIN_PIN });
     assert.equal(login.res.status, 200, login.data?.error || login.text);
+    assert.notEqual(login.data?.requiresDeviceCode, true);
+    const trustedPath = path.join(dataDir, "trusted-devices.json");
+    if (fs.existsSync(trustedPath)) {
+      const trusted = JSON.parse(fs.readFileSync(trustedPath, "utf8"));
+      assert.ok(Array.isArray(trusted));
+      assert.ok(trusted.some((row) => row.username === "admin"));
+    }
     const setCookies =
       typeof login.res.headers.getSetCookie === "function"
         ? login.res.headers.getSetCookie()

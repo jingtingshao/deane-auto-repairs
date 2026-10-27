@@ -147,6 +147,38 @@ function showApp() {
   window.DeaneBookingAlerts?.start?.();
 }
 
+let deviceChallengeId = "";
+
+function showPasswordLogin() {
+  const loginFormEl = document.getElementById("login-form");
+  const deviceForm = document.getElementById("device-verify-form");
+  if (loginFormEl) loginFormEl.hidden = false;
+  if (deviceForm) deviceForm.hidden = true;
+  deviceChallengeId = "";
+  const codeInput = document.getElementById("device-code");
+  if (codeInput) codeInput.value = "";
+  const deviceError = document.getElementById("device-verify-error");
+  if (deviceError) deviceError.hidden = true;
+}
+
+function showDeviceVerify(data) {
+  const loginFormEl = document.getElementById("login-form");
+  const deviceForm = document.getElementById("device-verify-form");
+  if (loginFormEl) loginFormEl.hidden = true;
+  if (deviceForm) deviceForm.hidden = false;
+  deviceChallengeId = String(data?.challengeId || "");
+  const hint = document.getElementById("device-verify-hint");
+  if (hint) {
+    const email = data?.emailHint || "the workshop email";
+    hint.textContent = `This computer is new. We sent a 6-digit code to ${email}. Enter it below to finish signing in.`;
+  }
+  const codeInput = document.getElementById("device-code");
+  if (codeInput) {
+    codeInput.value = "";
+    codeInput.focus();
+  }
+}
+
 function showLogin() {
   window.DeaneBookingAlerts?.stop?.();
   loginView.hidden = false;
@@ -157,6 +189,19 @@ function showLogin() {
   const userInput = document.getElementById("username");
   if (pinInput) pinInput.value = "";
   if (userInput) userInput.value = "";
+  showPasswordLogin();
+}
+
+async function enterAppAfterLogin(data) {
+  applyStaffSession(data);
+  showApp();
+  if (data.role === "technician") {
+    setSection("calendar");
+    window.DeaneCalendar?.showList?.();
+  } else {
+    setSection("dashboard");
+    await window.DeaneDashboard?.load?.();
+  }
 }
 
 function todayOverline() {
@@ -646,15 +691,11 @@ loginForm.addEventListener("submit", async (e) => {
     if (!res.ok) {
       throw new Error(data.error || `Server error (${res.status}). Is npm start running?`);
     }
-    applyStaffSession(data);
-    showApp();
-    if (data.role === "technician") {
-      setSection("calendar");
-      window.DeaneCalendar?.showList?.();
-    } else {
-      setSection("dashboard");
-      await window.DeaneDashboard?.load?.();
+    if (data.requiresDeviceCode) {
+      showDeviceVerify(data);
+      return;
     }
+    await enterAppAfterLogin(data);
   } catch (err) {
     loginError.hidden = false;
     const msg = err instanceof Error ? err.message : String(err);
@@ -667,6 +708,73 @@ loginForm.addEventListener("submit", async (e) => {
       submitBtn.textContent = "Sign in";
     }
   }
+});
+
+document.getElementById("device-verify-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const deviceError = document.getElementById("device-verify-error");
+  if (deviceError) deviceError.hidden = true;
+  const code = document.getElementById("device-code")?.value.trim() || "";
+  const form = document.getElementById("device-verify-form");
+  const submitBtn = form?.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Verifying…";
+  }
+  try {
+    const res = await fetch("/api/admin/login/verify-device", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ challengeId: deviceChallengeId, code }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Wrong code");
+    showPasswordLogin();
+    await enterAppAfterLogin(data);
+  } catch (err) {
+    if (deviceError) {
+      deviceError.hidden = false;
+      deviceError.textContent = err instanceof Error ? err.message : String(err);
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Verify and sign in";
+    }
+  }
+});
+
+document.getElementById("device-resend")?.addEventListener("click", async () => {
+  const deviceError = document.getElementById("device-verify-error");
+  if (deviceError) deviceError.hidden = true;
+  const btn = document.getElementById("device-resend");
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch("/api/admin/login/resend-device", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ challengeId: deviceChallengeId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Could not resend");
+    if (deviceError) {
+      deviceError.hidden = false;
+      deviceError.textContent = `Code sent again to ${data.emailHint || "workshop email"}.`;
+    }
+  } catch (err) {
+    if (deviceError) {
+      deviceError.hidden = false;
+      deviceError.textContent = err instanceof Error ? err.message : String(err);
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+});
+
+document.getElementById("device-cancel")?.addEventListener("click", () => {
+  showPasswordLogin();
 });
 
 document.getElementById("btn-logout").addEventListener("click", async () => {

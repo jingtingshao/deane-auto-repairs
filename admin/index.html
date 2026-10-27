@@ -27,6 +27,17 @@
         <button type="submit">Sign in</button>
         <p id="login-error" class="error" hidden></p>
       </form>
+      <form id="device-verify-form" class="login-card" hidden>
+        <p class="brand"><span class="script">Deane</span> AUTO REPAIRS</p>
+        <h1>Check your email</h1>
+        <p id="device-verify-hint" class="muted">This computer is new. We sent a 6-digit code to the workshop email.</p>
+        <label for="device-code">Verification code</label>
+        <input id="device-code" name="code" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="8" required />
+        <button type="submit">Verify and sign in</button>
+        <button type="button" id="device-resend" class="button ghost">Resend code</button>
+        <button type="button" id="device-cancel" class="button ghost">Back</button>
+        <p id="device-verify-error" class="error" hidden></p>
+      </form>
     </div>
 
     <div id="app" class="app workshop-app" data-section="dashboard" hidden>
@@ -1184,7 +1195,7 @@
       </div>
     </div>
 
-    <script src="admin.js?v=20261020partsguide"></script>
+    <script src="admin.js?v=20261027deviceverify"></script>
     <script src="dashboard.js?v=20261017quickcash"></script>
     <script src="calendar.js?v=20261022hours"></script>
     <script src="jobs.js?v=20261019workmatch"></script>
