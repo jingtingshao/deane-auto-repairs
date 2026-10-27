@@ -1081,6 +1081,10 @@ function isMatchedDecision(decision) {
   return decision === "accepted" || decision === "edited_then_accepted";
 }
 
+function isFreeEditDecision(decision) {
+  return decision === "pending" || decision === "rejected" || decision === "consumable" || decision === "tool";
+}
+
 async function applyCandidateAction(id, action, rowEl) {
   if (action === "reject") {
     await Admin.api(`/api/invoice-candidates/${id}/reject`, {
@@ -1213,7 +1217,7 @@ function renderCandidates() {
               const ignored = row.decision === "rejected";
               const consumable = row.decision === "consumable";
               const tool = row.decision === "tool";
-              const fieldsLocked = !pending && !editing;
+              const fieldsLocked = !isFreeEditDecision(row.decision) && !editing;
               const disabled = fieldsLocked ? " disabled" : "";
               const statusHtml = renderStatusPill(row, selectedJobId);
               const unmatchBtn = `<button type="button" class="danger" data-action="unmatch">Unmatch</button>`;
@@ -1327,7 +1331,7 @@ function renderCandidates() {
   });
   candidatesEl.querySelectorAll("tr[data-id]").forEach((rowEl) => {
     const row = candidates.find((item) => item.id === rowEl.dataset.id);
-    if (!row || row.decision !== "pending") return;
+    if (!row || !isFreeEditDecision(row.decision)) return;
     rowEl.querySelectorAll("[data-field='description'], [data-field='partNumber'], [data-field='qty'], [data-field='costPrice'], [data-field='lineTotal']").forEach((el) => {
       const save = () => {
         if (el.dataset.field === "lineTotal") syncLinePrices(rowEl, "total");
@@ -1542,12 +1546,14 @@ function scheduleLineSave(rowEl) {
 async function saveManualLine(rowEl) {
   const id = rowEl?.dataset?.id || "";
   const row = candidates.find((item) => item.id === id);
-  if (!row || row.decision !== "pending") return;
+  if (!row || !isFreeEditDecision(row.decision)) return;
   const description = String(rowEl.querySelector('[data-field="description"]')?.value || "");
   const partNumber = String(rowEl.querySelector('[data-field="partNumber"]')?.value || "");
   const qty = Math.max(1, Math.round(Number(rowEl.querySelector('[data-field="qty"]')?.value) || 1));
   const costRaw = Number(rowEl.querySelector('[data-field="costPrice"]')?.value);
   const costPrice = Number.isFinite(costRaw) ? costRaw : 0;
+  const costChanged =
+    qty !== Number(row.qtyCandidate) || money(costPrice) !== money(row.costPriceCandidate);
   row.descriptionCandidate = description;
   row.partNumberCandidate = partNumber;
   row.qtyCandidate = qty;
@@ -1556,6 +1562,7 @@ async function saveManualLine(rowEl) {
     method: "PATCH",
     body: JSON.stringify({ description, partNumber, qty, costPrice }),
   });
+  if (costChanged && row.decision !== "pending") await loadList();
 }
 
 async function savePendingLineEdits() {

@@ -841,6 +841,10 @@ function isShopClassifiedCandidateDecision(decision) {
   return decision === "consumable" || decision === "tool";
 }
 
+function isFreeEditCandidateDecision(decision) {
+  return decision === "pending" || decision === "rejected" || isShopClassifiedCandidateDecision(decision);
+}
+
 function isResolvedCandidateDecision(decision) {
   return (
     isJobAcceptedCandidateDecision(decision) ||
@@ -9596,8 +9600,10 @@ app.patch("/api/invoice-candidates/:candidateId", requireOwnerAdmin, (req, res) 
   const index = rows.findIndex((row) => row.id === req.params.candidateId);
   if (index < 0) return res.status(404).json({ error: "Candidate not found" });
   const previous = normalizeCandidate(rows[index]);
-  if (previous.decision !== "pending") {
-    return res.status(400).json({ error: "Only a line that is still to allocate can be edited here." });
+  if (!isFreeEditCandidateDecision(previous.decision)) {
+    return res.status(400).json({
+      error: "A line matched to a job is edited with Edit matched line.",
+    });
   }
   const body = req.body || {};
   const next = normalizeCandidate({
