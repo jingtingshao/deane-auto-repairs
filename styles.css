@@ -235,15 +235,20 @@ a[href^="tel:"] {
   text-decoration: none;
 }
 
+.header-location .header-icon {
+  width: 26px;
+  height: 26px;
+}
+
 .header-location strong {
   display: block;
-  font-size: 14px;
+  font-size: 16.8px;
   font-weight: 600;
 }
 
 .header-location small {
   display: block;
-  font-size: 12px;
+  font-size: 14.4px;
   opacity: 0.85;
 }
 
