@@ -5,23 +5,16 @@ alwaysApply: true
 
 # Deane Auto Repairs — go-live reminders
 
-## Pending reminder (proactive — mention at the start of the first chat on/after 25 Oct 2026)
-Website went live 23–24 Oct 2026. Search Console done 24 Oct: domain property `deaneauto.co.nz` verified via DNS TXT (1st Domains), sitemap `https://www.deaneauto.co.nz/sitemap.xml` submitted, indexing requested for `/` and `/book/`.
+## Go-live status (website live since 23–24 Oct 2026)
+SEO / domain go-live is **done** — do not re-run the launch checklist or remind about indexing.
 
-Remind the user to check whether Google has indexed the site:
-- Search Console → URL Inspection for `https://www.deaneauto.co.nz/` and `https://www.deaneauto.co.nz/book/` (want "URL is on Google")
-- Search Console → Sitemaps (Status = Success, Discovered pages = 2) and Pages report
-- Quick check: Google search `site:deaneauto.co.nz`
-- Not indexed after 1–2 days is normal (can take up to ~2 weeks); only investigate if errors show
-- Offer to run the live check (curl for noindex / canonical / redirects) if something looks wrong
+Search Console: domain property `deaneauto.co.nz` verified via DNS TXT on 1st Domains (keep that TXT record), sitemap submitted. User confirmed 26 Oct: `/` and `/book/` both "URL is on Google".
 
 Done 24 Oct: site "Open in Google Maps" + `data/business.js` `mapsUrl` + JSON-LD `hasMap` now use the official GBP share link `https://maps.app.goo.gl/sbM5hQmmw5oGgNY77` (place ID `ChIJpcEa575HDW0RftiwMHU8Cf8`). GBP website / phone / hours checked and correct. Google review link already in `data/business.js` (`googleReviewUrl`, used on invoices / reports) — do not ask the user for it again.
 
 Also done 24 Oct: `server.js` sends `X-Robots-Tag: noindex, nofollow` on `/r`, `/b`, `/report`, `/billing`, `/uploads`, `/admin`, `/tech`, `/api` (private customer links stay out of Google; no `robots.txt` Disallow needed for `/r/`).
 
-Still open: more GBP photos (listing has 2), phone test of admin + SMTP test email.
-
-Once the user confirms indexing is OK, remove this "Pending reminder" section.
+Still open (mention once if relevant, do not nag): more GBP photos (listing has 2), phone test of admin + SMTP test email.
 
 ## Launch checklist triggers
 When the user mentions domain pointing, DNS, custom domain, hosting, GitHub Pages custom domain, go-live, or making the website public:
