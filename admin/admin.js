@@ -222,7 +222,7 @@ function setOverline(text) {
 
 function setSection(name) {
   if (name === "billing") name = "quotes";
-  if (isTechnician() && (name === "dashboard" || name === "referrals" || name === "sms_inbox" || name === "supplier_invoices" || name === "suppliers" || name === "stock")) {
+  if (isTechnician() && (name === "dashboard" || name === "referrals" || name === "sms_inbox" || name === "supplier_invoices" || name === "suppliers" || name === "stock" || name === "tyre_prices")) {
     name = "calendar";
   }
   const dashboardSection = document.getElementById("dashboard-section");
@@ -237,6 +237,7 @@ function setSection(name) {
   const suppliersSection = document.getElementById("suppliers-section");
   const partsGuideSection = document.getElementById("parts-guide-section");
   const stockSection = document.getElementById("stock-section");
+  const tyrePricesSection = document.getElementById("tyre-prices-section");
   const btnNew = document.getElementById("btn-new");
   const billingOpen = name === "quotes" || name === "invoices";
   if (app) app.dataset.section = name;
@@ -252,12 +253,14 @@ function setSection(name) {
   if (suppliersSection) suppliersSection.hidden = name !== "suppliers";
   if (partsGuideSection) partsGuideSection.hidden = name !== "parts_guide";
   if (stockSection) stockSection.hidden = name !== "stock";
+  if (tyrePricesSection) tyrePricesSection.hidden = name !== "tyre_prices";
   if (btnNew) {
     if (
       name === "supplier_invoices" ||
       name === "suppliers" ||
       name === "parts_guide" ||
       name === "stock" ||
+      name === "tyre_prices" ||
       name === "calendar" ||
       name === "sms_inbox" ||
       name === "referrals"
@@ -282,6 +285,7 @@ function setSection(name) {
     suppliers: "nav-suppliers",
     parts_guide: "nav-parts-guide",
     stock: "nav-stock",
+    tyre_prices: "nav-tyre-prices",
   };
   Object.entries(navMap).forEach(([section, id]) => {
     document.getElementById(id)?.classList.toggle("active", name === section);
@@ -325,6 +329,11 @@ function setSection(name) {
     setOverline("STOCK");
     viewTitle.textContent = "Workshop stock";
     window.DeaneInventory?.show?.();
+  }
+  if (name === "tyre_prices") {
+    setOverline("TYRE PRICES");
+    viewTitle.textContent = "Tyre prices";
+    window.DeaneTyrePrices?.show?.();
   }
   if (name === "customers") {
     setOverline("CUSTOMERS");
@@ -838,6 +847,10 @@ document.getElementById("nav-parts-guide")?.addEventListener("click", () => {
 
 document.getElementById("nav-stock")?.addEventListener("click", () => {
   setSection("stock");
+});
+
+document.getElementById("nav-tyre-prices")?.addEventListener("click", () => {
+  setSection("tyre_prices");
 });
 
 document.getElementById("nav-quotes")?.addEventListener("click", () => {

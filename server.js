@@ -61,6 +61,7 @@ const {
 const referralsLib = require("./data/referrals");
 const driveBackup = require("./data/drive-backup");
 const websms = require("./data/websms");
+const tyrePricesLib = require("./data/tyre-prices");
 
 const PORT = Number(process.env.PORT) || 5173;
 const pdfParseLegacy =
@@ -243,6 +244,9 @@ const SMS_INBOUND_FILE = path.join(DATA_DIR, "sms-inbound.json");
 const SMS_LOG_FILE = path.join(DATA_DIR, "sms-log.json");
 const REFERRALS_FILE = path.join(DATA_DIR, "referrals.json");
 const TRUSTED_DEVICES_FILE = path.join(DATA_DIR, "trusted-devices.json");
+const TYRE_PRICE_ROWS_FILE = path.join(DATA_DIR, "tyre-price-rows.json");
+const TYRE_PRICE_SETTINGS_FILE = path.join(DATA_DIR, "tyre-price-settings.json");
+const TYRE_PRICES_PUBLIC_FILE = path.join(DATA_DIR, "tyre-prices-public.json");
 const UPLOADS_DIR = (() => {
   const raw = String(process.env.UPLOADS_DIR || "").trim();
   if (raw && isWritableDir(path.resolve(raw))) return path.resolve(raw);
@@ -10442,6 +10446,147 @@ app.post("/api/inventory/:id/adjust", requireOwnerAdmin, (req, res) => {
     res.json(inventoryLib.presentItem(item));
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+const tyrePriceUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 },
+});
+let tyrePriceRowsCache = { mtimeMs: -1, rows: [] };
+
+function readTyrePriceRows() {
+  let mtimeMs = 0;
+  try {
+    mtimeMs = fs.statSync(TYRE_PRICE_ROWS_FILE).mtimeMs;
+  } catch {
+    return [];
+  }
+  if (tyrePriceRowsCache.mtimeMs !== mtimeMs) {
+    tyrePriceRowsCache = { mtimeMs, rows: readJsonArray(TYRE_PRICE_ROWS_FILE, "tyre prices") };
+  }
+  return tyrePriceRowsCache.rows;
+}
+
+function readTyrePriceState() {
+  const state = readJsonArray(TYRE_PRICE_SETTINGS_FILE, "tyre price settings")[0] || {};
+  return { ...state, settings: tyrePricesLib.normalizeSettings(state.settings) };
+}
+
+function writeTyrePriceState(state) {
+  writeJsonArray(TYRE_PRICE_SETTINGS_FILE, [state]);
+}
+
+function readPublishedTyrePrices() {
+  return readJsonArray(TYRE_PRICES_PUBLIC_FILE, "website tyre prices")[0] || null;
+}
+
+app.get("/api/public/tyre-prices", (_req, res) => {
+  try {
+    const published = readPublishedTyrePrices();
+    if (!published) return res.status(404).json({ error: "No tyre prices published yet" });
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.json(published);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.get("/api/tyre-prices/meta", requireOwnerAdmin, (_req, res) => {
+  try {
+    const state = readTyrePriceState();
+    const published = readPublishedTyrePrices();
+    res.json({
+      settings: state.settings,
+      scrapedOn: state.scrapedOn || "",
+      sources: state.sources || [],
+      uploadedAt: state.uploadedAt || "",
+      rowCount: readTyrePriceRows().length,
+      published: state.published || null,
+      publishedSizes: published ? Object.keys(published.sizes || {}).length : 0,
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.get("/api/tyre-prices/search", requireOwnerAdmin, (req, res) => {
+  try {
+    const { settings } = readTyrePriceState();
+    res.json(tyrePricesLib.searchBySize(readTyrePriceRows(), req.query.size, settings));
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.put("/api/tyre-prices/settings", requireOwnerAdmin, (req, res) => {
+  try {
+    const state = readTyrePriceState();
+    state.settings = tyrePricesLib.normalizeSettings({ ...state.settings, ...(req.body || {}) });
+    state.settingsUpdatedAt = nowIso();
+    state.settingsUpdatedBy = nowActor(req);
+    writeTyrePriceState(state);
+    res.json({ settings: state.settings });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post("/api/tyre-prices/upload", requireOwnerAdmin, tyrePriceUpload.single("file"), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    let payload;
+    try {
+      payload = JSON.parse(req.file.buffer.toString("utf8"));
+    } catch {
+      return res.status(400).json({ error: "That is not a price data file (expected tyre-price-data.json)." });
+    }
+    const { rows, sources, scrapedOn } = tyrePricesLib.validateUpload(payload);
+    writeJsonArray(TYRE_PRICE_ROWS_FILE, rows);
+    const state = readTyrePriceState();
+    state.sources = sources;
+    state.scrapedOn = scrapedOn;
+    state.uploadedAt = nowIso();
+    state.uploadedBy = nowActor(req);
+    writeTyrePriceState(state);
+    res.json({ rowCount: rows.length, sources, scrapedOn });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post("/api/tyre-prices/publish", requireOwnerAdmin, (req, res) => {
+  try {
+    const rows = readTyrePriceRows();
+    if (!rows.length) return res.status(400).json({ error: "Upload price data first." });
+    const state = readTyrePriceState();
+    const payload = tyrePricesLib.buildPublic(rows, state.settings, state.scrapedOn || todayIso());
+    writeJsonArray(TYRE_PRICES_PUBLIC_FILE, [payload]);
+    state.published = {
+      at: nowIso(),
+      by: nowActor(req),
+      settings: state.settings,
+      scrapedOn: payload.updated,
+      sizes: Object.keys(payload.sizes).length,
+    };
+    writeTyrePriceState(state);
+    res.json(state.published);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.get("/api/tyre-prices/export.csv", requireOwnerAdmin, (_req, res) => {
+  try {
+    const state = readTyrePriceState();
+    const csv = tyrePricesLib.exportCsv(readTyrePriceRows(), state.settings);
+    const stamp = String(state.scrapedOn || todayIso()).slice(0, 10);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="Deane-Tyre-Prices-${stamp}.csv"`);
+    res.setHeader("Cache-Control", "no-store");
+    res.send(csv);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 

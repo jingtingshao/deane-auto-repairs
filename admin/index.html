@@ -57,6 +57,7 @@
           <button type="button" id="nav-suppliers" data-admin-only><b>◇</b> Suppliers</button>
           <button type="button" id="nav-parts-guide"><b>◎</b> Parts guide</button>
           <button type="button" id="nav-stock" data-admin-only><b>◈</b> Stock</button>
+          <button type="button" id="nav-tyre-prices" data-admin-only><b>◍</b> Tyre prices</button>
           <button type="button" id="nav-quotes"><b>$</b> Quotes <i id="nav-quotes-count" hidden>0</i></button>
           <button type="button" id="nav-invoices"><b>$</b> Invoices <i id="nav-invoices-count" hidden>0</i></button>
           <button type="button" id="nav-customers"><b>◉</b> Customers</button>
@@ -680,6 +681,58 @@
           <div id="stock-list" class="report-list"></div>
         </section>
 
+        <section id="tyre-prices-section" hidden>
+          <p id="tyre-prices-status" class="status-line" hidden></p>
+          <label class="list-search">
+            Tyre size
+            <input id="tyre-size-search" type="search" placeholder="205/55R16 or 2055516" autocomplete="off" />
+          </label>
+          <p id="tyre-search-summary" class="muted small"></p>
+          <div id="tyre-search-results"></div>
+
+          <form id="tyre-settings-form" class="report-form">
+            <fieldset>
+              <legend>Selling price</legend>
+              <p class="muted small">Sell price per tyre = normal cost ex GST × (1 + markup) + GST + fitting + Tyrewise fee. Supplier specials are ignored, so a special that ends never puts the price under cost.</p>
+              <div class="grid-3">
+                <label>Markup %<input id="tyre-markup" type="number" min="0" max="300" step="1" required /></label>
+                <label>Fitting per tyre (incl GST)<input id="tyre-fitting" type="number" min="0" max="500" step="1" required /></label>
+                <label>Tyrewise fee
+                  <select id="tyre-tyrewise">
+                    <option value="yes">Add to price</option>
+                    <option value="no">Leave out</option>
+                  </select>
+                </label>
+              </div>
+              <div class="line-actions">
+                <button type="submit" class="primary">Save</button>
+              </div>
+            </fieldset>
+          </form>
+
+          <div class="report-form">
+            <fieldset>
+              <legend>Website</legend>
+              <p id="tyre-publish-info" class="muted small"></p>
+              <div class="line-actions">
+                <button type="button" id="btn-tyre-publish" class="primary">Publish prices to website</button>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="report-form">
+            <fieldset>
+              <legend>Supplier price data</legend>
+              <p id="tyre-data-info" class="muted small"></p>
+              <div class="line-actions">
+                <button type="button" id="btn-tyre-upload" class="ghost">Upload new price data</button>
+                <input id="tyre-upload-input" type="file" accept=".json,application/json" hidden />
+                <button type="button" id="btn-tyre-export" class="ghost">Download for Excel</button>
+              </div>
+            </fieldset>
+          </div>
+        </section>
+
         <section id="customers-section" hidden>
           <div class="customers-find">
             <label class="list-search">
@@ -1195,7 +1248,7 @@
       </div>
     </div>
 
-    <script src="admin.js?v=20261027deviceverify"></script>
+    <script src="admin.js?v=20261028devicetyres"></script>
     <script src="dashboard.js?v=20261017quickcash"></script>
     <script src="calendar.js?v=20261022hours"></script>
     <script src="jobs.js?v=20261019workmatch"></script>
@@ -1204,6 +1257,7 @@
     <script src="supplier-invoices.js?v=20261019pickaccept"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>
     <script src="parts-directory.js?v=20261021wreckers"></script>
+    <script src="tyre-prices.js?v=20261028tyres"></script>
     <script src="customers.js?v=20260906techcustomers"></script>
     <script src="referrals.js?v=20260906usedon"></script>
     <script src="sms-inbox.js?v=20260830yesno"></script>

@@ -761,6 +761,109 @@ button.see-details {
   color: #fff;
 }
 
+.tyre-quotes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin: 4px 0 14px;
+  text-align: left;
+}
+
+.tyre-quotes:empty {
+  display: none;
+}
+
+.tyre-quote {
+  display: flex;
+  flex-direction: column;
+  padding: 18px 16px 16px;
+  border: 1px solid rgba(13, 43, 92, 0.15);
+  border-top: 4px solid #9ca3af;
+  border-radius: 8px;
+  background: #fafaf7;
+}
+
+.tyre-quote-mid-range {
+  border-top-color: var(--sign-yellow);
+}
+
+.tyre-quote-premium {
+  border-top-color: var(--navy);
+}
+
+.tyres-detail .tyre-quote-tier {
+  margin: 0 0 6px;
+  font: 700 11px / 1 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.tyre-quote h4 {
+  margin: 0;
+  font: 700 20px / 1.15 var(--display);
+  color: var(--navy);
+}
+
+.tyres-detail .tyre-quote-spec {
+  margin: 4px 0 12px;
+  font: 600 13px / 1.3 var(--mono);
+  color: #4b5563;
+}
+
+.tyres-detail .tyre-quote-price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: auto 0 0;
+}
+
+.tyre-quote-price strong {
+  font: 800 34px / 1 var(--display);
+  color: var(--navy);
+}
+
+.tyre-quote-price span {
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.tyres-detail .tyre-quote-set {
+  margin: 4px 0 8px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.tyres-detail .tyre-quote-stock {
+  margin: 0 0 4px;
+  font: 600 12px / 1.3 var(--body);
+  color: #92400e;
+}
+
+.tyres-detail .tyre-quote-stock.is-available {
+  color: #166534;
+}
+
+.tyre-quote .tyres-book-cta {
+  min-width: 0;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.tyres-detail .tyre-quotes-empty {
+  grid-column: 1 / -1;
+  padding: 14px;
+  border-radius: 8px;
+  background: #f4f4f1;
+  text-align: center;
+}
+
+.tyre-quotes-note {
+  margin: 0 auto 16px !important;
+  font-size: 12px !important;
+  color: #6b7280;
+}
+
 .checklist-details {
   margin-top: 1.5rem;
   border: 0;

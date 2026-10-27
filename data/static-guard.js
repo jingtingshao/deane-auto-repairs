@@ -33,6 +33,8 @@ const BLOCKED_STATIC_FILES = new Set([
   "invoice-candidates.json",
   "backup-status.json",
   "trusted-devices.json",
+  "tyre-price-rows.json",
+  "tyre-price-settings.json",
 ]);
 
 function blockedStaticPath(urlPath) {
