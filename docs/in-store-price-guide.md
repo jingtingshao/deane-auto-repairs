@@ -55,9 +55,8 @@ Oil & filter included up to **4L** (Standard / Premium) or **5L** (Diesel / 4WD)
 | Steering system, including rack & linkages | — | ✓ | ✓ |
 | Suspension components — wear, damage & excessive play | — | — | ✓ |
 | Wheel bearings — excessive play | — | — | ✓ |
-| CV boots | — | — | ✓ |
 | Brake warning / ABS lights | — | ✓ | ✓ |
-| Brake inspection (wheels on) - pads & disc visually check | — | ✓ | ✓ |
+| Brake inspection (wheels on) — visual check of pads & discs | — | ✓ | ✓ |
 | Detailed brake inspection (wheels off) | — | — | ✓ |
 | Front pads inspect | — | — | ✓ |
 | Rear pads / shoes inspect | — | — | ✓ |
@@ -66,7 +65,7 @@ Oil & filter included up to **4L** (Standard / Premium) or **5L** (Diesel / 4WD)
 | Brake lines / hoses (wheels off) | — | — | ✓ |
 | Parking brake check / adjust | — | — | ✓ |
 
-### Electrical, inspection, diagnostics
+### Electrical & inspection
 | Check | Basic | Standard | Premium / Diesel / European |
 |-------|:-----:|:--------:|:---------------------------:|
 | Battery condition test | — | ✓ | ✓ |
@@ -77,7 +76,6 @@ Oil & filter included up to **4L** (Standard / Premium) or **5L** (Diesel / 4WD)
 | Drive belts | — | ✓ | ✓ |
 | Exhaust visual | — | ✓ | ✓ |
 | Wiper blades | — | ✓ | ✓ |
-| Diagnostic scan — check for stored fault codes | — | — | ✓ |
 | Road test (up to 50 km/h) | — | — | ✓ |
 | Digital service report | — | ✓ | ✓ |
 

@@ -26,11 +26,10 @@ Oil & filter change, top-ups and service light reset are **Work completed** tick
 
 ## Premium only ($299 package)
 
-- Brake fluid condition; radiator cap & hoses  
-- Transmission / gearbox fluid; differential fluid  
-- Diagnostic scan — check for stored fault codes  
+- Brake fluid condition; radiator cap & hoses (cooling system)  
+- Transmission / gearbox fluid; differential fluid (level, where applicable)  
 - Brake inspection (**wheels off**) + pad / disc / lines / parking brake detail lines  
-- Suspension components, wheel bearings, CV boots  
+- Suspension components, wheel bearings  
 - Road test up to 50 km/h  
 
 Statuses: **OK** · **Watch** · **Attention** · **N/A**

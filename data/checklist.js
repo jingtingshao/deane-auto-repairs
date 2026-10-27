@@ -31,14 +31,13 @@ const GROUPS = [
       { code: "ELC-03", label: "Exterior lights & indicators", packages: STD, wofFlag: true },
       { code: "ELC-08", label: "Dashboard warning lights", packages: STD, wofFlag: true },
       { code: "ELC-04", label: "Inspected wiper blades", packages: STD, wofFlag: true },
-      { code: "ELC-07", label: "Diagnostic scan — check for stored fault codes", packages: PREMIUM },
     ],
   },
   {
     id: "brakes",
     title: "Brakes",
     items: [
-      { code: "BRK-01", label: "Brake inspection (wheels on) - pads & disc visually check", packages: STD, wofFlag: true },
+      { code: "BRK-01", label: "Brake inspection (wheels on) — visual check of pads & discs", packages: STD, wofFlag: true },
       { code: "BRK-02", label: "Brake warning / ABS lights", packages: STD, wofFlag: true },
       { code: "BRK-03", label: "Brake inspection (wheels off)", packages: PREMIUM, wofFlag: true },
       { code: "BRK-04", label: "Inspected front brake pads", packages: PREMIUM, wofFlag: true },
@@ -57,7 +56,6 @@ const GROUPS = [
       { code: "SUS-01", label: "Inspected steering system, including rack & linkages", packages: STD, wofFlag: true },
       { code: "SUS-02", label: "Inspected suspension components for wear, damage & excessive play", packages: PREMIUM, wofFlag: true },
       { code: "SUS-03", label: "Inspected wheel bearings for excessive play", packages: PREMIUM, wofFlag: true },
-      { code: "SUS-04", label: "Inspected CV boots", packages: PREMIUM, wofFlag: true },
     ],
   },
   {
@@ -98,9 +96,8 @@ const ACTIONS = {
   premiumExtra: [
     { id: "wheels_off", label: "Road wheels removed — brake inspection" },
     { id: "brakes_measured", label: "Brake pads / discs inspected (wheels off)" },
-    { id: "steering_suspension", label: "Suspension & CV boots checked" },
+    { id: "steering_suspension", label: "Suspension checked" },
     { id: "wheel_bearings", label: "Wheel bearings checked for play" },
-    { id: "diagnostic", label: "Diagnostic scan completed" },
     { id: "road_test", label: "Road test completed" },
   ],
   either: [
@@ -115,6 +112,7 @@ const ACTIONS = {
     { id: "fluids", label: "Fluids checked / topped up" },
     { id: "cabin_filter", label: "Cabin / pollen filter checked" },
     { id: "spark_plugs", label: "Spark plugs inspected" },
+    { id: "diagnostic", label: "Diagnostic scan completed" },
   ],
 };
 

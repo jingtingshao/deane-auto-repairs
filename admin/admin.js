@@ -1092,9 +1092,8 @@ const ACTIONS_FALLBACK = {
   premiumExtra: [
     { id: "wheels_off", label: "Road wheels removed — brake inspection" },
     { id: "brakes_measured", label: "Brake pads / discs inspected (wheels off)" },
-    { id: "steering_suspension", label: "Suspension & CV boots checked" },
+    { id: "steering_suspension", label: "Suspension checked" },
     { id: "wheel_bearings", label: "Wheel bearings checked for play" },
-    { id: "diagnostic", label: "Diagnostic scan completed" },
     { id: "road_test", label: "Road test completed" },
   ],
   either: [
