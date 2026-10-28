@@ -259,6 +259,68 @@ function validateUpload(payload) {
   };
 }
 
+function rowKey(r) {
+  return r.sku
+    ? `${r.supplier}|${r.sku}`
+    : `${r.supplier}|${r.size}|${r.brand}|${r.pattern}|${r.load_speed}`;
+}
+
+/** Supplier cost changes between two uploads, matched by supplier + SKU. */
+function diffCosts(oldRows, newRows) {
+  const before = new Map(oldRows.map((r) => [rowKey(r), r]));
+  const after = new Map(newRows.map((r) => [rowKey(r), r]));
+  const changed = [];
+  for (const [key, r] of after) {
+    const prev = before.get(key);
+    if (!prev) continue;
+    const oldCost = num(prev.cost_ex);
+    const newCost = num(r.cost_ex);
+    if (oldCost === null || newCost === null || Math.abs(oldCost - newCost) < 0.005) continue;
+    changed.push({ row: r, oldCost, newCost });
+  }
+  changed.sort((a, b) => Math.abs(b.newCost - b.oldCost) - Math.abs(a.newCost - a.oldCost));
+  return {
+    changed,
+    up: changed.filter((c) => c.newCost > c.oldCost).length,
+    down: changed.filter((c) => c.newCost < c.oldCost).length,
+    added: [...after.keys()].filter((k) => !before.has(k)).length,
+    removed: [...before.keys()].filter((k) => !after.has(k)).length,
+  };
+}
+
+/** Website card changes per size and tier (price, brand, or card added / removed). */
+function diffWebsite(oldPublic, newPublic) {
+  const changes = [];
+  const sizes = new Set([...Object.keys(oldPublic.sizes || {}), ...Object.keys(newPublic.sizes || {})]);
+  for (const size of sizes) {
+    const before = new Map((oldPublic.sizes[size] || []).map((o) => [o.tier, o]));
+    const after = new Map((newPublic.sizes[size] || []).map((o) => [o.tier, o]));
+    for (const tier of TIERS) {
+      const a = before.get(tier);
+      const b = after.get(tier);
+      if (!a && !b) continue;
+      if (a && b && a.price === b.price && a.brand === b.brand && a.pattern === b.pattern) continue;
+      changes.push({ size, tier, before: a || null, after: b || null });
+    }
+  }
+  const order = Object.keys(newPublic.sizes || {});
+  changes.sort((x, y) => order.indexOf(x.size) - order.indexOf(y.size) || TIERS.indexOf(x.tier) - TIERS.indexOf(y.tier));
+  return changes;
+}
+
+function costChangesCsv(changed) {
+  const header = ["Size", "Brand", "Pattern", "Load / speed", "Supplier", "SKU", "Old cost ex GST", "New cost ex GST", "Change"];
+  const lines = [header.map(csvCell).join(",")];
+  for (const { row: r, oldCost, newCost } of changed) {
+    lines.push(
+      [r.size, r.brand, r.pattern, r.load_speed, r.supplier, r.sku, oldCost.toFixed(2), newCost.toFixed(2), (newCost - oldCost).toFixed(2)]
+        .map(csvCell)
+        .join(",")
+    );
+  }
+  return `\uFEFF${lines.join("\r\n")}\r\n`;
+}
+
 function csvCell(value) {
   const s = value === null || value === undefined ? "" : String(value);
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -302,4 +364,7 @@ module.exports = {
   searchBySize,
   validateUpload,
   exportCsv,
+  diffCosts,
+  diffWebsite,
+  costChangesCsv,
 };

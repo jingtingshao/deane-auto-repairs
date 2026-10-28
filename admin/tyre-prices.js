@@ -79,7 +79,7 @@
         .map((src) => `${src.supplier} ${src.count}`)
         .join(" · ");
       dataInfoEl.textContent = meta.rowCount
-        ? `${meta.rowCount.toLocaleString("en-NZ")} tyres, supplier prices from ${Admin.formatDateShort(meta.scrapedOn)}. ${sources}`
+        ? `${meta.rowCount.toLocaleString("en-NZ")} tyres, supplier prices from ${Admin.formatDateShort(meta.scrapedOn)}. ${sources}. A reminder email goes out every Monday at 8am; uploading new data emails you any price changes.`
         : "No price data yet. Upload tyre-price-data.json from the price list folder on the office computer.";
     }
   }
@@ -254,7 +254,16 @@
     showStatus("Uploading price data…");
     try {
       const res = await Admin.api("/api/tyre-prices/upload", { method: "POST", body: form });
-      showStatus(`Loaded ${res.rowCount.toLocaleString("en-NZ")} tyres. Check a few sizes, then publish to update the website.`);
+      const c = res.changes;
+      const changeText = c
+        ? ` ${c.costsChanged} supplier cost${c.costsChanged === 1 ? "" : "s"} changed (${c.up} up, ${c.down} down), ${c.websiteChanged} website price${c.websiteChanged === 1 ? "" : "s"} would change.`
+        : "";
+      const emailText = res.email?.sent
+        ? ` Changes emailed to ${res.email.to}.`
+        : res.email?.error
+          ? ` Change email failed: ${res.email.error}.`
+          : "";
+      showStatus(`Loaded ${res.rowCount.toLocaleString("en-NZ")} tyres.${changeText}${emailText} Check a few sizes, then publish to update the website.`);
       await loadMeta();
       runSearch();
     } catch (err) {

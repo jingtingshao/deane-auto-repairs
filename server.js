@@ -10532,7 +10532,46 @@ app.put("/api/tyre-prices/settings", requireOwnerAdmin, (req, res) => {
   }
 });
 
-app.post("/api/tyre-prices/upload", requireOwnerAdmin, tyrePriceUpload.single("file"), (req, res) => {
+function adminUrl() {
+  return `${PUBLIC_BASE_URL || `http://localhost:${PORT}`}/admin/`;
+}
+
+function tyreWebsiteChangeLine(change) {
+  const label = (o) => (o ? `${o.brand} ${o.pattern} ${o.load} $${o.price}`.replace(/\s+/g, " ") : "not shown");
+  const diff =
+    change.before && change.after ? ` (${change.after.price >= change.before.price ? "+" : "-"}$${Math.abs(change.after.price - change.before.price)})` : "";
+  return `${change.size} ${change.tier}: ${label(change.before)} → ${label(change.after)}${diff}`;
+}
+
+async function sendTyrePriceChangeEmail({ costs, website, scrapedOn }) {
+  if (!smtpConfigured()) return { skipped: "Email not configured" };
+  if (!costs.changed.length && !website.length) return { skipped: "No price changes" };
+  const shownWebsite = website.slice(0, 60);
+  const text =
+    `New supplier tyre prices were uploaded (prices from ${scrapedOn}).\n\n` +
+    `WEBSITE PRICES THAT WILL CHANGE WHEN YOU PUBLISH (${website.length})\n` +
+    (website.length
+      ? shownWebsite.map(tyreWebsiteChangeLine).join("\n") +
+        (website.length > shownWebsite.length ? `\n…and ${website.length - shownWebsite.length} more.` : "")
+      : "None.") +
+    `\n\nSUPPLIER COSTS\n` +
+    `${costs.up} went up, ${costs.down} went down. ${costs.added} new tyres, ${costs.removed} no longer listed.\n` +
+    (costs.changed.length ? "Full list attached (CSV).\n" : "") +
+    `\nThe website still shows the old prices until you press Publish in Admin → Tyre prices:\n${adminUrl()}\n`;
+  const mailer = createMailer();
+  await mailer.sendMail({
+    from: MAIL_FROM,
+    to: business.email,
+    subject: `Tyre prices changed: ${website.length} website price${website.length === 1 ? "" : "s"}, ${costs.changed.length} supplier cost${costs.changed.length === 1 ? "" : "s"}`,
+    text,
+    attachments: costs.changed.length
+      ? [{ filename: `tyre-cost-changes-${scrapedOn}.csv`, content: tyrePricesLib.costChangesCsv(costs.changed) }]
+      : [],
+  });
+  return { sent: true, to: business.email };
+}
+
+app.post("/api/tyre-prices/upload", requireOwnerAdmin, tyrePriceUpload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
     let payload;
@@ -10542,18 +10581,97 @@ app.post("/api/tyre-prices/upload", requireOwnerAdmin, tyrePriceUpload.single("f
       return res.status(400).json({ error: "That is not a price data file (expected tyre-price-data.json)." });
     }
     const { rows, sources, scrapedOn } = tyrePricesLib.validateUpload(payload);
-    writeJsonArray(TYRE_PRICE_ROWS_FILE, rows);
+    const oldRows = readTyrePriceRows();
     const state = readTyrePriceState();
+    const showingNow =
+      readPublishedTyrePrices() || tyrePricesLib.buildPublic(oldRows, state.settings, state.scrapedOn || "");
+    writeJsonArray(TYRE_PRICE_ROWS_FILE, rows);
     state.sources = sources;
     state.scrapedOn = scrapedOn;
     state.uploadedAt = nowIso();
     state.uploadedBy = nowActor(req);
     writeTyrePriceState(state);
-    res.json({ rowCount: rows.length, sources, scrapedOn });
+
+    let changes = null;
+    let email = { skipped: "First upload — nothing to compare" };
+    if (oldRows.length) {
+      const costs = tyrePricesLib.diffCosts(oldRows, rows);
+      const website = tyrePricesLib.diffWebsite(
+        showingNow,
+        tyrePricesLib.buildPublic(rows, state.settings, scrapedOn)
+      );
+      changes = { costsChanged: costs.changed.length, up: costs.up, down: costs.down, websiteChanged: website.length };
+      try {
+        email = await sendTyrePriceChangeEmail({ costs, website, scrapedOn });
+      } catch (err) {
+        console.error("Tyre price change email failed:", err);
+        email = { error: err.message || "Email failed" };
+      }
+    }
+    res.json({ rowCount: rows.length, sources, scrapedOn, changes, email });
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
   }
 });
+
+function aucklandWeekdayHour(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-NZ", {
+    timeZone: "Pacific/Auckland",
+    weekday: "short",
+    hour: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  return {
+    weekday: parts.find((p) => p.type === "weekday")?.value || "",
+    hour: Number(parts.find((p) => p.type === "hour")?.value || 0),
+  };
+}
+
+/** Every Monday from 8am Auckland: remind the workshop to refresh supplier tyre prices. */
+function startTyrePriceReminderScheduler() {
+  if (!process.env.RENDER) {
+    console.log("Tyre price reminder: only runs on Render");
+    return;
+  }
+  if (!smtpConfigured()) {
+    console.log("Tyre price reminder: off (email not configured)");
+    return;
+  }
+  console.log("Tyre price reminder: Mondays from 8:00 Auckland time");
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    const { weekday, hour } = aucklandWeekdayHour();
+    if (weekday !== "Mon" || hour < 8) return;
+    const today = todayIso();
+    const state = readTyrePriceState();
+    if (state.lastReminderOn === today) return;
+    running = true;
+    try {
+      const age = state.scrapedOn ? `Current supplier prices are from ${state.scrapedOn}.` : "No supplier prices uploaded yet.";
+      await createMailer().sendMail({
+        from: MAIL_FROM,
+        to: business.email,
+        subject: "Weekly reminder: refresh tyre prices",
+        text:
+          `Time for the weekly tyre price refresh. ${age}\n\n` +
+          "1. Log in to Tyremax, Wing Tyres, Value Tyres and Blairs in the Cursor browser.\n" +
+          "2. Ask the agent to “更新价格” — it fetches the prices and saves tyre-price-data.json.\n" +
+          `3. Upload that file in Admin → Tyre prices. You will get an email listing any price changes.\n\n${adminUrl()}\n`,
+      });
+      const latest = readTyrePriceState();
+      latest.lastReminderOn = today;
+      writeTyrePriceState(latest);
+      console.log("Tyre price reminder sent");
+    } catch (err) {
+      console.error("Tyre price reminder failed:", err.message || err);
+    } finally {
+      running = false;
+    }
+  };
+  setTimeout(tick, 30_000);
+  setInterval(tick, 15 * 60 * 1000);
+}
 
 app.post("/api/tyre-prices/publish", requireOwnerAdmin, (req, res) => {
   try {
@@ -10661,6 +10779,7 @@ app.listen(PORT, "0.0.0.0", () => {
       : "WebSMS: not configured — add WEBSMS_CLIENT_ID / WEBSMS_CLIENT_SECRET for SMS reminders"
   );
   driveBackup.startBackupScheduler({ dataDir: DATA_DIR, uploadsDir: UPLOADS_DIR });
+  startTyrePriceReminderScheduler();
   const techNames = Object.keys(TECH_USERS);
   console.log(
     techNames.length
