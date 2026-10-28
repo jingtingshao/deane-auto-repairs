@@ -244,13 +244,9 @@
         price.querySelector("strong").textContent = formatDollars(opt.price);
 
         const stock = document.createElement("p");
-        const availability = opt.availability || (opt.inStock ? "supplier" : "order");
-        stock.className = `tyre-quote-stock${availability === "order" ? "" : " is-available"}`;
-        stock.textContent = {
-          workshop: "In stock",
-          supplier: "Available within 1 day",
-          order: "Order in — we’ll confirm timing",
-        }[availability];
+        stock.className = "tyre-quote-stock is-available";
+        stock.textContent = "In stock";
+        stock.hidden = opt.availability !== "workshop";
 
         const book = document.createElement("a");
         book.className = "service-cta tyres-book-cta";
