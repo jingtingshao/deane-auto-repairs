@@ -139,6 +139,67 @@ function buildPublic(rows, settings, scrapedOn) {
   };
 }
 
+const STOCK_NOISE = new Set([
+  "ND", "ASY", "XL", "RF", "TL", "AS", "HT", "AT", "MT", "SUV", "TYRE", "TYRES", "NON",
+  "DIRECTIONAL", "ASYMMETRIC", "ASYMMETRICAL", "PATTERN", "RUNFLAT",
+]);
+
+function stockTokens(text) {
+  return new Set(
+    String(text || "")
+      .toUpperCase()
+      .split(/[^A-Z0-9+]+/)
+      .filter((t) => t.length >= 2 && !STOCK_NOISE.has(t) && !/^\d{2,3}[A-Z]?$/.test(t))
+  );
+}
+
+/**
+ * Workshop tyre stock (Admin → Stock, category Tyres, qty on hand > 0).
+ * Returns (size, brand, pattern) => qty, matching size + brand + every tread-pattern word.
+ */
+function workshopTyreStock(items) {
+  const { parseTyreName } = require("./tyre-suppliers");
+  const list = [];
+  for (const it of items || []) {
+    if (it.category !== "tyre" || !(Number(it.qtyOnHand) > 0)) continue;
+    const text = `${it.name || ""} ${it.partNumber || ""}`;
+    const compact = /\b(\d{3})(\d{2})(\d{2})(C?)\b/i.exec(text);
+    const size = parseTyreName(text)?.size || (compact ? `${compact[1]}/${compact[2]}R${compact[3]}${compact[4].toUpperCase()}` : null);
+    if (!size) continue;
+    list.push({
+      size: sizeCmp(size),
+      brand: String(it.brand || "").toUpperCase().replace(/\s+/g, ""),
+      text: `${text} ${it.brand || ""}`.toUpperCase().replace(/\s+/g, ""),
+      tokens: stockTokens(text),
+      qty: Number(it.qtyOnHand),
+    });
+  }
+  return (size, brand, pattern) => {
+    const key = sizeCmp(size);
+    const b = String(brand || "").toUpperCase().replace(/\s+/g, "");
+    const want = stockTokens(pattern);
+    let qty = 0;
+    for (const s of list) {
+      if (s.size !== key || !b || !(s.brand === b || s.text.includes(b))) continue;
+      if (![...want].every((t) => s.tokens.has(t) || s.text.includes(t))) continue;
+      qty += s.qty;
+    }
+    return qty;
+  };
+}
+
+/** Public card availability: our own stock, supplier stock (next day), or order in. */
+function withAvailability(publicPrices, stockFor) {
+  const sizes = {};
+  for (const [size, options] of Object.entries(publicPrices?.sizes || {})) {
+    sizes[size] = options.map((o) => ({
+      ...o,
+      availability: stockFor(size, o.brand, o.pattern) > 0 ? "workshop" : o.inStock ? "supplier" : "order",
+    }));
+  }
+  return { ...publicPrices, sizes };
+}
+
 /** Cheapest tyre in each tier for one size, preferring ones in stock. */
 function cheapestPerTier(rows, settings) {
   const picks = new Set();
@@ -181,7 +242,7 @@ function sizesByPrefix(rows, query, settings) {
     });
 }
 
-function searchBySize(rows, query, settings) {
+function searchBySize(rows, query, settings, stockFor = () => 0) {
   let size = normalizeSizeQuery(query);
   let matches = rows.filter((r) => sizeCmp(r.size) === sizeCmp(size));
   if (!matches.length) {
@@ -205,6 +266,7 @@ function searchBySize(rows, query, settings) {
       tyrewiseEx: num(r.tyrewise_ex),
       stock: String(r.stock ?? ""),
       inStock: inStock(r),
+      workshopQty: stockFor(r.size, r.brand, r.pattern),
       sellPrice: sellPrice(r, settings),
       tier: tierOf(r.brand),
       cheapestInTier: picks.has(r),
@@ -361,6 +423,8 @@ module.exports = {
   sellPrice,
   websitePicks,
   buildPublic,
+  workshopTyreStock,
+  withAvailability,
   searchBySize,
   validateUpload,
   exportCsv,

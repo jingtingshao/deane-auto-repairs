@@ -193,7 +193,7 @@
           <td>${Admin.escapeHtml(r.tier)}${best}</td>
           <td>${Admin.escapeHtml(r.loadSpeed)}</td>
           <td>${Admin.escapeHtml(r.supplier)}</td>
-          <td>${Admin.escapeHtml(r.stock || "—")}</td>
+          <td>${r.workshopQty ? `<span class="badge published">Workshop ${Admin.escapeHtml(String(r.workshopQty))}</span><br />` : ""}${Admin.escapeHtml(r.stock || "—")}</td>
           <td class="price">${cost}</td>
           <td class="price">${money(r.tyrewiseEx)}</td>
           <td class="price"><strong>${money(r.sellPrice, 0)}</strong></td>

@@ -10486,8 +10486,9 @@ app.get("/api/public/tyre-prices", (_req, res) => {
   try {
     const published = readPublishedTyrePrices();
     if (!published) return res.status(404).json({ error: "No tyre prices published yet" });
-    res.setHeader("Cache-Control", "public, max-age=300");
-    res.json(published);
+    const stockFor = tyrePricesLib.workshopTyreStock(readInventoryItems());
+    res.setHeader("Cache-Control", "public, max-age=60");
+    res.json(tyrePricesLib.withAvailability(published, stockFor));
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
@@ -10517,7 +10518,8 @@ app.get("/api/tyre-prices/meta", requireOwnerAdmin, (_req, res) => {
 app.get("/api/tyre-prices/search", requireOwnerAdmin, (req, res) => {
   try {
     const { settings } = readTyrePriceState();
-    res.json(tyrePricesLib.searchBySize(readTyrePriceRows(), req.query.size, settings));
+    const stockFor = tyrePricesLib.workshopTyreStock(readInventoryItems());
+    res.json(tyrePricesLib.searchBySize(readTyrePriceRows(), req.query.size, settings, stockFor));
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
