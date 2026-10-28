@@ -62,6 +62,7 @@ const referralsLib = require("./data/referrals");
 const driveBackup = require("./data/drive-backup");
 const websms = require("./data/websms");
 const tyrePricesLib = require("./data/tyre-prices");
+const tyreSuppliersLib = require("./data/tyre-suppliers");
 
 const PORT = Number(process.env.PORT) || 5173;
 const pdfParseLegacy =
@@ -10502,6 +10503,9 @@ app.get("/api/tyre-prices/meta", requireOwnerAdmin, (_req, res) => {
       sources: state.sources || [],
       uploadedAt: state.uploadedAt || "",
       rowCount: readTyrePriceRows().length,
+      suppliers: tyreSuppliersLib.supplierStatus(),
+      refreshing: Boolean(tyreRefreshJob),
+      lastRefresh: state.lastRefresh || null,
       published: state.published || null,
       publishedSizes: published ? Object.keys(published.sizes || {}).length : 0,
     });
@@ -10543,32 +10547,75 @@ function tyreWebsiteChangeLine(change) {
   return `${change.size} ${change.tier}: ${label(change.before)} → ${label(change.after)}${diff}`;
 }
 
-async function sendTyrePriceChangeEmail({ costs, website, scrapedOn }) {
+async function sendTyrePriceChangeEmail({ intro, costs, website, scrapedOn, failures = [] }) {
   if (!smtpConfigured()) return { skipped: "Email not configured" };
-  if (!costs.changed.length && !website.length) return { skipped: "No price changes" };
+  const costChanges = costs?.changed || [];
+  if (!costChanges.length && !website.length && !failures.length) return { skipped: "No price changes" };
   const shownWebsite = website.slice(0, 60);
+  const failureText = failures.length
+    ? `COULD NOT REFRESH (old prices kept)\n${failures.map((f) => `${f.supplier}: ${f.error}`).join("\n")}\n\n`
+    : "";
   const text =
-    `New supplier tyre prices were uploaded (prices from ${scrapedOn}).\n\n` +
+    `${intro} (prices from ${scrapedOn}).\n\n` +
+    failureText +
     `WEBSITE PRICES THAT WILL CHANGE WHEN YOU PUBLISH (${website.length})\n` +
     (website.length
       ? shownWebsite.map(tyreWebsiteChangeLine).join("\n") +
         (website.length > shownWebsite.length ? `\n…and ${website.length - shownWebsite.length} more.` : "")
       : "None.") +
     `\n\nSUPPLIER COSTS\n` +
-    `${costs.up} went up, ${costs.down} went down. ${costs.added} new tyres, ${costs.removed} no longer listed.\n` +
-    (costs.changed.length ? "Full list attached (CSV).\n" : "") +
+    (costs
+      ? `${costs.up} went up, ${costs.down} went down. ${costs.added} new tyres, ${costs.removed} no longer listed.\n`
+      : "No earlier prices to compare with.\n") +
+    (costChanges.length ? "Full list attached (CSV).\n" : "") +
     `\nThe website still shows the old prices until you press Publish in Admin → Tyre prices:\n${adminUrl()}\n`;
-  const mailer = createMailer();
-  await mailer.sendMail({
+  const subject = costChanges.length || website.length
+    ? `Tyre prices changed: ${website.length} website price${website.length === 1 ? "" : "s"}, ${costChanges.length} supplier cost${costChanges.length === 1 ? "" : "s"}${failures.length ? ` (${failures.length} supplier failed)` : ""}`
+    : `Tyre price refresh: ${failures.length} supplier${failures.length === 1 ? "" : "s"} failed`;
+  await createMailer().sendMail({
     from: MAIL_FROM,
     to: business.email,
-    subject: `Tyre prices changed: ${website.length} website price${website.length === 1 ? "" : "s"}, ${costs.changed.length} supplier cost${costs.changed.length === 1 ? "" : "s"}`,
+    subject,
     text,
-    attachments: costs.changed.length
-      ? [{ filename: `tyre-cost-changes-${scrapedOn}.csv`, content: tyrePricesLib.costChangesCsv(costs.changed) }]
+    attachments: costChanges.length
+      ? [{ filename: `tyre-cost-changes-${scrapedOn}.csv`, content: tyrePricesLib.costChangesCsv(costChanges) }]
       : [],
   });
   return { sent: true, to: business.email };
+}
+
+/** Save a new full price list, compare it with the old one, and email any changes. */
+async function applyNewTyreRows({ rows, sources, scrapedOn, actor, intro, failures = [] }) {
+  const oldRows = readTyrePriceRows();
+  const state = readTyrePriceState();
+  const showingNow =
+    readPublishedTyrePrices() || tyrePricesLib.buildPublic(oldRows, state.settings, state.scrapedOn || "");
+  writeJsonArray(TYRE_PRICE_ROWS_FILE, rows);
+  state.sources = sources;
+  state.scrapedOn = scrapedOn;
+  state.uploadedAt = nowIso();
+  state.uploadedBy = actor;
+  writeTyrePriceState(state);
+
+  let costs = null;
+  let website = [];
+  if (oldRows.length) {
+    costs = tyrePricesLib.diffCosts(oldRows, rows);
+    website = tyrePricesLib.diffWebsite(showingNow, tyrePricesLib.buildPublic(rows, state.settings, scrapedOn));
+  }
+  let email = { skipped: "First upload — nothing to compare" };
+  if (costs || failures.length) {
+    try {
+      email = await sendTyrePriceChangeEmail({ intro, costs, website, scrapedOn, failures });
+    } catch (err) {
+      console.error("Tyre price change email failed:", err);
+      email = { error: err.message || "Email failed" };
+    }
+  }
+  const changes = costs
+    ? { costsChanged: costs.changed.length, up: costs.up, down: costs.down, websiteChanged: website.length }
+    : null;
+  return { changes, email };
 }
 
 app.post("/api/tyre-prices/upload", requireOwnerAdmin, tyrePriceUpload.single("file"), async (req, res) => {
@@ -10581,37 +10628,108 @@ app.post("/api/tyre-prices/upload", requireOwnerAdmin, tyrePriceUpload.single("f
       return res.status(400).json({ error: "That is not a price data file (expected tyre-price-data.json)." });
     }
     const { rows, sources, scrapedOn } = tyrePricesLib.validateUpload(payload);
-    const oldRows = readTyrePriceRows();
-    const state = readTyrePriceState();
-    const showingNow =
-      readPublishedTyrePrices() || tyrePricesLib.buildPublic(oldRows, state.settings, state.scrapedOn || "");
-    writeJsonArray(TYRE_PRICE_ROWS_FILE, rows);
-    state.sources = sources;
-    state.scrapedOn = scrapedOn;
-    state.uploadedAt = nowIso();
-    state.uploadedBy = nowActor(req);
-    writeTyrePriceState(state);
-
-    let changes = null;
-    let email = { skipped: "First upload — nothing to compare" };
-    if (oldRows.length) {
-      const costs = tyrePricesLib.diffCosts(oldRows, rows);
-      const website = tyrePricesLib.diffWebsite(
-        showingNow,
-        tyrePricesLib.buildPublic(rows, state.settings, scrapedOn)
-      );
-      changes = { costsChanged: costs.changed.length, up: costs.up, down: costs.down, websiteChanged: website.length };
-      try {
-        email = await sendTyrePriceChangeEmail({ costs, website, scrapedOn });
-      } catch (err) {
-        console.error("Tyre price change email failed:", err);
-        email = { error: err.message || "Email failed" };
-      }
-    }
-    res.json({ rowCount: rows.length, sources, scrapedOn, changes, email });
+    const result = await applyNewTyreRows({
+      rows,
+      sources,
+      scrapedOn,
+      actor: nowActor(req),
+      intro: "New supplier tyre prices were uploaded in Admin",
+    });
+    res.json({ rowCount: rows.length, sources, scrapedOn, ...result });
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
   }
+});
+
+let tyreRefreshJob = null;
+
+/** Log in to every supplier with a saved login, download prices, and apply them. */
+function runTyrePriceRefresh(reason, actor) {
+  if (tyreRefreshJob) return tyreRefreshJob;
+  tyreRefreshJob = (async () => {
+    const results = await tyreSuppliersLib.fetchAllSuppliers(process.env, (msg) => console.log(`Tyre refresh: ${msg}`));
+    const oldRows = readTyrePriceRows();
+    const oldCounts = {};
+    for (const r of oldRows) oldCounts[r.supplier] = (oldCounts[r.supplier] || 0) + 1;
+    const failures = [];
+    const good = [];
+    for (const r of results) {
+      if (r.skipped) continue;
+      if (r.error) failures.push({ supplier: r.supplier, error: r.error });
+      else if (oldCounts[r.supplier] && r.rows.length < oldCounts[r.supplier] * 0.5) {
+        failures.push({ supplier: r.supplier, error: `only ${r.rows.length} tyres downloaded (last time ${oldCounts[r.supplier]})` });
+      } else good.push(r);
+    }
+    const label = reason === "weekly" ? "The weekly automatic tyre price refresh" : "A tyre price refresh started in Admin";
+    let outcome = { changes: null, email: null };
+    if (good.length) {
+      const today = todayIso();
+      const fresh = new Set(good.map((g) => g.supplier));
+      const state = readTyrePriceState();
+      const sources = [
+        ...(state.sources || []).filter((s) => !fresh.has(s.supplier)),
+        ...good.map((g) => ({ supplier: g.supplier, scrapedOn: today, count: g.rows.length })),
+      ].sort((a, b) => a.supplier.localeCompare(b.supplier));
+      const { rows } = tyrePricesLib.validateUpload({
+        rows: [...oldRows.filter((r) => !fresh.has(r.supplier)), ...good.flatMap((g) => g.rows)],
+        sources,
+        scrapedOn: today,
+      });
+      outcome = await applyNewTyreRows({
+        rows,
+        sources,
+        scrapedOn: today,
+        actor,
+        intro: `${label} downloaded new prices from ${[...fresh].join(", ")}`,
+        failures,
+      });
+    } else if (failures.length && smtpConfigured()) {
+      try {
+        outcome.email = await sendTyrePriceChangeEmail({
+          intro: `${label} could not download any supplier prices`,
+          costs: null,
+          website: [],
+          scrapedOn: readTyrePriceState().scrapedOn || "earlier",
+          failures,
+        });
+      } catch (err) {
+        outcome.email = { error: err.message || "Email failed" };
+      }
+    }
+    const latest = readTyrePriceState();
+    latest.lastRefresh = {
+      at: nowIso(),
+      reason,
+      ok: good.map((g) => ({ supplier: g.supplier, count: g.rows.length })),
+      failures,
+      changes: outcome.changes,
+      email: outcome.email,
+    };
+    writeTyrePriceState(latest);
+    return latest.lastRefresh;
+  })()
+    .catch((err) => {
+      console.error("Tyre price refresh failed:", err);
+      const latest = readTyrePriceState();
+      latest.lastRefresh = { at: nowIso(), reason, ok: [], failures: [{ supplier: "All", error: err.message || String(err) }] };
+      writeTyrePriceState(latest);
+      return latest.lastRefresh;
+    })
+    .finally(() => {
+      tyreRefreshJob = null;
+    });
+  return tyreRefreshJob;
+}
+
+app.post("/api/tyre-prices/refresh", requireOwnerAdmin, (req, res) => {
+  if (!tyreSuppliersLib.supplierStatus().some((s) => s.configured)) {
+    return res.status(400).json({
+      error: "No supplier logins are saved on the server yet. Add them under Render → Environment.",
+    });
+  }
+  const already = Boolean(tyreRefreshJob);
+  runTyrePriceRefresh("manual", nowActor(req));
+  res.json({ started: true, already });
 });
 
 function aucklandWeekdayHour(date = new Date()) {
@@ -10627,17 +10745,21 @@ function aucklandWeekdayHour(date = new Date()) {
   };
 }
 
-/** Every Monday from 8am Auckland: remind the workshop to refresh supplier tyre prices. */
+/**
+ * Every Monday from 8am Auckland: refresh supplier tyre prices automatically when
+ * supplier logins are saved on the server; otherwise email a reminder to do it by hand.
+ */
 function startTyrePriceReminderScheduler() {
   if (!process.env.RENDER) {
-    console.log("Tyre price reminder: only runs on Render");
+    console.log("Tyre price refresh: weekly schedule only runs on Render");
     return;
   }
-  if (!smtpConfigured()) {
-    console.log("Tyre price reminder: off (email not configured)");
-    return;
-  }
-  console.log("Tyre price reminder: Mondays from 8:00 Auckland time");
+  const configured = tyreSuppliersLib.supplierStatus().filter((s) => s.configured).map((s) => s.supplier);
+  console.log(
+    configured.length
+      ? `Tyre price refresh: Mondays from 8:00 Auckland time (${configured.join(", ")})`
+      : "Tyre price reminder: Mondays from 8:00 Auckland time (no supplier logins saved)"
+  );
   let running = false;
   const tick = async () => {
     if (running) return;
@@ -10645,7 +10767,19 @@ function startTyrePriceReminderScheduler() {
     if (weekday !== "Mon" || hour < 8) return;
     const today = todayIso();
     const state = readTyrePriceState();
-    if (state.lastReminderOn === today) return;
+    if (configured.length) {
+      if (state.lastRefreshOn === today) return;
+      state.lastRefreshOn = today;
+      writeTyrePriceState(state);
+      running = true;
+      try {
+        await runTyrePriceRefresh("weekly", "weekly schedule");
+      } finally {
+        running = false;
+      }
+      return;
+    }
+    if (state.lastReminderOn === today || !smtpConfigured()) return;
     running = true;
     try {
       const age = state.scrapedOn ? `Current supplier prices are from ${state.scrapedOn}.` : "No supplier prices uploaded yet.";

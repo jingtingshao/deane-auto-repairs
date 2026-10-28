@@ -13,6 +13,9 @@
   const publishInfoEl = document.getElementById("tyre-publish-info");
   const publishBtn = document.getElementById("btn-tyre-publish");
   const dataInfoEl = document.getElementById("tyre-data-info");
+  const refreshInfoEl = document.getElementById("tyre-refresh-info");
+  const refreshBtn = document.getElementById("btn-tyre-refresh");
+  let refreshPoll = null;
   const uploadBtn = document.getElementById("btn-tyre-upload");
   const uploadInput = document.getElementById("tyre-upload-input");
 
@@ -79,8 +82,49 @@
         .map((src) => `${src.supplier} ${src.count}`)
         .join(" · ");
       dataInfoEl.textContent = meta.rowCount
-        ? `${meta.rowCount.toLocaleString("en-NZ")} tyres, supplier prices from ${Admin.formatDateShort(meta.scrapedOn)}. ${sources}. A reminder email goes out every Monday at 8am; uploading new data emails you any price changes.`
+        ? `${meta.rowCount.toLocaleString("en-NZ")} tyres, supplier prices from ${Admin.formatDateShort(meta.scrapedOn)}. ${sources}.`
         : "No price data yet. Upload tyre-price-data.json from the price list folder on the office computer.";
+    }
+    renderRefreshInfo();
+  }
+
+  function renderRefreshInfo() {
+    if (!refreshInfoEl || !meta) return;
+    const suppliers = meta.suppliers || [];
+    const saved = suppliers.filter((s) => s.configured).map((s) => s.supplier);
+    const missing = suppliers.filter((s) => !s.configured).map((s) => s.supplier);
+    const parts = [];
+    parts.push(
+      saved.length
+        ? `Every Monday at 8am the server logs in and refreshes ${saved.join(", ")} automatically, then emails any price changes.`
+        : "No supplier logins saved on the server, so every Monday at 8am you get a reminder email instead."
+    );
+    if (saved.length && missing.length) parts.push(`No login saved for ${missing.join(", ")}.`);
+    const last = meta.lastRefresh;
+    if (meta.refreshing) {
+      parts.push("Refreshing now… this takes a few minutes.");
+    } else if (last) {
+      const ok = (last.ok || []).map((o) => `${o.supplier} ${o.count}`).join(", ");
+      const failed = (last.failures || []).map((f) => `${f.supplier} (${f.error})`).join("; ");
+      parts.push(
+        `Last refresh ${Admin.formatDateTimeShort(last.at)}: ${ok || "nothing downloaded"}${failed ? `. Failed: ${failed}` : ""}.`
+      );
+    }
+    refreshInfoEl.textContent = parts.join(" ");
+    if (refreshBtn) {
+      refreshBtn.disabled = Boolean(meta.refreshing) || !saved.length;
+      refreshBtn.textContent = meta.refreshing ? "Refreshing…" : "Refresh prices now";
+    }
+    if (meta.refreshing && !refreshPoll) {
+      refreshPoll = setInterval(async () => {
+        await loadMeta();
+        if (!meta?.refreshing) {
+          clearInterval(refreshPoll);
+          refreshPoll = null;
+          runSearch();
+          showStatus("Price refresh finished. Any changes have been emailed.");
+        }
+      }, 10_000);
     }
   }
 
@@ -236,6 +280,16 @@
       showStatus(err?.message || "Could not publish.");
     } finally {
       publishBtn.disabled = !meta?.rowCount;
+    }
+  });
+
+  refreshBtn?.addEventListener("click", async () => {
+    if (!confirm("Log in to the suppliers and download new prices now? This takes a few minutes.")) return;
+    try {
+      await Admin.api("/api/tyre-prices/refresh", { method: "POST", body: "{}" });
+      await loadMeta();
+    } catch (err) {
+      showStatus(err?.message || "Could not start the refresh.");
     }
   });
 

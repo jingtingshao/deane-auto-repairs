@@ -52,3 +52,19 @@ services:
         sync: false
       - key: WEBSMS_WEBHOOK_SECRET
         sync: false
+      - key: TYREMAX_EMAIL
+        sync: false
+      - key: TYREMAX_PASSWORD
+        sync: false
+      - key: WING_EMAIL
+        sync: false
+      - key: WING_PASSWORD
+        sync: false
+      - key: VALUETYRES_CODE
+        sync: false
+      - key: VALUETYRES_PASSWORD
+        sync: false
+      - key: BLAIRS_EMAIL
+        sync: false
+      - key: BLAIRS_PASSWORD
+        sync: false
