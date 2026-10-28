@@ -87,11 +87,14 @@ def overlay_poster(poster_path: Path, qr_path: Path, out_path: Path, place: str)
     print(f"poster {out_path.name} ({place})")
 
 
-def make_sticker(qr_path: Path, out_path: Path) -> None:
+def make_sticker(
+    qr_path: Path,
+    out_path: Path,
+    title: str = "SCAN TO BOOK",
+    url: str = "www.deaneauto.co.nz/book",
+) -> None:
     qr = Image.open(qr_path).convert("RGB")
     pad = 36
-    title = "SCAN TO BOOK"
-    url = "www.deaneauto.co.nz/book"
     title_font = font(36, bold=True)
     url_font = font(22, bold=False)
     probe = ImageDraw.Draw(Image.new("RGB", (10, 10)))
@@ -123,12 +126,17 @@ TYRE_SUBLINE = "(NEXT TO BP PETROL STATION)"
 YELLOW = (255, 214, 0)
 
 
-def make_box_card(qr_path: Path, width: int, height: int, s: int) -> Image.Image:
+def make_box_card(
+    qr_path: Path,
+    width: int,
+    height: int,
+    s: int,
+    title: str = "SCAN TO BOOK",
+    url: str = "deaneauto.co.nz/book",
+) -> Image.Image:
     card = Image.new("RGB", (width, height), NAVY)
     draw = ImageDraw.Draw(card)
     draw.rounded_rectangle((0, 0, width - 1, height - 1), radius=10 * s, fill=WHITE, outline=YELLOW, width=3 * s)
-    title = "SCAN TO BOOK"
-    url = "deaneauto.co.nz/book"
     title_font = font(14 * s, bold=True)
     url_font = font(10 * s, bold=True)
     qr_px = 118 * s
@@ -144,6 +152,10 @@ def make_box_card(qr_path: Path, width: int, height: int, s: int) -> Image.Image
     url_y = top + title_h + gap + qr_px + gap
     draw.text(((width - (u_box[2] - u_box[0])) / 2 - u_box[0], url_y - u_box[1]), url, fill=NAVY, font=url_font)
     return card
+
+
+TYRE_CARD_TITLE = "SCAN FOR PRICES"
+TYRE_CARD_URL = "deaneauto.co.nz/tyres"
 
 
 def tyre_poster(qr_path: Path) -> None:
@@ -173,7 +185,9 @@ def tyre_poster(qr_path: Path) -> None:
     draw.text((sx * s - box[0], sy * s - box[1]), TYRE_SUBLINE, fill=WHITE, font=sub_font)
 
     bx0, by0, bx1, by1 = (v * s for v in TYRE_QR_BOX)
-    card = make_box_card(qr_path, bx1 - bx0, by1 - by0, s)
+    card = make_box_card(
+        qr_path, bx1 - bx0, by1 - by0, s, title=TYRE_CARD_TITLE, url=TYRE_CARD_URL
+    )
     poster.paste(card, (bx0, by0))
 
     out = ADS_DIR / TYRE_POSTER.replace(".jpg", "-qr.png")
@@ -197,10 +211,22 @@ def load_cn_poster() -> Image.Image:
 
 
 def tyre_poster_cn(qr_path: Path) -> None:
-    finish_cn_poster(load_cn_poster(), qr_path, TYRE_CN_POSTER.replace(".jpg", "-qr.png"))
+    finish_cn_poster(
+        load_cn_poster(),
+        qr_path,
+        TYRE_CN_POSTER.replace(".jpg", "-qr.png"),
+        title=TYRE_CARD_TITLE,
+        url=TYRE_CARD_URL,
+    )
 
 
-def finish_cn_poster(poster: Image.Image, qr_path: Path, out_name: str) -> None:
+def finish_cn_poster(
+    poster: Image.Image,
+    qr_path: Path,
+    out_name: str,
+    title: str = "SCAN TO BOOK",
+    url: str = "deaneauto.co.nz/book",
+) -> None:
     s = TYRE_SCALE
     px = poster.load()
 
@@ -224,7 +250,7 @@ def finish_cn_poster(poster: Image.Image, qr_path: Path, out_name: str) -> None:
     draw.text((sx * s - box[0], sy * s - box[1]), TYRE_SUBLINE, fill=WHITE, font=sub_font)
 
     bx0, by0, bx1, by1 = (v * s for v in TYRE_CN_QR_BOX)
-    card = make_box_card(qr_path, bx1 - bx0, by1 - by0, s)
+    card = make_box_card(qr_path, bx1 - bx0, by1 - by0, s, title=title, url=url)
     poster.paste(card, (bx0, by0))
 
     out = ADS_DIR / out_name
@@ -641,11 +667,19 @@ def wof_poster(qr_path: Path) -> None:
 def main() -> None:
     QR_DIR.mkdir(parents=True, exist_ok=True)
     general = QR_DIR / "book.png"
+    tyre_prices = QR_DIR / "tyre-prices.png"
     make_sticker(general, QR_DIR / "scan-to-book-sticker.png")
+    make_sticker(
+        tyre_prices,
+        QR_DIR / "scan-tyre-prices-sticker.png",
+        title="SCAN FOR TYRE PRICES",
+        url="www.deaneauto.co.nz/tyres",
+    )
     for poster_name, qr_name, place in POSTERS:
         overlay_poster(ADS_DIR / poster_name, QR_DIR / qr_name, ADS_DIR / poster_name.replace(".png", "-qr.png"), place)
-    tyre_poster(QR_DIR / "book-tyres.png")
-    tyre_poster_cn(QR_DIR / "book-tyres.png")
+    # Tyre ads open the live price finder so customers can check their size.
+    tyre_poster(tyre_prices)
+    tyre_poster_cn(tyre_prices)
     wof_poster_cn(QR_DIR / "book-wof.png")
     wof_poster(QR_DIR / "book-wof.png")
     service_poster_cn(QR_DIR / "book-basic-service.png")

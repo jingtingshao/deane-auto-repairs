@@ -49,6 +49,9 @@ On Render, set `ADMIN_PIN` in Environment (not in Git). If it is missing or too 
 | `docs/service-checklist-and-wof-notes.md` | Spec |
 | `facebook-page.txt` | Facebook copy kit |
 | `pre-purchase/ppi-form.html` | Pre-purchase report form with photo upload slots |
+| `tyres/` | Public tyre price finder (QR target: `https://www.deaneauto.co.nz/tyres/`) |
+| `assets/qr/tyre-prices.png` | Print-ready QR for ads → tyre prices |
+| `assets/qr/scan-tyre-prices-sticker.png` | Labeled sticker: Scan for tyre prices |
 
 Reports are stored in `data/reports.json` on this computer (simple local MVP).
 Quotes and invoices are stored in `data/billing.json` (workshop only — no bank data).

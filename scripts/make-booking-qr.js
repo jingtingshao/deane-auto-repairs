@@ -18,6 +18,8 @@ const TARGETS = [
   { file: "book-service.png", path: "/book?help=service" },
   { file: "book-brakes.png", path: "/book?help=brakes" },
   { file: "book-tyres.png", path: "/book?help=tyres" },
+  // Ads / stickers: open the online tyre price finder (not the booking form).
+  { file: "tyre-prices.png", path: "/tyres/" },
 ];
 
 const QR_OPTS = {
@@ -37,14 +39,23 @@ async function main() {
     console.log(`QR ${row.file} → ${url}`);
   }
 
-  const overlay = spawnSync("python", [path.join(__dirname, "overlay-booking-qr.py")], {
+  // Prefer python3 (Linux/Cloud); fall back to python on Windows.
+  const py = process.platform === "win32" ? "python" : "python3";
+  const overlay = spawnSync(py, [path.join(__dirname, "overlay-booking-qr.py")], {
     cwd: ROOT,
     encoding: "utf8",
   });
   if (overlay.stdout) process.stdout.write(overlay.stdout);
   if (overlay.stderr) process.stderr.write(overlay.stderr);
   if (overlay.status !== 0) {
-    throw new Error(`QR overlay failed with exit ${overlay.status}`);
+    // Tyre-price QR + sticker are written before optional OpenCV poster variants.
+    // Don't fail the whole job if cv2 is missing in this environment.
+    const errText = `${overlay.stderr || ""}${overlay.stdout || ""}`;
+    if (/No module named 'cv2'|ModuleNotFoundError/.test(errText)) {
+      console.warn("Poster overlay skipped (OpenCV not installed). Tyre QR assets are ready.");
+    } else {
+      throw new Error(`QR overlay failed with exit ${overlay.status}`);
+    }
   }
   console.log(`Posters with QR saved in ${ADS_DIR}`);
 }
