@@ -18,18 +18,23 @@ POSTERS = [
 ]
 
 
-def font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+WINDOWS_FONTS = Path("C:/Windows/Fonts")
+
+
+def font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     names = (
         ["arialbd.ttf", "segoeuib.ttf", "calibrib.ttf"]
         if bold
         else ["arial.ttf", "segoeui.ttf", "calibri.ttf"]
     )
     for name in names:
-        try:
-            return ImageFont.truetype(name, size)
-        except OSError:
-            continue
-    return ImageFont.load_default()
+        for candidate in (name, WINDOWS_FONTS / name):
+            try:
+                return ImageFont.truetype(str(candidate), size)
+            except OSError:
+                continue
+    # The bitmap fallback renders tiny text that silently ruins print posters.
+    raise OSError(f"No usable font found among {names}")
 
 
 def text_size(draw: ImageDraw.ImageDraw, text: str, used: ImageFont.ImageFont) -> tuple[int, int]:
@@ -210,9 +215,42 @@ def load_cn_poster() -> Image.Image:
     return src.resize((src.width * TYRE_SCALE, src.height * TYRE_SCALE), Image.Resampling.LANCZOS)
 
 
+CN_BRAND_BOX = (476, 61, 593, 117)
+CN_BRAND_TEXT = "鼎恩汽修"
+CN_BRAND_SCALE = 0.9 * 0.9 * 0.9
+CN_BRAND_FONT = "msyhbd.ttc"
+# The poster's Chinese characters lean slightly right.
+CN_BRAND_SHEAR = 0.12
+
+
+def retitle_cn_brand(poster: Image.Image, s: int) -> None:
+    """Replace the yellow 鼎恩 beside the Deane script with CN_BRAND_TEXT at CN_BRAND_SCALE of its height."""
+    x0, y0, x1, y1 = CN_BRAND_BOX
+    src = poster.crop((x0 * s, y0 * s, (x1 + 1) * s, (y1 + 1) * s))
+    yellow = sorted(p for p in src.getdata() if p[0] > 200 and p[1] > 170 and p[2] < 80)
+    fill = yellow[len(yellow) // 2]
+    erase_text(poster, CN_BRAND_BOX, s, pad=6)
+
+    big = ImageFont.truetype(str(WINDOWS_FONTS / CN_BRAND_FONT), 400)
+    tb = big.getbbox(CN_BRAND_TEXT)
+    mask = Image.new("L", (tb[2] - tb[0] + 120, tb[3] - tb[1]), 0)
+    ImageDraw.Draw(mask).text((-tb[0], -tb[1]), CN_BRAND_TEXT, font=big, fill=255)
+    mask = mask.transform(
+        mask.size, Image.Transform.AFFINE, (1, CN_BRAND_SHEAR, -CN_BRAND_SHEAR * mask.height, 0, 1, 0),
+        resample=Image.Resampling.BICUBIC,
+    )
+    mask = mask.crop(mask.getbbox())
+    target_h = round((y1 - y0 + 1) * CN_BRAND_SCALE * s)
+    mask = mask.resize((round(mask.width * target_h / mask.height), target_h), Image.Resampling.LANCZOS)
+    top = round((y0 + y1 + 1) / 2 * s - target_h / 2)
+    paste_text(poster, mask, (x0 * s, top), fill, s, shadow=170)
+
+
 def tyre_poster_cn(qr_path: Path) -> None:
+    poster = load_cn_poster()
+    retitle_cn_brand(poster, TYRE_SCALE)
     finish_cn_poster(
-        load_cn_poster(),
+        poster,
         qr_path,
         TYRE_CN_POSTER.replace(".jpg", "-qr.png"),
         title=TYRE_CARD_TITLE,
