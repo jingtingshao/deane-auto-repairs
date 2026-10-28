@@ -141,7 +141,6 @@
           <td class="price">${cost}</td>
           <td class="price">${money(r.tyrewiseEx)}</td>
           <td class="price"><strong>${money(r.sellPrice, 0)}</strong></td>
-          <td class="price">${r.sellPrice ? money(r.sellPrice * 4, 0) : "—"}</td>
           <td>${web}</td>
         </tr>`;
       })
@@ -157,7 +156,6 @@
             <th>Cost ex GST</th>
             <th>Tyrewise ex GST</th>
             <th>Sell fitted</th>
-            <th>Set of 4</th>
             <th>Website</th>
           </tr>
         </thead>

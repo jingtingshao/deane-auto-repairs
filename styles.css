@@ -828,14 +828,8 @@ button.see-details {
   color: #4b5563;
 }
 
-.tyres-detail .tyre-quote-set {
-  margin: 4px 0 8px;
-  font-size: 13px;
-  color: #4b5563;
-}
-
 .tyres-detail .tyre-quote-stock {
-  margin: 0 0 4px;
+  margin: 8px 0 4px;
   font: 600 12px / 1.3 var(--body);
   color: #92400e;
 }

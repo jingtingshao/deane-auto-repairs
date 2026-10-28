@@ -5,13 +5,17 @@ const DEFAULT_SETTINGS = Object.freeze({
   fittingIncl: 30,
   includeTyrewise: true,
 });
+// Tiers follow tyrehero.co.nz/brands (Oct 2026); anything not listed there is Budget
+// unless noted. Giti, Petlas, Cooper, CST and Marshal are not on TyreHero.
 const PREMIUM = new Set([
-  "goodyear", "continental", "bridgestone", "michelin", "pirelli", "dunlop",
-  "hankook", "kumho", "falken", "yokohama", "toyo",
+  "alliance", "bfgoodrich", "bridgestone", "continental", "dunlop", "goodyear", "michelin",
+  "pirelli", "toyo", "vredestein", "yokohama", "z tyre",
 ]);
 const MID = new Set([
-  "laufenn", "maxxis", "giti", "general tire", "petlas", "triangle", "nankang", "sailun",
-  "linglong", "goodride", "westlake", "marshal", "gripmax", "cooper", "nexen",
+  "amp", "atturo", "davanti", "falken", "general", "general tire", "gt radial", "hankook",
+  "kenda", "kumho", "linglong", "maxxis", "minerva", "nexen", "nitto", "otani", "prinx",
+  "triangle", "vitora",
+  "giti", "petlas", "cooper", "cst", "marshal",
 ]);
 const TIERS = ["Budget", "Mid-range", "Premium"];
 const PATTERN_NOISE = /^(ND|ASY|ASYM\w*|ASS?Y\w*|ASSIMETRICAL|NON|NITRO|\+|-|&)$/i;
@@ -92,26 +96,15 @@ function sellPrice(row, settings) {
 
 function websitePicks(rows, settings) {
   const usable = rows.filter((r) => num(r.cost_ex) && r.brand && r.brand !== "Other");
-  const byTier = { Budget: [], "Mid-range": [], Premium: [] };
-  for (const r of usable) byTier[tierOf(r.brand)].push(r);
-  const pools = {
-    Budget: [...byTier.Budget, ...byTier["Mid-range"]],
-    "Mid-range": byTier["Mid-range"],
-    Premium: byTier.Premium,
-  };
   const picks = [];
-  const used = new Set();
-  let floor = 0;
   for (const tier of TIERS) {
-    const cands = pools[tier].filter((r) => sellPrice(r, settings) > floor && !used.has(r.brand));
+    const cands = usable.filter((r) => tierOf(r.brand) === tier);
     if (!cands.length) continue;
     cands.sort((a, b) => Number(inStock(b)) - Number(inStock(a)) || sellPrice(a, settings) - sellPrice(b, settings));
-    const pick = cands[0];
-    floor = sellPrice(pick, settings);
-    used.add(pick.brand);
-    picks.push({ tier, row: pick, price: floor });
+    picks.push({ tier, row: cands[0], price: sellPrice(cands[0], settings) });
   }
-  return picks;
+  // A lower tier that is not cheaper than a higher tier is pointless to show.
+  return picks.filter((p, i) => picks.slice(i + 1).every((q) => p.price < q.price));
 }
 
 function buildPublic(rows, settings, scrapedOn) {
@@ -260,7 +253,7 @@ function exportCsv(rows, settings) {
   const header = [
     "Size", "Brand", "Pattern", "Load / speed", "Supplier", "SKU", "Category",
     "Cost ex GST", "Special", "Usual cost ex GST", "Tyrewise ex GST", "Stock",
-    "Sell price fitted incl GST", "Set of 4", "Supplier description",
+    "Sell price fitted incl GST", "Supplier description",
   ];
   const sorted = [...rows].sort(
     (a, b) => sizeCmp(a.size).localeCompare(sizeCmp(b.size)) || (a.cost_ex ?? 0) - (b.cost_ex ?? 0)
@@ -272,7 +265,7 @@ function exportCsv(rows, settings) {
       [
         r.size, r.brand, r.pattern, r.load_speed, r.supplier, r.sku, r.category,
         r.cost_ex, r.special ? "SPECIAL" : "", r.usual_ex, r.tyrewise_ex, r.stock,
-        price, price === null ? "" : price * 4, r.features,
+        price, r.features,
       ]
         .map(csvCell)
         .join(",")

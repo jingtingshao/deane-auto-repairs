@@ -243,10 +243,6 @@
         price.innerHTML = "<strong></strong><span>per tyre, fitted</span>";
         price.querySelector("strong").textContent = formatDollars(opt.price);
 
-        const set = document.createElement("p");
-        set.className = "tyre-quote-set";
-        set.textContent = `Set of 4: ${formatDollars(opt.price * 4)}`;
-
         const stock = document.createElement("p");
         stock.className = `tyre-quote-stock${opt.inStock ? " is-available" : ""}`;
         stock.textContent = opt.inStock ? "Available now" : "Order in — we’ll confirm timing";
@@ -262,7 +258,7 @@
           );
         });
 
-        card.append(tier, name, spec, price, set, stock, book);
+        card.append(tier, name, spec, price, stock, book);
         return card;
       })
     );
