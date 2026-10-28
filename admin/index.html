@@ -687,13 +687,19 @@
             Tyre size
             <input id="tyre-size-search" type="search" placeholder="205/55R16, 20555 or just 205" autocomplete="off" />
           </label>
+          <div id="tyre-tier-filters" class="parts-guide-filters">
+            <button type="button" class="ghost active" data-tyre-tier="all">All</button>
+            <button type="button" class="ghost" data-tyre-tier="Budget">Budget</button>
+            <button type="button" class="ghost" data-tyre-tier="Mid-range">Mid-range</button>
+            <button type="button" class="ghost" data-tyre-tier="Premium">Premium</button>
+          </div>
           <p id="tyre-search-summary" class="muted small"></p>
           <div id="tyre-search-results"></div>
 
           <form id="tyre-settings-form" class="report-form">
             <fieldset>
               <legend>Selling price</legend>
-              <p class="muted small">Sell price per tyre = normal cost ex GST × (1 + markup) + GST + fitting + Tyrewise fee. Supplier specials are ignored, so a special that ends never puts the price under cost.</p>
+              <p class="muted small">Sell price per tyre = normal cost ex GST × (1 + markup) + GST + fitting + Tyrewise fee. Supplier specials are ignored, so a special that ends never puts the price under cost. Tiers follow tyrehero.co.nz/brands. These prices are only shown here, not on the website.</p>
               <div class="grid-3">
                 <label>Markup %<input id="tyre-markup" type="number" min="0" max="300" step="1" required /></label>
                 <label>Fitting per tyre (incl GST)<input id="tyre-fitting" type="number" min="0" max="500" step="1" required /></label>
@@ -709,16 +715,6 @@
               </div>
             </fieldset>
           </form>
-
-          <div class="report-form">
-            <fieldset>
-              <legend>Website</legend>
-              <p id="tyre-publish-info" class="muted small"></p>
-              <div class="line-actions">
-                <button type="button" id="btn-tyre-publish" class="primary">Publish prices to website</button>
-              </div>
-            </fieldset>
-          </div>
 
           <div class="report-form">
             <fieldset>
@@ -1257,7 +1253,7 @@
     <script src="supplier-invoices.js?v=20261019pickaccept"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>
     <script src="parts-directory.js?v=20261021wreckers"></script>
-    <script src="tyre-prices.js?v=20261028tyretiers"></script>
+    <script src="tyre-prices.js?v=20261028adminonly"></script>
     <script src="customers.js?v=20260906techcustomers"></script>
     <script src="referrals.js?v=20260906usedon"></script>
     <script src="sms-inbox.js?v=20260830yesno"></script>

@@ -18,7 +18,6 @@ const MID = new Set([
   "giti", "petlas", "cooper", "cst", "marshal",
 ]);
 const TIERS = ["Budget", "Mid-range", "Premium"];
-const PATTERN_NOISE = /^(ND|ASY|ASYM\w*|ASS?Y\w*|ASSIMETRICAL|NON|NITRO|\+|-|&)$/i;
 const ROW_FIELDS = [
   "supplier", "category", "sku", "size", "brand", "pattern", "variant", "load_speed", "ply",
   "features", "oe_fitments", "cost_ex", "special", "usual_ex", "rrp_incl", "tyrewise_ex", "stock",
@@ -71,15 +70,6 @@ function tierOf(brand) {
   return "Budget";
 }
 
-function nicePattern(pattern) {
-  return String(pattern || "")
-    .split(/\s+/)
-    .filter((w) => w && !PATTERN_NOISE.test(w))
-    .map((w) => (/^[A-Z]{4,}$/.test(w) ? w.charAt(0) + w.slice(1).toLowerCase() : w))
-    .join(" ")
-    .slice(0, 40);
-}
-
 /** Price basis is the normal (non-special) cost, so an ending special never undercuts. */
 function baseCost(row) {
   return row.special && num(row.usual_ex) ? num(row.usual_ex) : num(row.cost_ex);
@@ -94,49 +84,16 @@ function sellPrice(row, settings) {
   return Math.ceil(tyre + settings.fittingIncl + tyrewise);
 }
 
-function websitePicks(rows, settings) {
-  const usable = rows.filter((r) => num(r.cost_ex) && r.brand && r.brand !== "Other");
-  const picks = [];
+/** Cheapest tyre in each tier for one size, preferring ones in stock. */
+function cheapestPerTier(rows, settings) {
+  const picks = new Set();
   for (const tier of TIERS) {
-    const cands = usable.filter((r) => tierOf(r.brand) === tier);
+    const cands = rows.filter((r) => num(r.cost_ex) && r.brand && r.brand !== "Other" && tierOf(r.brand) === tier);
     if (!cands.length) continue;
     cands.sort((a, b) => Number(inStock(b)) - Number(inStock(a)) || sellPrice(a, settings) - sellPrice(b, settings));
-    picks.push({ tier, row: cands[0], price: sellPrice(cands[0], settings) });
+    picks.add(cands[0]);
   }
-  // A lower tier that is not cheaper than a higher tier is pointless to show.
-  return picks.filter((p, i) => picks.slice(i + 1).every((q) => p.price < q.price));
-}
-
-function buildPublic(rows, settings, scrapedOn) {
-  const groups = new Map();
-  for (const r of rows) {
-    if (!/^\d{3}\/\d{2}R\d{2}$/.test(r.size)) continue;
-    if (!groups.has(r.size)) groups.set(r.size, []);
-    groups.get(r.size).push(r);
-  }
-  const sizes = {};
-  const keys = [...groups.keys()].sort((a, b) => {
-    const [, aw, ap, ar] = /^(\d+)\/(\d+)R(\d+)$/.exec(a);
-    const [, bw, bp, br] = /^(\d+)\/(\d+)R(\d+)$/.exec(b);
-    return ar - br || aw - bw || ap - bp;
-  });
-  for (const size of keys) {
-    const picks = websitePicks(groups.get(size), settings);
-    if (!picks.length) continue;
-    sizes[size] = picks.map(({ tier, row, price }) => ({
-      tier,
-      brand: row.brand,
-      pattern: nicePattern(row.pattern),
-      load: row.load_speed || "",
-      price,
-      inStock: inStock(row),
-    }));
-  }
-  return {
-    updated: scrapedOn,
-    note: "Per tyre, fitted, incl. GST and Tyrewise fee",
-    sizes,
-  };
+  return picks;
 }
 
 /** "205", "205/55r", "20555r" -> sizes that start with that width / profile / rim. */
@@ -178,7 +135,7 @@ function searchBySize(rows, query, settings) {
     size = sizes[0].size;
     matches = rows.filter((r) => r.size === size);
   }
-  const picks = new Map(websitePicks(matches, settings).map((p) => [p.row, p.tier]));
+  const picks = cheapestPerTier(matches, settings);
   const list = matches
     .map((r) => ({
       supplier: r.supplier,
@@ -193,7 +150,8 @@ function searchBySize(rows, query, settings) {
       stock: String(r.stock ?? ""),
       inStock: inStock(r),
       sellPrice: sellPrice(r, settings),
-      websiteTier: picks.get(r) || "",
+      tier: tierOf(r.brand),
+      cheapestInTier: picks.has(r),
       description: r.features || "",
     }))
     .sort((a, b) => Number(b.inStock) - Number(a.inStock) || (a.costEx ?? 1e9) - (b.costEx ?? 1e9));
@@ -251,7 +209,7 @@ function csvCell(value) {
 
 function exportCsv(rows, settings) {
   const header = [
-    "Size", "Brand", "Pattern", "Load / speed", "Supplier", "SKU", "Category",
+    "Size", "Brand", "Tier", "Pattern", "Load / speed", "Supplier", "SKU", "Category",
     "Cost ex GST", "Special", "Usual cost ex GST", "Tyrewise ex GST", "Stock",
     "Sell price fitted incl GST", "Supplier description",
   ];
@@ -263,7 +221,7 @@ function exportCsv(rows, settings) {
     const price = sellPrice(r, settings);
     lines.push(
       [
-        r.size, r.brand, r.pattern, r.load_speed, r.supplier, r.sku, r.category,
+        r.size, r.brand, tierOf(r.brand), r.pattern, r.load_speed, r.supplier, r.sku, r.category,
         r.cost_ex, r.special ? "SPECIAL" : "", r.usual_ex, r.tyrewise_ex, r.stock,
         price, r.features,
       ]
@@ -282,8 +240,6 @@ module.exports = {
   inStock,
   tierOf,
   sellPrice,
-  websitePicks,
-  buildPublic,
   searchBySize,
   validateUpload,
   exportCsv,

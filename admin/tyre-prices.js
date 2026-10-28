@@ -5,17 +5,18 @@
   const searchEl = document.getElementById("tyre-size-search");
   const summaryEl = document.getElementById("tyre-search-summary");
   const resultsEl = document.getElementById("tyre-search-results");
+  const tierFiltersEl = document.getElementById("tyre-tier-filters");
   const settingsForm = document.getElementById("tyre-settings-form");
   const markupEl = document.getElementById("tyre-markup");
   const fittingEl = document.getElementById("tyre-fitting");
   const tyrewiseEl = document.getElementById("tyre-tyrewise");
-  const publishInfoEl = document.getElementById("tyre-publish-info");
-  const publishBtn = document.getElementById("btn-tyre-publish");
   const dataInfoEl = document.getElementById("tyre-data-info");
   const uploadBtn = document.getElementById("btn-tyre-upload");
   const uploadInput = document.getElementById("tyre-upload-input");
 
   let meta = null;
+  let lastResult = null;
+  let tierFilter = "all";
   let searchTimer = null;
   let statusTimer = null;
 
@@ -39,22 +40,12 @@
     return `markup ${s.markupPct}%, fitting ${money(s.fittingIncl, 0)}, Tyrewise ${s.includeTyrewise ? "included" : "left out"}`;
   }
 
-  function sameSettings(a, b) {
-    return (
-      a && b &&
-      Number(a.markupPct) === Number(b.markupPct) &&
-      Number(a.fittingIncl) === Number(b.fittingIncl) &&
-      Boolean(a.includeTyrewise) === Boolean(b.includeTyrewise)
-    );
-  }
-
   function renderMeta() {
     if (!meta) return;
     const s = meta.settings;
     if (markupEl) markupEl.value = s.markupPct;
     if (fittingEl) fittingEl.value = s.fittingIncl;
     if (tyrewiseEl) tyrewiseEl.value = s.includeTyrewise ? "yes" : "no";
-
     if (dataInfoEl) {
       const sources = (meta.sources || [])
         .map((src) => `${src.supplier} ${src.count}`)
@@ -63,21 +54,6 @@
         ? `${meta.rowCount.toLocaleString("en-NZ")} tyres, supplier prices from ${Admin.formatDateShort(meta.scrapedOn)}. ${sources}`
         : "No price data yet. Upload tyre-price-data.json from the price list folder on the office computer.";
     }
-
-    if (publishInfoEl) {
-      const p = meta.published;
-      if (!p) {
-        publishInfoEl.textContent = "Not published yet. The website shows the built-in price list until you publish.";
-      } else {
-        const stale =
-          !sameSettings(p.settings, s) || (meta.scrapedOn && p.scrapedOn !== meta.scrapedOn)
-            ? " Settings or price data have changed since then — publish again to update the website."
-            : "";
-        publishInfoEl.textContent =
-          `Website prices published ${Admin.formatDateTimeShort(p.at)} (${p.sizes} sizes, ${settingsLabel(p.settings)}, supplier prices from ${Admin.formatDateShort(p.scrapedOn)}).${stale}`;
-      }
-    }
-    if (publishBtn) publishBtn.disabled = !meta.rowCount;
   }
 
   async function loadMeta() {
@@ -111,37 +87,42 @@
 
   function renderResults(data) {
     if (!resultsEl) return;
-    const rows = data?.rows || [];
-    if (!rows.length && data?.sizes?.length) {
+    lastResult = data;
+    const all = data?.rows || [];
+    if (!all.length && data?.sizes?.length) {
       renderSizeChoices(data);
       return;
     }
-    if (!rows.length) {
+    if (!all.length) {
       if (summaryEl) summaryEl.textContent = "";
       resultsEl.innerHTML = `<div class="empty">No tyres found for ${Admin.escapeHtml(data?.size || "that size")}.</div>`;
       return;
     }
+    const rows = tierFilter === "all" ? all : all.filter((r) => r.tier === tierFilter);
     const inStock = rows.filter((r) => r.inStock).length;
+    const tierNote = tierFilter === "all" ? "" : ` ${tierFilter} only.`;
     if (summaryEl) {
-      summaryEl.textContent = `${data.size}: ${rows.length} tyres, ${inStock} in stock. Sell price is per tyre, fitted, incl GST.`;
+      summaryEl.textContent = `${data.size}: ${rows.length} tyres, ${inStock} in stock.${tierNote} Sell price is per tyre, fitted, incl GST.`;
+    }
+    if (!rows.length) {
+      resultsEl.innerHTML = `<div class="empty">No ${Admin.escapeHtml(tierFilter)} tyres in ${Admin.escapeHtml(data.size)}.</div>`;
+      return;
     }
     const body = rows
       .map((r) => {
         const cost = r.special
           ? `${money(r.costEx)} <span class="badge pay-overdue">Special</span><br /><small class="muted">Usual ${money(r.usualEx)}</small>`
           : money(r.costEx);
-        const web = r.websiteTier
-          ? `<span class="badge published">${Admin.escapeHtml(r.websiteTier)}</span>`
-          : "";
+        const best = r.cheapestInTier ? ' <span class="badge published">Cheapest</span>' : "";
         return `<tr${r.inStock ? "" : ' class="muted"'}>
           <td><strong>${Admin.escapeHtml(r.brand)}</strong> ${Admin.escapeHtml(r.pattern || "")}<br /><small class="muted">${Admin.escapeHtml(r.description || "")}</small></td>
+          <td>${Admin.escapeHtml(r.tier)}${best}</td>
           <td>${Admin.escapeHtml(r.loadSpeed)}</td>
           <td>${Admin.escapeHtml(r.supplier)}</td>
           <td>${Admin.escapeHtml(r.stock || "—")}</td>
           <td class="price">${cost}</td>
           <td class="price">${money(r.tyrewiseEx)}</td>
           <td class="price"><strong>${money(r.sellPrice, 0)}</strong></td>
-          <td>${web}</td>
         </tr>`;
       })
       .join("");
@@ -150,13 +131,13 @@
         <thead>
           <tr>
             <th>Tyre</th>
+            <th>Tier</th>
             <th>Load / speed</th>
             <th>Supplier</th>
             <th>Stock</th>
             <th>Cost ex GST</th>
             <th>Tyrewise ex GST</th>
             <th>Sell fitted</th>
-            <th>Website</th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
@@ -167,6 +148,7 @@
   async function runSearch() {
     const q = String(searchEl?.value || "").trim();
     if (!q) {
+      lastResult = null;
       if (summaryEl) summaryEl.textContent = "";
       if (resultsEl) resultsEl.innerHTML = "";
       return;
@@ -184,6 +166,14 @@
   });
   searchEl?.addEventListener("search", runSearch);
 
+  tierFiltersEl?.querySelectorAll("[data-tyre-tier]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      tierFilter = btn.dataset.tyreTier;
+      tierFiltersEl.querySelectorAll("[data-tyre-tier]").forEach((b) => b.classList.toggle("active", b === btn));
+      if (lastResult) renderResults(lastResult);
+    });
+  });
+
   settingsForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
@@ -198,24 +188,9 @@
       meta = { ...meta, settings: res.settings };
       renderMeta();
       runSearch();
-      showStatus(`Saved: ${settingsLabel(res.settings)}. Publish to update the website.`);
+      showStatus(`Saved: ${settingsLabel(res.settings)}.`);
     } catch (err) {
       showStatus(err?.message || "Could not save.");
-    }
-  });
-
-  publishBtn?.addEventListener("click", async () => {
-    if (!meta) return;
-    if (!confirm(`Publish tyre prices to the website with ${settingsLabel(meta.settings)}?`)) return;
-    publishBtn.disabled = true;
-    try {
-      const res = await Admin.api("/api/tyre-prices/publish", { method: "POST", body: "{}" });
-      showStatus(`Published ${res.sizes} sizes to the website.`);
-      await loadMeta();
-    } catch (err) {
-      showStatus(err?.message || "Could not publish.");
-    } finally {
-      publishBtn.disabled = !meta?.rowCount;
     }
   });
 
@@ -234,7 +209,7 @@
     showStatus("Uploading price data…");
     try {
       const res = await Admin.api("/api/tyre-prices/upload", { method: "POST", body: form });
-      showStatus(`Loaded ${res.rowCount.toLocaleString("en-NZ")} tyres. Check a few sizes, then publish to update the website.`);
+      showStatus(`Loaded ${res.rowCount.toLocaleString("en-NZ")} tyres.`);
       await loadMeta();
       runSearch();
     } catch (err) {
