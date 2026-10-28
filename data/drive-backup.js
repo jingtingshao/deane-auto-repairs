@@ -132,18 +132,27 @@ function zipWorkshopData({ dataDir, uploadsDir, includePhotos }) {
 }
 
 async function uploadZip(drive, folderId, zipPath, zipName) {
-  const res = await drive.files.create({
-    requestBody: {
-      name: zipName,
-      parents: [folderId],
-    },
-    media: {
-      mimeType: "application/zip",
-      body: fs.createReadStream(zipPath),
-    },
-    fields: "id, name, size, createdTime, webViewLink",
+  const body = fs.createReadStream(zipPath);
+  // The zip is deleted after a failed upload; an unhandled stream error here would crash the server.
+  body.on("error", (err) => {
+    console.error("Backup zip read failed:", err.message || err);
   });
-  return res.data;
+  try {
+    const res = await drive.files.create({
+      requestBody: {
+        name: zipName,
+        parents: [folderId],
+      },
+      media: {
+        mimeType: "application/zip",
+        body,
+      },
+      fields: "id, name, size, createdTime, webViewLink",
+    });
+    return res.data;
+  } finally {
+    body.destroy();
+  }
 }
 
 async function pruneOldBackups(drive, folderId, keep) {
