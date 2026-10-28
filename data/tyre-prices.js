@@ -18,6 +18,7 @@ const MID = new Set([
   "giti", "petlas", "cooper", "cst", "marshal",
 ]);
 const TIERS = ["Budget", "Mid-range", "Premium"];
+const PATTERN_NOISE = /^(ND|ASY|ASYM\w*|ASS?Y\w*|ASSIMETRICAL|NON|NITRO|\+|-|&)$/i;
 const ROW_FIELDS = [
   "supplier", "category", "sku", "size", "brand", "pattern", "variant", "load_speed", "ply",
   "features", "oe_fitments", "cost_ex", "special", "usual_ex", "rrp_incl", "tyrewise_ex", "stock",
@@ -84,6 +85,60 @@ function sellPrice(row, settings) {
   return Math.ceil(tyre + settings.fittingIncl + tyrewise);
 }
 
+function nicePattern(pattern) {
+  return String(pattern || "")
+    .split(/\s+/)
+    .filter((w) => w && !PATTERN_NOISE.test(w))
+    .map((w) => (/^[A-Z]{4,}$/.test(w) ? w.charAt(0) + w.slice(1).toLowerCase() : w))
+    .join(" ")
+    .slice(0, 40);
+}
+
+/** Website cards: cheapest per tier, dropping a lower tier that is not cheaper than a higher one. */
+function websitePicks(rows, settings) {
+  const usable = rows.filter((r) => num(r.cost_ex) && r.brand && r.brand !== "Other");
+  const picks = [];
+  for (const tier of TIERS) {
+    const cands = usable.filter((r) => tierOf(r.brand) === tier);
+    if (!cands.length) continue;
+    cands.sort((a, b) => Number(inStock(b)) - Number(inStock(a)) || sellPrice(a, settings) - sellPrice(b, settings));
+    picks.push({ tier, row: cands[0], price: sellPrice(cands[0], settings) });
+  }
+  return picks.filter((p, i) => picks.slice(i + 1).every((q) => p.price < q.price));
+}
+
+function buildPublic(rows, settings, scrapedOn) {
+  const groups = new Map();
+  for (const r of rows) {
+    if (!/^\d{3}\/\d{2}R\d{2}$/.test(r.size)) continue;
+    if (!groups.has(r.size)) groups.set(r.size, []);
+    groups.get(r.size).push(r);
+  }
+  const sizes = {};
+  const keys = [...groups.keys()].sort((a, b) => {
+    const [, aw, ap, ar] = /^(\d+)\/(\d+)R(\d+)$/.exec(a);
+    const [, bw, bp, br] = /^(\d+)\/(\d+)R(\d+)$/.exec(b);
+    return ar - br || aw - bw || ap - bp;
+  });
+  for (const size of keys) {
+    const picks = websitePicks(groups.get(size), settings);
+    if (!picks.length) continue;
+    sizes[size] = picks.map(({ tier, row, price }) => ({
+      tier,
+      brand: row.brand,
+      pattern: nicePattern(row.pattern),
+      load: row.load_speed || "",
+      price,
+      inStock: inStock(row),
+    }));
+  }
+  return {
+    updated: scrapedOn,
+    note: "Per tyre, fitted, incl. GST and Tyrewise fee",
+    sizes,
+  };
+}
+
 /** Cheapest tyre in each tier for one size, preferring ones in stock. */
 function cheapestPerTier(rows, settings) {
   const picks = new Set();
@@ -136,6 +191,7 @@ function searchBySize(rows, query, settings) {
     matches = rows.filter((r) => r.size === size);
   }
   const picks = cheapestPerTier(matches, settings);
+  const onWebsite = new Map(websitePicks(matches, settings).map((p) => [p.row, p.tier]));
   const list = matches
     .map((r) => ({
       supplier: r.supplier,
@@ -152,6 +208,7 @@ function searchBySize(rows, query, settings) {
       sellPrice: sellPrice(r, settings),
       tier: tierOf(r.brand),
       cheapestInTier: picks.has(r),
+      onWebsite: onWebsite.has(r),
       description: r.features || "",
     }))
     .sort((a, b) => Number(b.inStock) - Number(a.inStock) || (a.costEx ?? 1e9) - (b.costEx ?? 1e9));
@@ -240,6 +297,8 @@ module.exports = {
   inStock,
   tierOf,
   sellPrice,
+  websitePicks,
+  buildPublic,
   searchBySize,
   validateUpload,
   exportCsv,

@@ -19,6 +19,7 @@ data/referrals.json
 data/backup-status.json
 data/tyre-price-rows.json
 data/tyre-price-settings.json
+data/tyre-prices-public.json
 data/*.bak
 data/*.tmp
 uploads/*

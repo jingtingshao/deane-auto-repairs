@@ -10,6 +10,8 @@
   const markupEl = document.getElementById("tyre-markup");
   const fittingEl = document.getElementById("tyre-fitting");
   const tyrewiseEl = document.getElementById("tyre-tyrewise");
+  const publishInfoEl = document.getElementById("tyre-publish-info");
+  const publishBtn = document.getElementById("btn-tyre-publish");
   const dataInfoEl = document.getElementById("tyre-data-info");
   const uploadBtn = document.getElementById("btn-tyre-upload");
   const uploadInput = document.getElementById("tyre-upload-input");
@@ -40,8 +42,34 @@
     return `markup ${s.markupPct}%, fitting ${money(s.fittingIncl, 0)}, Tyrewise ${s.includeTyrewise ? "included" : "left out"}`;
   }
 
+  function sameSettings(a, b) {
+    return (
+      a && b &&
+      Number(a.markupPct) === Number(b.markupPct) &&
+      Number(a.fittingIncl) === Number(b.fittingIncl) &&
+      Boolean(a.includeTyrewise) === Boolean(b.includeTyrewise)
+    );
+  }
+
+  function renderPublishInfo() {
+    if (!publishInfoEl || !meta) return;
+    const p = meta.published;
+    if (publishBtn) publishBtn.disabled = !meta.rowCount;
+    if (!p) {
+      publishInfoEl.textContent = "Not published yet. The website shows the built-in price list until you publish.";
+      return;
+    }
+    const stale =
+      !sameSettings(p.settings, meta.settings) || (meta.scrapedOn && p.scrapedOn !== meta.scrapedOn)
+        ? " Settings or price data have changed since then — publish again to update the website."
+        : "";
+    publishInfoEl.textContent =
+      `Website prices published ${Admin.formatDateTimeShort(p.at)} (${p.sizes} sizes, ${settingsLabel(p.settings)}, supplier prices from ${Admin.formatDateShort(p.scrapedOn)}).${stale}`;
+  }
+
   function renderMeta() {
     if (!meta) return;
+    renderPublishInfo();
     const s = meta.settings;
     if (markupEl) markupEl.value = s.markupPct;
     if (fittingEl) fittingEl.value = s.fittingIncl;
@@ -113,7 +141,9 @@
         const cost = r.special
           ? `${money(r.costEx)} <span class="badge pay-overdue">Special</span><br /><small class="muted">Usual ${money(r.usualEx)}</small>`
           : money(r.costEx);
-        const best = r.cheapestInTier ? ' <span class="badge published">Cheapest</span>' : "";
+        const best =
+          (r.cheapestInTier ? ' <span class="badge published">Cheapest</span>' : "") +
+          (r.onWebsite ? ' <span class="badge quote">On website</span>' : "");
         return `<tr${r.inStock ? "" : ' class="muted"'}>
           <td><strong>${Admin.escapeHtml(r.brand)}</strong> ${Admin.escapeHtml(r.pattern || "")}<br /><small class="muted">${Admin.escapeHtml(r.description || "")}</small></td>
           <td>${Admin.escapeHtml(r.tier)}${best}</td>
@@ -188,9 +218,24 @@
       meta = { ...meta, settings: res.settings };
       renderMeta();
       runSearch();
-      showStatus(`Saved: ${settingsLabel(res.settings)}.`);
+      showStatus(`Saved: ${settingsLabel(res.settings)}. Publish to update the website.`);
     } catch (err) {
       showStatus(err?.message || "Could not save.");
+    }
+  });
+
+  publishBtn?.addEventListener("click", async () => {
+    if (!meta) return;
+    if (!confirm(`Publish tyre prices to the website with ${settingsLabel(meta.settings)}?`)) return;
+    publishBtn.disabled = true;
+    try {
+      const res = await Admin.api("/api/tyre-prices/publish", { method: "POST", body: "{}" });
+      showStatus(`Published ${res.sizes} sizes to the website.`);
+      await loadMeta();
+    } catch (err) {
+      showStatus(err?.message || "Could not publish.");
+    } finally {
+      publishBtn.disabled = !meta?.rowCount;
     }
   });
 
@@ -209,7 +254,7 @@
     showStatus("Uploading price data…");
     try {
       const res = await Admin.api("/api/tyre-prices/upload", { method: "POST", body: form });
-      showStatus(`Loaded ${res.rowCount.toLocaleString("en-NZ")} tyres.`);
+      showStatus(`Loaded ${res.rowCount.toLocaleString("en-NZ")} tyres. Check a few sizes, then publish to update the website.`);
       await loadMeta();
       runSearch();
     } catch (err) {
