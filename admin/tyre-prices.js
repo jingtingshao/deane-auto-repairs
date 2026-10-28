@@ -89,9 +89,33 @@
     }
   }
 
+  function renderSizeChoices(data) {
+    const sizes = data.sizes;
+    const shown = sizes.slice(0, 80);
+    if (summaryEl) {
+      summaryEl.textContent = `${sizes.length} sizes match "${data.size}". Pick one.${sizes.length > shown.length ? " Type more of the size to narrow it down." : ""}`;
+    }
+    resultsEl.innerHTML = `<div class="parts-guide-filters">${shown
+      .map((s) => {
+        const from = s.fromPrice ? ` · from ${money(s.fromPrice, 0)}` : "";
+        return `<button type="button" class="ghost" data-tyre-size="${Admin.escapeAttr(s.size)}">${Admin.escapeHtml(s.size)} <small class="muted">${s.count} tyres${from}</small></button>`;
+      })
+      .join("")}</div>`;
+    resultsEl.querySelectorAll("[data-tyre-size]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        searchEl.value = btn.dataset.tyreSize;
+        runSearch();
+      });
+    });
+  }
+
   function renderResults(data) {
     if (!resultsEl) return;
     const rows = data?.rows || [];
+    if (!rows.length && data?.sizes?.length) {
+      renderSizeChoices(data);
+      return;
+    }
     if (!rows.length) {
       if (summaryEl) summaryEl.textContent = "";
       resultsEl.innerHTML = `<div class="empty">No tyres found for ${Admin.escapeHtml(data?.size || "that size")}.</div>`;

@@ -146,10 +146,45 @@ function buildPublic(rows, settings, scrapedOn) {
   };
 }
 
+/** "205", "205/55r", "20555r" -> sizes that start with that width / profile / rim. */
+function sizesByPrefix(rows, query, settings) {
+  const digits = String(query || "").replace(/\D/g, "");
+  if (digits.length < 3) return [];
+  const noProfile = /^\s*\d{3}\s*R/i.test(String(query));
+  const want = noProfile
+    ? { w: digits.slice(0, 3), p: "", r: digits.slice(3, 5) }
+    : { w: digits.slice(0, 3), p: digits.slice(3, 5), r: digits.slice(5, 7) };
+  const groups = new Map();
+  for (const r of rows) {
+    const m =
+      /^(\d{3})\/(\d{2})Z?R(\d{2}(?:\.5)?)C?$/.exec(r.size) || /^(\d{3})()R(\d{2})C?$/.exec(r.size);
+    if (!m || m[1] !== want.w || !m[2].startsWith(want.p) || !m[3].startsWith(want.r)) continue;
+    if (!groups.has(r.size)) groups.set(r.size, { size: r.size, rim: Number(m[3]), profile: Number(m[2]) || 0, rows: [] });
+    groups.get(r.size).rows.push(r);
+  }
+  return [...groups.values()]
+    .sort((a, b) => a.rim - b.rim || a.profile - b.profile || a.size.localeCompare(b.size))
+    .map((g) => {
+      const stocked = g.rows.filter(inStock);
+      const prices = (stocked.length ? stocked : g.rows).map((r) => sellPrice(r, settings)).filter((n) => n);
+      return {
+        size: g.size,
+        count: g.rows.length,
+        inStock: stocked.length,
+        fromPrice: prices.length ? Math.min(...prices) : null,
+      };
+    });
+}
+
 function searchBySize(rows, query, settings) {
-  const size = normalizeSizeQuery(query);
-  const key = sizeCmp(size);
-  const matches = rows.filter((r) => sizeCmp(r.size) === key);
+  let size = normalizeSizeQuery(query);
+  let matches = rows.filter((r) => sizeCmp(r.size) === sizeCmp(size));
+  if (!matches.length) {
+    const sizes = sizesByPrefix(rows, query, settings);
+    if (sizes.length !== 1) return { size: String(query || "").trim(), rows: [], sizes };
+    size = sizes[0].size;
+    matches = rows.filter((r) => r.size === size);
+  }
   const picks = new Map(websitePicks(matches, settings).map((p) => [p.row, p.tier]));
   const list = matches
     .map((r) => ({
@@ -169,7 +204,7 @@ function searchBySize(rows, query, settings) {
       description: r.features || "",
     }))
     .sort((a, b) => Number(b.inStock) - Number(a.inStock) || (a.costEx ?? 1e9) - (b.costEx ?? 1e9));
-  return { size, rows: list };
+  return { size, rows: list, sizes: [] };
 }
 
 function validateUpload(payload) {
