@@ -115,27 +115,42 @@ function buildPublic(rows, settings, scrapedOn) {
     groups.get(r.size).push(r);
   }
   const sizes = {};
+  const brands = {};
   const keys = [...groups.keys()].sort((a, b) => {
     const [, aw, ap, ar] = /^(\d+)\/(\d+)R(\d+)$/.exec(a);
     const [, bw, bp, br] = /^(\d+)\/(\d+)R(\d+)$/.exec(b);
     return ar - br || aw - bw || ap - bp;
   });
+  const card = (tier, row, price) => ({
+    tier,
+    brand: row.brand,
+    pattern: nicePattern(row.pattern),
+    load: row.load_speed || "",
+    price,
+    inStock: inStock(row),
+  });
   for (const size of keys) {
     const picks = websitePicks(groups.get(size), settings);
     if (!picks.length) continue;
-    sizes[size] = picks.map(({ tier, row, price }) => ({
-      tier,
-      brand: row.brand,
-      pattern: nicePattern(row.pattern),
-      load: row.load_speed || "",
-      price,
-      inStock: inStock(row),
-    }));
+    sizes[size] = picks.map(({ tier, row, price }) => card(tier, row, price));
+
+    // Brand search: cheapest in-stock tyre per brand + pattern + load rating.
+    const byModel = new Map();
+    for (const r of groups.get(size)) {
+      if (!num(r.cost_ex) || !r.brand || r.brand === "Other" || !inStock(r)) continue;
+      const c = card(tierOf(r.brand), r, sellPrice(r, settings));
+      const key = `${c.brand}|${c.pattern}|${c.load}`.toUpperCase();
+      if (!byModel.has(key) || c.price < byModel.get(key).price) byModel.set(key, c);
+    }
+    brands[size] = [...byModel.values()].sort(
+      (a, b) => a.brand.localeCompare(b.brand) || a.price - b.price
+    );
   }
   return {
     updated: scrapedOn,
     note: "Per tyre, fitted, incl. GST and Tyrewise fee",
     sizes,
+    brands,
   };
 }
 
@@ -190,14 +205,21 @@ function workshopTyreStock(items) {
 
 /** Public card availability: our own stock, supplier stock (next day), or order in. */
 function withAvailability(publicPrices, stockFor) {
-  const sizes = {};
-  for (const [size, options] of Object.entries(publicPrices?.sizes || {})) {
-    sizes[size] = options.map((o) => ({
-      ...o,
-      availability: stockFor(size, o.brand, o.pattern) > 0 ? "workshop" : o.inStock ? "supplier" : "order",
-    }));
-  }
-  return { ...publicPrices, sizes };
+  const mark = (all) => {
+    const out = {};
+    for (const [size, options] of Object.entries(all || {})) {
+      out[size] = options.map((o) => ({
+        ...o,
+        availability: stockFor(size, o.brand, o.pattern) > 0 ? "workshop" : o.inStock ? "supplier" : "order",
+      }));
+    }
+    return out;
+  };
+  return {
+    ...publicPrices,
+    sizes: mark(publicPrices?.sizes),
+    ...(publicPrices?.brands ? { brands: mark(publicPrices.brands) } : {}),
+  };
 }
 
 /** Cheapest tyre in each tier for one size, preferring ones in stock. */

@@ -10482,13 +10482,20 @@ function readPublishedTyrePrices() {
   return readJsonArray(TYRE_PRICES_PUBLIC_FILE, "website tyre prices")[0] || null;
 }
 
-app.get("/api/public/tyre-prices", (_req, res) => {
+app.get("/api/public/tyre-prices", (req, res) => {
   try {
     const published = readPublishedTyrePrices();
     if (!published) return res.status(404).json({ error: "No tyre prices published yet" });
     const stockFor = tyrePricesLib.workshopTyreStock(readInventoryItems());
+    const body = JSON.stringify(tyrePricesLib.withAvailability(published, stockFor));
     res.setHeader("Cache-Control", "public, max-age=60");
-    res.json(tyrePricesLib.withAvailability(published, stockFor));
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Vary", "Accept-Encoding");
+    if (/\bgzip\b/.test(String(req.headers["accept-encoding"] || ""))) {
+      res.setHeader("Content-Encoding", "gzip");
+      return res.end(require("zlib").gzipSync(body));
+    }
+    res.end(body);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }

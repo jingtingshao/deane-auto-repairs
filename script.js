@@ -182,6 +182,8 @@
   const tyreWidth = document.querySelector("#tyre-width");
   const tyreProfile = document.querySelector("#tyre-profile");
   const tyreRim = document.querySelector("#tyre-rim");
+  const tyreBrand = document.querySelector("#tyre-brand");
+  const tyreBrandField = document.querySelector("[data-tyre-brand-field]");
   const tyreQuotes = document.querySelector("[data-tyre-quotes]");
   const tyreQuotesNote = document.querySelector("[data-tyre-quotes-note]");
   let tyrePrices = null;
@@ -211,10 +213,34 @@
     notesField.value = [...kept, line].join("\n");
   };
 
+  const currentTyreSize = () => `${tyreWidth.value}/${tyreProfile.value}R${tyreRim.value}`;
+
+  const fillTyreBrands = () => {
+    if (!tyreBrand || !tyreBrandField) return;
+    const models = tyrePrices?.brands?.[currentTyreSize()] || [];
+    tyreBrandField.hidden = !models.length;
+    const keep = tyreBrand.value;
+    const groups = ["Budget", "Mid-range", "Premium"]
+      .map((tier) => {
+        const names = [...new Set(models.filter((m) => m.tier === tier).map((m) => m.brand))].sort();
+        if (!names.length) return null;
+        const group = document.createElement("optgroup");
+        group.label = tier;
+        group.append(...names.map((b) => new Option(b, b, false, b === keep)));
+        return group;
+      })
+      .filter(Boolean);
+    tyreBrand.replaceChildren(new Option("All brands", ""), ...groups);
+    tyreBrand.value = models.some((m) => m.brand === keep) ? keep : "";
+  };
+
   const renderTyreQuotes = () => {
     if (!tyreQuotes || !tyrePrices) return;
-    const size = `${tyreWidth.value}/${tyreProfile.value}R${tyreRim.value}`;
-    const options = tyrePrices.sizes[size] || [];
+    const size = currentTyreSize();
+    const brand = tyreBrand?.value || "";
+    const options = brand
+      ? (tyrePrices.brands?.[size] || []).filter((o) => o.brand === brand).sort((a, b) => a.price - b.price)
+      : tyrePrices.sizes[size] || [];
     if (!options.length) {
       const empty = document.createElement("p");
       empty.className = "tyre-quotes-empty";
@@ -273,6 +299,10 @@
   const onTyreProfile = () => {
     const sizes = tyreSizes().filter((s) => s.w === tyreWidth.value && s.p === tyreProfile.value);
     fillTyreSelect(tyreRim, sizes.map((s) => s.r), tyreRim.value);
+    onTyreRim();
+  };
+  const onTyreRim = () => {
+    fillTyreBrands();
     renderTyreQuotes();
   };
 
@@ -292,7 +322,8 @@
         onTyreWidth();
         tyreWidth.addEventListener("change", onTyreWidth);
         tyreProfile.addEventListener("change", onTyreProfile);
-        tyreRim.addEventListener("change", renderTyreQuotes);
+        tyreRim.addEventListener("change", onTyreRim);
+        tyreBrand?.addEventListener("change", renderTyreQuotes);
         if (tyreQuotesNote) {
           const updated = new Date(`${data.updated}T00:00:00`).toLocaleDateString("en-NZ", {
             day: "numeric",
