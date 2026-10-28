@@ -409,6 +409,58 @@ p {
   color: var(--sign-navy);
 }
 
+.hero-actions .button-tyres {
+  padding: 16px 22px;
+  font-size: 1.08em;
+  background: #fff;
+  color: var(--sign-navy);
+}
+
+.tyre-finder {
+  padding: 64px 0 72px;
+  background: var(--sign-navy);
+  color: #fff;
+  scroll-margin-top: var(--header-h);
+}
+
+.tyre-finder-head {
+  max-width: 760px;
+  margin: 0 auto 26px;
+  text-align: center;
+}
+
+.tyre-finder-head .tyre-finder-kicker {
+  margin: 0 0 12px;
+  font: 700 13px / 1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sign-yellow);
+}
+
+.tyre-finder-head h1,
+.tyre-finder-head h2 {
+  margin: 0 0 14px;
+  font: 800 clamp(38px, 4.6vw, 62px) / 0.92 var(--display);
+  text-transform: uppercase;
+}
+
+.tyre-finder-head h1 em,
+.tyre-finder-head h2 em {
+  font-style: normal;
+  color: var(--sign-yellow);
+}
+
+.tyre-finder-head p {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.tyre-finder .tyres-detail {
+  margin-top: 0;
+}
+
 .button-outline {
   background: transparent;
   color: #fff;
@@ -715,6 +767,7 @@ button.see-details {
 }
 
 #tyres,
+#tyre-prices,
 #wof,
 #reports {
   scroll-margin-top: calc(var(--header-h) + 0.75rem);
@@ -763,7 +816,8 @@ button.see-details {
 
 .tyre-quotes {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 300px));
+  justify-content: center;
   gap: 14px;
   margin: 4px 0 14px;
   text-align: left;

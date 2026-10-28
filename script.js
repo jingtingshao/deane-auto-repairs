@@ -176,7 +176,6 @@
     btn.addEventListener("click", closeChecklist);
   });
 
-  const tyreToggle = document.querySelector("[data-tyre-size-toggle]");
   const tyrePanel = document.querySelector("[data-tyre-size-panel]");
   const notesField = document.querySelector("#notes");
   const tyreWidth = document.querySelector("#tyre-width");
@@ -315,7 +314,7 @@
         res.ok ? res.json() : Promise.reject(new Error(res.statusText))
       );
     tyrePricesLoading = getJson("/api/public/tyre-prices")
-      .catch(() => getJson("assets/tyre-prices.json"))
+      .catch(() => getJson("/assets/tyre-prices.json"))
       .then((data) => {
         tyrePrices = data;
         fillTyreSelect(tyreWidth, tyreSizes().map((s) => s.w), tyreWidth.value);
@@ -343,22 +342,23 @@
   };
 
   const openTyreSize = () => {
-    if (!tyrePanel || !tyreToggle) return;
-    tyrePanel.hidden = false;
-    tyreToggle.setAttribute("aria-expanded", "true");
-    tyrePanel.scrollIntoView({ behavior: "smooth", block: "start" });
     loadTyrePrices();
+    (document.querySelector("#tyre-prices") || tyrePanel)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
-  if (tyreToggle && tyrePanel) {
-    tyreToggle.addEventListener("click", () => {
-      const willOpen = tyrePanel.hidden;
-      tyrePanel.hidden = !willOpen;
-      tyreToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
-      if (willOpen) {
-        tyrePanel.scrollIntoView({ behavior: "smooth", block: "start" });
-        loadTyrePrices();
-      }
-    });
+  if (tyrePanel) {
+    if ("IntersectionObserver" in window) {
+      const watcher = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((e) => e.isIntersecting)) return;
+          watcher.disconnect();
+          loadTyrePrices();
+        },
+        { rootMargin: "600px" }
+      );
+      watcher.observe(tyrePanel);
+    } else {
+      loadTyrePrices();
+    }
   }
 
   if (location.hash === "#prices") {
