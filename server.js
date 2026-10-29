@@ -9653,7 +9653,14 @@ app.get("/api/supplier-invoices", requireOwnerAdmin, (_req, res) => {
         })),
       };
     })
-    .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+    .sort((a, b) => {
+      const dateA = a.invoiceDate || String(a.createdAt || "").slice(0, 10);
+      const dateB = b.invoiceDate || String(b.createdAt || "").slice(0, 10);
+      return (
+        dateB.localeCompare(dateA) ||
+        String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+      );
+    });
   res.json(rows);
 });
 
