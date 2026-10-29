@@ -2875,11 +2875,6 @@ function normalizeSavedCustomer(body, current = {}) {
     err.status = 400;
     throw err;
   }
-  if (!lastName) {
-    const err = new Error("Last name is required.");
-    err.status = 400;
-    throw err;
-  }
   if (!vehicles.length) {
     const err = new Error("Add at least one registration / plate.");
     err.status = 400;
@@ -2979,7 +2974,7 @@ function upsertCustomerFromParty(party = {}) {
   if (!customerName) {
     return { customerId: String(party.customerId || "").trim(), created: false, linked: false };
   }
-  // Customers list requires first + last; single-word walk-ins use "-".
+  // Single-word walk-ins use "-" as last name.
   if (firstName && !lastName) lastName = "-";
   if (!firstName && lastName) {
     firstName = lastName;

@@ -630,11 +630,6 @@ async function saveInlineCustomer(customerId, btn) {
     rowEl.querySelector('[data-inline="firstName"]')?.focus();
     return;
   }
-  if (!lastName) {
-    alert("Enter the last name.");
-    rowEl.querySelector('[data-inline="lastName"]')?.focus();
-    return;
-  }
   try {
     if (btn) {
       btn.disabled = true;
@@ -852,11 +847,6 @@ async function saveCustomer(event) {
   if (!body.firstName) {
     alert("Enter the first name.");
     document.getElementById("customer-first-name")?.focus();
-    return;
-  }
-  if (!body.lastName) {
-    alert("Enter the last name.");
-    document.getElementById("customer-last-name")?.focus();
     return;
   }
   const fullName = `${body.firstName} ${body.lastName}`.replace(/\s+/g, " ").trim();
