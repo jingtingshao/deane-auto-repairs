@@ -182,6 +182,11 @@ function nameKey(value) {
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/** Tyres reuse one part code across sizes, so a tyre also needs the same name to be the same stock line. */
+function nameMustMatch(category) {
+  return category === "tyre";
+}
+
 function findMatch(items, input) {
   const category = input.category;
   const key = partKey(input.partNumber);
@@ -189,13 +194,17 @@ function findMatch(items, input) {
   if (key) {
     const hits = items.filter((row) => {
       if (row.category !== category || partKey(row.partNumber) !== key) return false;
-      if (name && nameKey(row.name) !== name) return false;
+      if (nameMustMatch(category) && name && nameKey(row.name) !== name) return false;
       return true;
     });
     if (hits.length === 1) return hits[0];
     if (hits.length > 1) {
       const supplier = nameKey(input.supplier);
-      return hits.find((row) => nameKey(row.supplier) === supplier) || hits[0];
+      return (
+        hits.find((row) => nameKey(row.supplier) === supplier && nameKey(row.name) === name) ||
+        hits.find((row) => nameKey(row.supplier) === supplier) ||
+        hits[0]
+      );
     }
     return null;
   }
@@ -282,7 +291,7 @@ function applyReceive(items, movements, input, now) {
     if (!item.id) throw stockError("Could not create this stock line.");
     items.push(item);
   }
-  item.name = draft.name || item.name;
+  item.name = item.name || draft.name;
   item.partNumber = draft.partNumber || item.partNumber;
   item.brand = draft.brand || item.brand;
   item.supplier = draft.supplier || item.supplier;
@@ -320,18 +329,18 @@ function liveInvoiceReceipt(items, movements, input) {
   for (const movement of movements || []) {
     const item = live.get(movement.itemId);
     if (!item) continue;
+    const nameOk = (itemName) =>
+      !name || itemName === name || (Boolean(part) && !nameMustMatch(item.category));
     if (candidateId && String(movement.candidateId || "") === candidateId) {
       const itemPart = partKey(item.partNumber);
-      const itemName = nameKey(item.name);
       const samePart = !part || itemPart === part;
-      const sameName = !name || itemName === name;
-      if (samePart && sameName) return { item, movement };
+      if (samePart && nameOk(nameKey(item.name))) return { item, movement };
       continue;
     }
     if (!invoiceId || String(movement.supplierInvoiceId || "") !== invoiceId) continue;
     const itemPart = partKey(item.partNumber);
     const itemName = nameKey(item.name);
-    if (part && itemPart === part && (!name || itemName === name)) return { item, movement };
+    if (part && itemPart === part && nameOk(itemName)) return { item, movement };
     if (!part && !itemPart && name && itemName === name) return { item, movement };
   }
   return null;
@@ -348,6 +357,7 @@ function stockedCandidateIdSet(candidates, items, movements) {
       invoiceId: String(movement.supplierInvoiceId || "").trim(),
       part: partKey(item.partNumber),
       name: nameKey(item.name),
+      category: item.category,
     });
   }
   const ids = new Set();
@@ -356,7 +366,10 @@ function stockedCandidateIdSet(candidates, items, movements) {
     const part = partKey(row.partNumberCandidate);
     const name = nameKey(row.descriptionCandidate);
     const hit = receipts.some((receipt) => {
-      const samePart = Boolean(part) && receipt.part === part && receipt.name === name;
+      const samePart =
+        Boolean(part) &&
+        receipt.part === part &&
+        (receipt.name === name || !nameMustMatch(receipt.category));
       const sameBlankPart = !part && !receipt.part && Boolean(name) && receipt.name === name;
       if (!samePart && !sameBlankPart) return false;
       if (receipt.candidateId && receipt.candidateId === row.id) return true;
@@ -469,6 +482,60 @@ function receiveSupplierInvoice(items, movements, invoice, candidates, now, newI
   return { added, already, skipped };
 }
 
+/**
+ * Carry a part number / name correction on a stocked invoice line over to stock.
+ * A stock item only this line received is renamed; if the item is shared with other
+ * receipts, or the corrected part already exists, this line's qty moves to the right item.
+ */
+function syncEditedInvoiceLine(items, movements, before, after, now, newId) {
+  const candidateId = cleanText(after?.id, 80);
+  const oldPart = partKey(before?.partNumberCandidate);
+  const oldName = nameKey(before?.descriptionCandidate);
+  const newPartNumber = cleanText(after?.partNumberCandidate, 80);
+  const newName = cleanText(after?.descriptionCandidate, 160);
+  if (!candidateId) return [];
+  if (oldPart === partKey(newPartNumber) && oldName === nameKey(newName)) return [];
+  const changed = [];
+  for (const movement of movements) {
+    if (String(movement.candidateId || "") !== candidateId || !(Number(movement.qtyDelta) > 0)) continue;
+    const item = items.find((row) => row.id === movement.itemId);
+    if (!item) continue;
+    const partNumber = partKey(item.partNumber) === oldPart ? newPartNumber : item.partNumber;
+    const name = newName && nameKey(item.name) === oldName ? newName : item.name;
+    if (partNumber === item.partNumber && name === item.name) continue;
+    const others = movements.filter((row) => row !== movement && row.itemId === item.id);
+    const shared = others.some((row) => Number(row.qtyDelta) > 0);
+    const target = findMatch(
+      items.filter((row) => row.id !== item.id),
+      { category: item.category, partNumber, name, supplier: item.supplier }
+    );
+    if (!shared && !target) {
+      item.partNumber = partNumber;
+      item.name = name;
+      item.updatedAt = now;
+      changed.push(item);
+      continue;
+    }
+    const qty = Math.min(roundQty(movement.qtyDelta), item.qtyOnHand);
+    item.qtyOnHand = roundQty(item.qtyOnHand - qty);
+    item.updatedAt = now;
+    let dest = target;
+    if (!dest) {
+      dest = { ...item, id: newId(), partNumber, name, qtyOnHand: 0, createdAt: now };
+      items.push(dest);
+    }
+    dest.qtyOnHand = roundQty(dest.qtyOnHand + qty);
+    dest.updatedAt = now;
+    movement.itemId = dest.id;
+    movement.qtyAfter = dest.qtyOnHand;
+    changed.push(item, dest);
+    if (!others.length && item.qtyOnHand === 0) {
+      items.splice(items.indexOf(item), 1);
+    }
+  }
+  return changed;
+}
+
 function applyAdjust(item, input, now) {
   const delta = roundQty(input?.qtyDelta);
   if (!delta) throw stockError("Enter a quantity change.");
@@ -511,6 +578,7 @@ module.exports = {
   applyAdjust,
   lineCountsAsStock,
   receiveSupplierInvoice,
+  syncEditedInvoiceLine,
   pairStewardshipFees: tyreStewardship.pairStewardshipFees,
   isStewardshipCandidate: tyreStewardship.isStewardshipCandidate,
   landedUnitCost: tyreStewardship.landedUnitCost,

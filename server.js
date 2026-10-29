@@ -2527,6 +2527,7 @@ function editMatchedCandidate(candidateId, req) {
     now
   );
   writeInvoiceCandidates(candidateRows);
+  syncStockForEditedCandidate(candidate, candidateRows[candidateIndex]);
   const supplierInvoice = refreshSupplierInvoiceStatus(candidate.supplierInvoiceId);
   writePartAudit("jobPart", updatedPart.id, "update", existingPart, updatedPart, req, "matched part edited");
   writePartAudit(
@@ -9820,6 +9821,7 @@ app.patch("/api/invoice-candidates/:candidateId", requireOwnerAdmin, (req, res) 
   });
   rows[index] = next;
   writeInvoiceCandidates(rows);
+  syncStockForEditedCandidate(previous, next);
   res.json(next);
 });
 
@@ -10163,6 +10165,22 @@ function readInventoryMovements() {
 function writeInventoryMovements(rows) {
   const trimmed = rows.slice(-2000);
   writeJsonArray(INVENTORY_MOVEMENTS_FILE, trimmed);
+}
+
+function syncStockForEditedCandidate(before, after) {
+  const items = readInventoryItems();
+  const movements = readInventoryMovements();
+  const changed = inventoryLib.syncEditedInvoiceLine(
+    items,
+    movements,
+    before,
+    after,
+    nowIso(),
+    () => randomUUID()
+  );
+  if (!changed.length) return;
+  writeInventoryItems(items);
+  writeInventoryMovements(movements);
 }
 
 function stockedCandidateIds() {

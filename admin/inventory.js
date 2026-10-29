@@ -123,13 +123,17 @@
     if (key) {
       const hits = items.filter((row) => {
         if (row.category !== category || partKey(row.partNumber) !== key) return false;
-        if (name && nameKey(row.name) !== name) return false;
+        if (category === "tyre" && name && nameKey(row.name) !== name) return false;
         return true;
       });
       if (hits.length === 1) return hits[0];
       if (hits.length > 1) {
         const supplier = nameKey(input?.supplier);
-        return hits.find((row) => nameKey(row.supplier) === supplier) || hits[0];
+        return (
+          hits.find((row) => nameKey(row.supplier) === supplier && nameKey(row.name) === name) ||
+          hits.find((row) => nameKey(row.supplier) === supplier) ||
+          hits[0]
+        );
       }
     }
     const supplier = nameKey(input?.supplier);
