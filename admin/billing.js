@@ -1033,6 +1033,11 @@ function lineLooksLikePackageService(description) {
   );
 }
 
+/** Service, WOF, and PPI lines go above the parts and stock used. */
+function lineIsHeadline(description) {
+  return lineLooksLikePackageService(description) || lineLooksLikeWof(description);
+}
+
 function lineLooksLikeConsumable(description) {
   return /\bconsumables?\b/i.test(String(description || "").trim());
 }
@@ -1139,6 +1144,13 @@ function renderQuickAdds() {
             })
           );
         }
+      } else if (lineIsHeadline(item.description)) {
+        const blankFirst =
+          lineRows.length === 1 && !String(lineRows[0].description || "").trim() && !(Number(lineRows[0].unitPriceIncl) > 0);
+        if (blankFirst) lineRows = [];
+        let at = 0;
+        while (at < lineRows.length && lineIsHeadline(lineRows[at].description)) at += 1;
+        lineRows.splice(at, 0, newLine(item));
       } else {
         lineRows.push(newLine(item));
       }
@@ -1170,7 +1182,11 @@ function renderLines() {
         <td><input class="price" data-field="unitPriceIncl" type="number" min="0" step="0.01" value="${Admin.escapeAttr(String(line.unitPriceIncl))}" ${locked ? "readonly" : ""} /></td>
         <td><input class="price-incl" data-field="gstInclUnit" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" title="Price including GST" value="${Admin.escapeAttr(inclFieldValue(line))}" ${locked ? "readonly" : ""} /></td>
         <td class="total">${money(totalIncl)}</td>
-        <td>${locked ? "" : `<button type="button" class="ghost" data-remove="${index}">×</button>`}</td>
+        <td class="line-row-actions">${
+          locked
+            ? ""
+            : `<button type="button" class="ghost line-move" data-move="-1" title="Move up" aria-label="Move line up" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" class="ghost line-move" data-move="1" title="Move down" aria-label="Move line down" ${index === lineRows.length - 1 ? "disabled" : ""}>↓</button><button type="button" class="ghost" data-remove="${index}">×</button>`
+        }</td>
       </tr>`;
     })
     .join("");
@@ -1229,6 +1245,17 @@ function renderLines() {
       if (!lineRows.length) lineRows = [newLine()];
       renderLines();
       scheduleBillAutosave();
+    });
+  });
+  billingLinesEl.querySelectorAll("[data-move]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const index = Number(btn.closest("tr")?.dataset.index);
+      const target = index + Number(btn.dataset.move);
+      if (!(target >= 0 && target < lineRows.length)) return;
+      [lineRows[index], lineRows[target]] = [lineRows[target], lineRows[index]];
+      renderLines();
+      scheduleBillAutosave();
+      billingLinesEl.querySelector(`tr[data-index="${target}"] [data-move="${btn.dataset.move}"]`)?.focus();
     });
   });
   renderTotals();

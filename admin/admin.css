@@ -1193,6 +1193,19 @@ label.check input {
   padding-right: 0.5rem;
 }
 
+.line-table .line-row-actions {
+  white-space: nowrap;
+}
+
+.line-table .line-row-actions button + button {
+  margin-left: 0.25rem;
+}
+
+.line-table .line-move:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 .line-actions {
   margin-top: 0.6rem;
 }
