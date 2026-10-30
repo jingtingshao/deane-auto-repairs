@@ -224,6 +224,85 @@ function renderMonthConsumablesSummary() {
   monthConsumablesEl.textContent = `${monthLabel(ym)}: ${parts.join(" · ")} across ${invoiceCount} invoice${invoiceCount === 1 ? "" : "s"}`;
 }
 
+function usageCutoffIso(months) {
+  if (!(months > 0)) return "";
+  const today = typeof Admin.todayIso === "function" ? Admin.todayIso() : new Date().toISOString().slice(0, 10);
+  const [y, m, d] = today.split("-").map(Number);
+  const cutoff = new Date(Date.UTC(y, m - 1 - months, d));
+  return cutoff.toISOString().slice(0, 10);
+}
+
+function collectPartsUsage(query, months) {
+  const q = String(query || "").trim().toLowerCase();
+  const cutoff = usageCutoffIso(months);
+  const groups = new Map();
+  for (const row of rows) {
+    const date = row.invoiceDate || String(row.createdAt || "").slice(0, 10);
+    if (cutoff && (!date || date < cutoff)) continue;
+    for (const line of row.searchLines || []) {
+      if (line.decision === "rejected") continue;
+      if (isStewardshipText(line.description) || isStewardshipText(line.partNumber)) continue;
+      if (q && !lineSearchText(line).includes(q)) continue;
+      const part = String(line.partNumber || "").replace(/\s+/g, "").toUpperCase();
+      const name = String(line.description || "").trim();
+      const key = part || name.toLowerCase().replace(/\s+/g, " ");
+      if (!key) continue;
+      let group = groups.get(key);
+      if (!group) {
+        group = { partNumber: part, name, suppliers: new Set(), qty: 0, invoices: new Set(), lastDate: "", lastCost: 0 };
+        groups.set(key, group);
+      }
+      group.qty += Number(line.qty) || 0;
+      group.invoices.add(row.id);
+      if (row.supplier) group.suppliers.add(row.supplier);
+      if (date >= group.lastDate) {
+        group.lastDate = date;
+        group.lastCost = money(line.cost);
+        if (name) group.name = name;
+      }
+    }
+  }
+  return [...groups.values()].sort(
+    (a, b) => b.qty - a.qty || b.invoices.size - a.invoices.size || b.lastDate.localeCompare(a.lastDate)
+  );
+}
+
+function renderPartsUsage() {
+  const resultsEl = document.getElementById("supplier-usage-results");
+  if (!resultsEl) return;
+  const query = document.getElementById("supplier-usage-keyword")?.value || "";
+  const months = Number(document.getElementById("supplier-usage-period")?.value) || 0;
+  const groups = collectPartsUsage(query, months);
+  if (!groups.length) {
+    resultsEl.innerHTML = '<p class="muted">No supplier invoice lines found for this search and period.</p>';
+    return;
+  }
+  const totalQty = groups.reduce((sum, g) => sum + g.qty, 0);
+  const body = groups
+    .slice(0, 20)
+    .map(
+      (g, i) => `<tr>
+        <td>${i + 1}</td>
+        <td><strong>${Admin.escapeHtml(g.name || g.partNumber)}</strong>${g.partNumber ? `<br /><span class="muted">${Admin.escapeHtml(g.partNumber)}</span>` : ""}</td>
+        <td>${Admin.escapeHtml([...g.suppliers].join(", ") || "—")}</td>
+        <td><strong>${Admin.escapeHtml(String(g.qty))}</strong></td>
+        <td>${g.invoices.size}</td>
+        <td>${Admin.escapeHtml(Admin.formatDateShort(g.lastDate) || "—")}</td>
+        <td>${Admin.escapeHtml(formatMoney(g.lastCost))}</td>
+      </tr>`
+    )
+    .join("");
+  resultsEl.innerHTML = `<p class="muted small">${groups.length} part${groups.length === 1 ? "" : "s"} · ${totalQty} total qty${groups.length > 20 ? " · showing top 20" : ""}</p>
+    <div class="line-table-wrap">
+      <table class="line-table supplier-usage-table">
+        <thead>
+          <tr><th>#</th><th>Part</th><th>Supplier</th><th>Qty</th><th>Invoices</th><th>Last bought</th><th>Last cost ex GST</th></tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>`;
+}
+
 function statusBadge(status) {
   const map = {
     uploaded: "Uploaded",
@@ -825,6 +904,7 @@ function scheduleDuplicateCheck() {
 function renderList() {
   if (!listEl) return;
   renderMonthConsumablesSummary();
+  renderPartsUsage();
   if (!rows.length) {
     listEl.innerHTML = '<div class="empty">No supplier invoices yet.</div>';
     return;
@@ -1649,6 +1729,8 @@ async function autoMatch() {
 
 searchEl?.addEventListener("input", renderList);
 searchEl?.addEventListener("search", renderList);
+document.getElementById("supplier-usage-keyword")?.addEventListener("input", renderPartsUsage);
+document.getElementById("supplier-usage-period")?.addEventListener("change", renderPartsUsage);
 form?.elements.namedItem("supplier")?.addEventListener("input", scheduleDuplicateCheck);
 form?.elements.namedItem("invoiceNo")?.addEventListener("input", scheduleDuplicateCheck);
 form?.elements.namedItem("supplier")?.addEventListener("change", scheduleDuplicateCheck);

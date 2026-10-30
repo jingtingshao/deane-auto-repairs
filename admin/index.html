@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="admin.css?v=20261021guidehistory" />
+    <link rel="stylesheet" href="admin.css?v=20261030usage" />
     <link rel="stylesheet" href="admin-refresh.css?v=20261021capricorn" />
   </head>
   <body>
@@ -475,6 +475,25 @@
               <input id="supplier-invoice-import-file" type="file" accept=".pdf,application/pdf,image/*" multiple hidden />
               <button type="button" id="btn-supplier-invoice-refresh" class="ghost">Refresh</button>
             </div>
+            <details id="supplier-usage" class="supplier-usage">
+              <summary>Parts used — most bought from suppliers</summary>
+              <div class="supplier-usage-filters">
+                <label>
+                  Part name or number
+                  <input id="supplier-usage-keyword" type="search" placeholder="e.g. pad, 2648P" autocomplete="off" />
+                </label>
+                <label>
+                  Period
+                  <select id="supplier-usage-period">
+                    <option value="3">Last 3 months</option>
+                    <option value="6" selected>Last 6 months</option>
+                    <option value="12">Last 12 months</option>
+                    <option value="0">All time</option>
+                  </select>
+                </label>
+              </div>
+              <div id="supplier-usage-results"></div>
+            </details>
             <div id="supplier-invoices-list" class="report-list"></div>
           </section>
 
@@ -1262,7 +1281,7 @@
     <script src="jobs.js?v=20261019workmatch"></script>
     <script src="billing.js?v=20261018splitpay"></script>
     <script src="inventory.js?v=20261020stockhistory"></script>
-    <script src="supplier-invoices.js?v=20261019pickaccept"></script>
+    <script src="supplier-invoices.js?v=20261030usage"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>
     <script src="parts-directory.js?v=20261021wreckers"></script>
     <script src="tyre-prices.js?v=20261028workshopstock"></script>

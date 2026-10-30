@@ -1709,6 +1709,36 @@ label.check input {
   background: #2e7d32;
 }
 
+.supplier-usage {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f6f8fb;
+}
+
+.supplier-usage summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.supplier-usage-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0.75rem 0 0.5rem;
+}
+
+.supplier-usage-filters label {
+  display: grid;
+  gap: 0.25rem;
+  flex: 1 1 12rem;
+}
+
+.supplier-usage-table td {
+  vertical-align: top;
+}
+
 .supplier-month-summary {
   margin: 0 0 0.75rem;
   padding: 0.65rem 0.85rem;
