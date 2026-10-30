@@ -1052,6 +1052,18 @@ function resolveJobStockItem(items, part) {
   return named.length === 1 ? named[0] : null;
 }
 
+/** Job parts matched from a supplier invoice line that was never added to stock: bought for this car, not taken off the shelf. */
+function partsBoughtForJob(parts, items, movements) {
+  const partIds = new Set((parts || []).map((part) => part.id).filter(Boolean));
+  if (!partIds.size) return new Set();
+  const linked = readInvoiceCandidates().filter(
+    (row) => row.appliedPartId && partIds.has(row.appliedPartId) && isJobAcceptedCandidateDecision(row.decision)
+  );
+  if (!linked.length) return new Set();
+  const stocked = inventoryLib.stockedCandidateIdSet(linked, items, movements);
+  return new Set(linked.filter((row) => !stocked.has(row.id)).map((row) => row.appliedPartId));
+}
+
 /** Take job parts off the shelf, or put them back when the qty drops or the line is removed. */
 function issueJobStock(job, previousParts) {
   if (!job) return false;
@@ -1081,6 +1093,7 @@ function issueJobStock(job, previousParts) {
       .map((part) => String(part.stockItemId || prevById.get(part.id)?.stockItemId || "").trim())
       .filter(Boolean)
   );
+  const boughtForJob = partsBoughtForJob(nextParts, items, movements);
 
   for (const part of nextParts) {
     const prev = prevById.get(part.id);
@@ -1089,6 +1102,7 @@ function issueJobStock(job, previousParts) {
     let item = resolveJobStockItem(items, { ...part, stockItemId: explicitId });
     // A text-only line must not take the same item again when another line is already linked to it.
     if (item && !explicitId && linkedIds.has(item.id)) item = null;
+    if (item && !explicitId && !issued && boughtForJob.has(part.id)) item = null;
     if (!item) {
       part.stockIssuedQty = issued;
       if (prev?.stockItemId) part.stockItemId = prev.stockItemId;
@@ -2287,6 +2301,57 @@ function refreshSupplierInvoiceStatus(invoiceId) {
   return invoice;
 }
 
+const MERGED_PART_FIELDS = [
+  "partNumber",
+  "supplier",
+  "costPrice",
+  "markupPercent",
+  "sellPrice",
+  "supplierInvoiceNo",
+  "supplierInvoiceDate",
+  "ordered",
+  "received",
+  "source",
+  "ocrConfidence",
+  "matchScore",
+  "photoRefs",
+];
+
+function mergedFromSnapshot(part) {
+  const snapshot = {};
+  for (const key of MERGED_PART_FIELDS) snapshot[key] = part[key];
+  return snapshot;
+}
+
+/**
+ * A job line typed from the quote / customer invoice (e.g. "Front brake pads") and the
+ * supplier invoice line for the same part are one part, not two.
+ * Lines already taken from stock or already from a supplier invoice are left alone.
+ */
+function findJobPartToMerge(parts, candidate, incoming) {
+  const open = (parts || []).filter((p) => {
+    const desc = String(p.description || "").trim();
+    if (!desc || jobsLib.isServiceOrLabourLine(desc) || jobsLib.isNonPartInvoiceLine(desc)) return false;
+    if (p.source === "ocr" || p.source === "stock" || p.supplierInvoiceNo) return false;
+    return !p.stockItemId && !(Number(p.stockIssuedQty) > 0);
+  });
+  if (!open.length) return null;
+  const only = (rows) => (rows.length === 1 ? rows[0] : null);
+  const partNo = stockPartKey(incoming.partNumber);
+  if (partNo.length >= 3) {
+    const hit = only(
+      open.filter((p) => stockPartKey(p.partNumber) === partNo || stockPartKey(p.description).includes(partNo))
+    );
+    if (hit) return hit;
+  }
+  const name = stockNameKey(incoming.description);
+  const sameName = only(open.filter((p) => name && stockNameKey(p.description) === name));
+  if (sameName) return sameName;
+  const category = inventoryLib.guessCategory(`${incoming.description} ${candidate.rawLineText || ""}`);
+  if (!category) return null;
+  return only(open.filter((p) => inventoryLib.guessCategory(p.description) === category));
+}
+
 function acceptInvoiceCandidate(candidateId, req, decisionMode = "accepted") {
   const candidateRows = readInvoiceCandidates();
   const candidateIndex = candidateRows.findIndex((row) => row.id === candidateId);
@@ -2382,7 +2447,39 @@ function acceptInvoiceCandidate(candidateId, req, decisionMode = "accepted") {
   );
   const beforeJob = { ...(jobs[jobIndex] || {}) };
   const parts = Array.isArray(jobs[jobIndex].parts) ? [...jobs[jobIndex].parts] : [];
-  parts.push(part);
+  const mergeTarget = findJobPartToMerge(parts, currentCandidate, part);
+  if (mergeTarget) {
+    const index = parts.indexOf(mergeTarget);
+    const priced = Number(mergeTarget.sellPrice) > 0;
+    const merged = jobsLib.normalizePart(
+      {
+        ...mergeTarget,
+        partNumber: mergeTarget.partNumber || part.partNumber,
+        qty: Number(mergeTarget.qty) > 0 ? mergeTarget.qty : part.qty,
+        supplier: part.supplier,
+        costPrice: part.costPrice,
+        markupPercent: priced ? mergeTarget.markupPercent : part.markupPercent,
+        sellPrice: priced ? mergeTarget.sellPrice : undefined,
+        supplierInvoiceNo: part.supplierInvoiceNo,
+        supplierInvoiceDate: part.supplierInvoiceDate,
+        ordered: true,
+        received: true,
+        source: "ocr",
+        status: mergeTarget.status === "billed" ? "billed" : "approved",
+        ocrConfidence: part.ocrConfidence,
+        matchScore: part.matchScore,
+        photoRefs: part.photoRefs,
+        mergedFrom: mergedFromSnapshot(mergeTarget),
+        updatedAt: now,
+        updatedBy: nowActor(req),
+      },
+      mergeTarget.id
+    );
+    parts[index] = merged;
+    Object.assign(part, merged);
+  } else {
+    parts.push(part);
+  }
   jobs[jobIndex].parts = jobsLib.normalizeParts(parts, () => randomUUID());
   jobs[jobIndex].status = jobsLib.normalizeJobStatus(jobs[jobIndex].status, jobs[jobIndex].parts);
   jobs[jobIndex].updatedAt = now;
@@ -2490,6 +2587,11 @@ function editMatchedCandidate(candidateId, req) {
   }
 
   const existingPart = sourceParts[sourcePartIndex];
+  if (existingPart.mergedFrom && sourceJobIndex !== targetJobIndex) {
+    const err = new Error("This line was joined to a part already on the job. Unmatch it first, then match the other job.");
+    err.status = 400;
+    throw err;
+  }
   if (existingPart.status === "billed") {
     const err = new Error("This part is already billed and cannot be edited.");
     err.status = 400;
@@ -2643,9 +2745,29 @@ function unmatchInvoiceCandidate(candidateId, req) {
 
   const jobs = readJobs();
   let removedPart = null;
+  let restoredPart = null;
   if (wasAccepted) {
     const linked = findCandidateLinkedPart(jobs, candidate);
-    if (linked) {
+    if (linked?.part.mergedFrom) {
+      const parts = [...(jobs[linked.jobIndex].parts || [])];
+      const billed = linked.part.status === "billed";
+      const { sellPrice, markupPercent, ...rest } = linked.part.mergedFrom;
+      restoredPart = jobsLib.normalizePart(
+        {
+          ...linked.part,
+          ...rest,
+          ...(billed ? {} : { sellPrice, markupPercent }),
+          mergedFrom: null,
+          updatedAt: nowIso(),
+          updatedBy: nowActor(req),
+        },
+        linked.part.id
+      );
+      parts[linked.partIndex] = restoredPart;
+      jobs[linked.jobIndex].parts = jobsLib.normalizeParts(parts, () => randomUUID());
+      jobs[linked.jobIndex].updatedAt = nowIso();
+      writeJobs(jobs);
+    } else if (linked) {
       if (linked.part.status === "billed") {
         const err = new Error("This part is already billed. Unmatch is not allowed.");
         err.status = 400;
@@ -2687,6 +2809,9 @@ function unmatchInvoiceCandidate(candidateId, req) {
   const supplierInvoice = refreshSupplierInvoiceStatus(candidate.supplierInvoiceId);
   if (removedPart) {
     writePartAudit("jobPart", removedPart.id, "delete", removedPart, null, req, "candidate unmatched");
+  }
+  if (restoredPart) {
+    writePartAudit("jobPart", restoredPart.id, "update", null, restoredPart, req, "supplier details removed on unmatch");
   }
   writePartAudit(
     "invoiceCandidate",

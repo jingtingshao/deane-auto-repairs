@@ -145,6 +145,7 @@ function normalizePart(part = {}, idFallback = "") {
     photoRefs: normalizePhotoRefs(part.photoRefs),
     note,
     notes: note,
+    ...(part.mergedFrom && typeof part.mergedFrom === "object" ? { mergedFrom: { ...part.mergedFrom } } : {}),
     createdAt: String(part.createdAt || "").trim(),
     createdBy: String(part.createdBy || "").trim(),
     updatedAt: String(part.updatedAt || "").trim(),
