@@ -32,6 +32,7 @@ const catalog = require("./data/catalog");
 const namesLib = require("./data/names");
 const jobsLib = require("./data/jobs");
 const inventoryLib = require("./data/inventory");
+const supplierProfiles = require("./data/supplier-profiles");
 const appointmentsLib = require("./data/appointments");
 const bookingRequestsLib = require("./data/booking-requests");
 const { buildBillingPdf, safeFilename } = require("./data/billing-pdf");
@@ -1772,13 +1773,13 @@ function classifyTopstarLine(item) {
       confidence: 0.96,
     };
   }
-  if (/\bUJ-\w+/i.test(blob)) {
+  if (/\bU?J-\w+/i.test(blob)) {
     const zMatch = blob.match(/\(([^)]+)\)/);
     const zText = zMatch ? zMatch[1].replace(/\s+/g, " ").trim() : "";
     return {
       ...item,
       descriptionCandidate: zText ? `Oil filter ${zText}` : desc || code,
-      partNumberCandidate: (code.match(/UJ-\w+/i) || [code])[0],
+      partNumberCandidate: (code.match(/U?J-\w+/i) || [code])[0],
       decision: "pending",
       confidence: 0.95,
     };
@@ -1910,6 +1911,7 @@ function parseSupplierInvoiceText(rawText, options = {}) {
     .filter(Boolean);
 
   const topstar = /top\s*star/i.test(text) || /top\s*star/i.test(String(options.supplierHint || ""));
+  const profile = topstar ? null : supplierProfiles.detectSupplierProfile(text, options.supplierHint);
   const fromSupplier = statementSupplierName(text);
   const supplierLine = topstar
     ? "Topstar New Zealand"
@@ -1917,44 +1919,60 @@ function parseSupplierInvoiceText(rawText, options = {}) {
       fromSupplier ||
       lines.find((line) => /^[A-Z][A-Z\s&.'-]{2,}$/.test(line) && !/invoice|bill to|date/i.test(line)) ||
       "";
-  const supplier = topstar ? "Topstar New Zealand" : supplierLine.replace(/\s+sample.*$/i, "").trim();
+  const supplier = topstar
+    ? "Topstar New Zealand"
+    : profile
+      ? profile.name
+      : supplierLine.replace(/\s+sample.*$/i, "").trim();
 
   const invoiceNoLine = lines.findIndex((line) => /^invoice\s*number$/i.test(line));
-  const invoiceNo =
-    (invoiceNoLine >= 0 ? lines[invoiceNoLine + 1] : "") ||
-    (text.match(
-      /(?:sample\s*no|invoice\s*(?:number|no|#)|tax\s*invoice\s*(?:number|no|#)|inv\s*#)\s*[:\-]?\s*([A-Z0-9-]+)/i
-    ) || [])[1] ||
-    statementInvoiceNumber(text) ||
-    "";
+  const invoiceNo = profile?.invoiceNo
+    ? profile.invoiceNo(text, lines)
+    : (invoiceNoLine >= 0 ? lines[invoiceNoLine + 1] : "") ||
+      (text.match(
+        /(?:sample\s*no|invoice\s*(?:number|no|#)|tax\s*invoice\s*(?:number|no|#)|inv\s*#)\s*[:\-]?\s*([A-Z0-9-]+)/i
+      ) || [])[1] ||
+      statementInvoiceNumber(text) ||
+      "";
   const invoiceDateLine = lines.findIndex((line) => /^invoice\s*date$/i.test(line));
   const dateRaw =
+    profile?.invoiceDate?.(text, lines) ||
     (invoiceDateLine >= 0 ? lines[invoiceDateLine + 1] : "") ||
     (text.match(/invoice\s*date\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i) || [])[1] ||
     (text.match(/\bdate\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i) || [])[1] ||
     "";
   const invoiceDate = normalizeInvoiceDateInput(dateRaw);
-  const subtotal = Number(
-    (text.match(/sub\s*total\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i) || [])[1]?.replace(/,/g, "") || 0
-  );
-  const tax = Number(
-    (text.match(/total\s*gst\s*\d+%\s*([\d,]+(?:\.\d{1,2})?)/i) ||
-      text.match(/(?:^|\n)\s*tax\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i) ||
-      [])[1]?.replace(/,/g, "") || 0
-  );
-  const total = Number(
-    (text.match(/total\(nzd\)\s*([\d,]+(?:\.\d{1,2})?)/i) ||
-      text.match(/total\s*inclusive(?:\s*of\s*tax)?\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i) ||
-      text.match(/(?<!sub\s)\btotal\s+\$?\s*([\d,]+(?:\.\d{1,2})?)/i) ||
-      [])[1]?.replace(/,/g, "") || 0
-  );
+  const profileTotals = profile?.totals?.(text, lines) || null;
+  const subtotal =
+    profileTotals?.subtotal ||
+    Number(
+      (text.match(/sub\s*total\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i) || [])[1]?.replace(/,/g, "") || 0
+    );
+  const tax =
+    profileTotals?.tax ||
+    Number(
+      (text.match(/total\s*gst\s*\d+%\s*([\d,]+(?:\.\d{1,2})?)/i) ||
+        text.match(/(?:^|\n)\s*tax\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i) ||
+        [])[1]?.replace(/,/g, "") || 0
+    );
+  const total =
+    profileTotals?.total ||
+    Number(
+      (text.match(/total\(nzd\)\s*([\d,]+(?:\.\d{1,2})?)/i) ||
+        text.match(/total\s*inclusive(?:\s*of\s*tax)?\s*[:\-]?\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i) ||
+        text.match(/(?<!sub\s)\btotal\s+\$?\s*([\d,]+(?:\.\d{1,2})?)/i) ||
+        [])[1]?.replace(/,/g, "") || 0
+    );
 
-  let candidates = [];
-  const tyreOrder = inventoryLib.parseTyreOrderLines(lines);
+  // Handwritten lines (Maka) are only taken from clean text; OCR guesses would invent part numbers.
+  let candidates = profile?.lines ? profile.lines(lines) : [];
+  if (profile?.handwrittenLines) candidates = parseStatementPartLines(lines);
+  const genericLines = !profile?.handwrittenLines && !candidates.length;
+  const tyreOrder = genericLines ? inventoryLib.parseTyreOrderLines(lines) : [];
   const tyreOrderHasFee = tyreOrder.some((row) => inventoryLib.isStewardshipCandidate(row));
   if (tyreOrderHasFee) candidates = tyreOrder;
   else if (topstar) candidates = parseTopstarRows(lines, { allowNoHeader: options.continuationPage });
-  const headerIndex = topstar
+  const headerIndex = topstar || !genericLines
     ? -1
     : lines.findIndex((line) =>
     /qty.*description.*(?:part\s*no|part\s*number).*unit.*total/i.test(line)
@@ -1980,10 +1998,10 @@ function parseSupplierInvoiceText(rawText, options = {}) {
       });
     }
   }
-  if (!candidates.length) {
+  if (genericLines && !candidates.length) {
     candidates = parseStatementPartLines(lines);
   }
-  if (!candidates.length) {
+  if (genericLines && !candidates.length) {
     candidates = parseCandidatesFromRawText(text, supplier);
   }
   candidates = candidates.map((row) => ({
@@ -2050,20 +2068,43 @@ async function prepareInvoiceImageForOcr(buffer) {
   }
 }
 
+const INVOICE_OCR_TIMEOUT_MS = 90 * 1000;
+
 async function ocrInvoiceImage(buffer) {
   const prepared = await prepareInvoiceImageForOcr(buffer);
   const cachePath = path.join(require("os").tmpdir(), "deane-tesseract");
   fs.mkdirSync(cachePath, { recursive: true });
-  const worker = await Tesseract.createWorker("eng", 1, { logger: () => {}, cachePath });
-  try {
+  let worker = null;
+  let timedOut = false;
+  let timer = null;
+  const run = (async () => {
+    worker = await Tesseract.createWorker("eng", 1, { logger: () => {}, cachePath });
+    if (timedOut) return "";
     await worker.setParameters({
       tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
       preserve_interword_spaces: "1",
     });
     const result = await worker.recognize(prepared, { rotateAuto: true });
     return String(result?.data?.text || "").trim();
+  })();
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      reject(new Error(`no text after ${INVOICE_OCR_TIMEOUT_MS / 1000}s`));
+    }, INVOICE_OCR_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([run, timeout]);
+  } catch (err) {
+    const unreadable = new Error(`Invoice photo could not be read: ${err.message}`);
+    unreadable.code = "OCR_UNREADABLE";
+    throw unreadable;
   } finally {
-    await worker.terminate().catch(() => {});
+    clearTimeout(timer);
+    run
+      .catch(() => {})
+      .finally(() => worker?.terminate().catch(() => {}));
+    if (timedOut) worker?.terminate().catch(() => {});
   }
 }
 
@@ -2081,9 +2122,17 @@ function saveImportFileToUploads(file) {
 
 async function readSupplierInvoicePages(files, supplierHint = "", continuation = false) {
   const pages = [];
+  let unreadPages = 0;
   let hint = String(supplierHint || "").trim();
   for (let i = 0; i < files.length; i += 1) {
-    const rawText = await extractTextFromImportFile(files[i]);
+    let rawText = "";
+    try {
+      rawText = await extractTextFromImportFile(files[i]);
+    } catch (err) {
+      if (err.code !== "OCR_UNREADABLE") throw err;
+      console.warn(err.message);
+      unreadPages += 1;
+    }
     const parsed = parseSupplierInvoiceText(rawText, {
       supplierHint: hint,
       continuationPage: continuation || i > 0,
@@ -2117,6 +2166,7 @@ async function readSupplierInvoicePages(files, supplierHint = "", continuation =
     total: pick("total"),
     rawText,
     candidates,
+    unreadPages,
   };
 }
 
@@ -9397,8 +9447,11 @@ app.post(
       if (!supplier) missing.push("supplier");
       if (!invoiceNo) missing.push("invoice number");
       if (!lineCount) missing.push("part lines");
+      const unreadNote = parsedInvoice.unreadPages
+        ? "The photo could not be read (too slow or unclear). "
+        : "";
       const warning = missing.length
-        ? `Photo saved. Type the ${missing.join(", ")} the reader missed. Use Add line for parts, then press Save invoice.`
+        ? `${unreadNote}Photo saved. Type the ${missing.join(", ")} the reader missed. Use Add line for parts, then press Save invoice.`
         : "";
 
       const invoices = readSupplierInvoices();
@@ -9569,7 +9622,9 @@ app.post(
         pages: files.length,
         warning: newRows.length
           ? ""
-          : "Page saved, but no part lines were read. Use Add line to type them in.",
+          : `Page saved, but no part lines were read${
+              parsedPages.unreadPages ? " (the photo could not be read)" : ""
+            }. Use Add line to type them in.`,
       });
     } catch (err) {
       console.error("Could not add supplier invoice pages:", err);

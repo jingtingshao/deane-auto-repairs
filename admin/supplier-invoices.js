@@ -689,8 +689,9 @@ function renderInvoicePreview(invoice) {
   });
 }
 
-function showReadingStatus(pageCount) {
-  const text = pageCount > 1 ? `Reading ${pageCount} pages…` : "Reading invoice…";
+const READ_LIMIT_PER_PAGE_MS = 100 * 1000;
+
+function showReadingStatus(text) {
   if (ocrStatusLine) {
     ocrStatusLine.textContent = text;
     ocrStatusLine.className = "muted small supplier-ocr-status pending";
@@ -698,22 +699,38 @@ function showReadingStatus(pageCount) {
   showStatus(text, 120000);
 }
 
+async function postInvoiceFiles(url, files) {
+  readingInvoice = true;
+  const label = files.length > 1 ? `Reading ${files.length} pages…` : "Reading invoice…";
+  const started = Date.now();
+  const tick = () => showReadingStatus(`${label} ${Math.round((Date.now() - started) / 1000)}s`);
+  tick();
+  const ticker = setInterval(tick, 1000);
+  const controller = new AbortController();
+  const limit = setTimeout(() => controller.abort(), READ_LIMIT_PER_PAGE_MS * files.length + 30000);
+  const body = new FormData();
+  files.forEach((file) => body.append("files", file));
+  try {
+    return await Admin.api(url, { method: "POST", body, signal: controller.signal });
+  } catch (err) {
+    const message =
+      err?.name === "AbortError"
+        ? "Reading took too long and was stopped. Try again, or press + New supplier invoice and type it in."
+        : err?.message || "Could not read the invoice.";
+    showStatus(message, 9000);
+    throw new Error(message);
+  } finally {
+    clearInterval(ticker);
+    clearTimeout(limit);
+    readingInvoice = false;
+    renderOcrStatus();
+  }
+}
+
 async function addInvoicePages(files) {
   if (!current?.id) throw new Error("Open a supplier invoice first.");
   if (!files.length) return;
-  readingInvoice = true;
-  showReadingStatus(files.length);
-  const body = new FormData();
-  files.forEach((file) => body.append("files", file));
-  let result;
-  try {
-    result = await Admin.api(`/api/supplier-invoices/${current.id}/import-pages`, {
-      method: "POST",
-      body,
-    });
-  } finally {
-    readingInvoice = false;
-  }
+  const result = await postInvoiceFiles(`/api/supplier-invoices/${current.id}/import-pages`, files);
   await loadInvoice(current.id);
   await loadList();
   const added = Number(result?.linesAdded) || 0;
@@ -731,19 +748,7 @@ async function importInvoiceFile(fileList) {
     await addInvoicePages(files);
     return;
   }
-  readingInvoice = true;
-  showReadingStatus(files.length);
-  const body = new FormData();
-  files.forEach((file) => body.append("files", file));
-  let result;
-  try {
-    result = await Admin.api("/api/supplier-invoices/import-file", {
-      method: "POST",
-      body,
-    });
-  } finally {
-    readingInvoice = false;
-  }
+  const result = await postInvoiceFiles("/api/supplier-invoices/import-file", files);
   if (!result?.invoice?.id) throw new Error("Import finished but invoice is missing.");
   await loadInvoice(result.invoice.id);
   await loadList();
