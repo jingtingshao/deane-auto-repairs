@@ -99,11 +99,12 @@ const WEBSITE_BRANDS_PER_TIER = 3;
 
 /**
  * Website cards: up to WEBSITE_BRANDS_PER_TIER brands per tier.
- * A lower tier is dropped when its cheapest option is not cheaper than a higher tier.
+ * Budget / Mid-range / Premium all stay available even when a lower tier
+ * is not cheaper — guests can still pick those brands from the Brand menu.
  */
 function websitePicks(rows, settings) {
   const usable = rows.filter((r) => num(r.cost_ex) && r.brand && r.brand !== "Other");
-  const byTier = [];
+  const picks = [];
   for (const tier of TIERS) {
     const cands = usable.filter((r) => tierOf(r.brand) === tier);
     if (!cands.length) continue;
@@ -111,19 +112,15 @@ function websitePicks(rows, settings) {
       (a, b) => Number(inStock(b)) - Number(inStock(a)) || sellPrice(a, settings) - sellPrice(b, settings)
     );
     const seen = new Set();
-    const picks = [];
     for (const row of cands) {
       const brandKey = String(row.brand).toLowerCase();
       if (seen.has(brandKey)) continue;
       seen.add(brandKey);
       picks.push({ tier, row, price: sellPrice(row, settings) });
-      if (picks.length >= WEBSITE_BRANDS_PER_TIER) break;
+      if (seen.size >= WEBSITE_BRANDS_PER_TIER) break;
     }
-    byTier.push({ picks, cheapest: picks[0].price });
   }
-  return byTier
-    .filter((t, i) => byTier.slice(i + 1).every((higher) => t.cheapest < higher.cheapest))
-    .flatMap((t) => t.picks);
+  return picks;
 }
 
 function buildPublic(rows, settings, scrapedOn) {
@@ -149,11 +146,8 @@ function buildPublic(rows, settings, scrapedOn) {
     inStock: inStock(row),
   });
   for (const size of keys) {
-    const picks = websitePicks(groups.get(size), settings);
-    if (!picks.length) continue;
-    sizes[size] = picks.map(({ tier, row, price }) => card(tier, row, price));
-
-    // Brand filter: cheapest tyre per brand + pattern + load (stock preferred when prices match).
+    // Brand filter always lists every brand for this size (including Budget options
+    // that are not cheaper than Mid-range), so guests can still choose them.
     const byModel = new Map();
     for (const r of groups.get(size)) {
       if (!num(r.cost_ex) || !r.brand || r.brand === "Other") continue;
@@ -168,9 +162,15 @@ function buildPublic(rows, settings, scrapedOn) {
         byModel.set(key, c);
       }
     }
+    if (!byModel.size) continue;
     brands[size] = [...byModel.values()].sort(
       (a, b) => a.price - b.price || a.brand.localeCompare(b.brand) || a.pattern.localeCompare(b.pattern)
     );
+
+    const picks = websitePicks(groups.get(size), settings);
+    if (picks.length) {
+      sizes[size] = picks.map(({ tier, row, price }) => card(tier, row, price));
+    }
   }
   return {
     updated: scrapedOn,

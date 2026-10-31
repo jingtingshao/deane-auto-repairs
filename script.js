@@ -227,11 +227,8 @@
     if (tyreBrand) tyreBrand.value = "";
   };
 
-  const tyreOptionsForSize = (size) => {
-    const fromBrands = tyrePrices?.brands?.[size];
-    if (fromBrands?.length) return fromBrands;
-    return tyrePrices?.sizes?.[size] || [];
-  };
+  // Full catalogue for Brand menu (every brand for this size). Curated cards stay in sizes[].
+  const tyreCatalogueForSize = (size) => tyrePrices?.brands?.[size] || tyrePrices?.sizes?.[size] || [];
 
   const fillTyreBrands = () => {
     if (!tyreBrand || !tyreBrandField) return;
@@ -241,7 +238,7 @@
       tyreBrand.value = "";
       return;
     }
-    const models = tyreOptionsForSize(currentTyreSize());
+    const models = tyreCatalogueForSize(currentTyreSize());
     tyreBrandField.hidden = !models.length;
     const keep = tyreBrand.value;
     const groups = ["Budget", "Mid-range", "Premium"]
@@ -266,8 +263,8 @@
     }
     const size = currentTyreSize();
     const brand = tyreBrand?.value || "";
-    const catalogue = tyreOptionsForSize(size);
-    // All brands: curated website cards when present; otherwise the full catalogue.
+    const catalogue = tyreCatalogueForSize(size);
+    // All brands: curated website cards; a chosen brand uses the full catalogue.
     const options = brand
       ? catalogue.filter((o) => o.brand === brand).sort((a, b) => a.price - b.price)
       : tyrePrices.sizes?.[size]?.length

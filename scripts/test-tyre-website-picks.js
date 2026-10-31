@@ -43,7 +43,7 @@ const settings = { ...DEFAULT_SETTINGS };
 }
 
 {
-  // Mid-range cheaper than Budget → Budget hidden
+  // Mid-range cheaper than Budget → Budget still listed (brand menu + website cards)
   const picks = websitePicks(
     [
       row({ brand: "Mazzini", pattern: "A", cost_ex: 80 }),
@@ -54,8 +54,20 @@ const settings = { ...DEFAULT_SETTINGS };
   );
   assert.deepStrictEqual(
     picks.map((p) => `${p.tier}:${p.row.brand}`),
-    ["Mid-range:Linglong", "Premium:Goodyear"]
+    ["Budget:Mazzini", "Mid-range:Linglong", "Premium:Goodyear"]
   );
+
+  const publicPrices = buildPublic(
+    [
+      row({ brand: "Mazzini", pattern: "ECO307+", cost_ex: 49.3, size: "175/65R15", load_speed: "84H" }),
+      row({ brand: "Linglong", pattern: "Comfort Master", cost_ex: 44, size: "175/65R15", load_speed: "84H" }),
+      row({ brand: "Goodyear", pattern: "Assurance", cost_ex: 110, size: "175/65R15", load_speed: "84H" }),
+    ],
+    settings,
+    "2026-11-01"
+  );
+  assert.ok(publicPrices.brands["175/65R15"].some((c) => c.brand === "Mazzini"));
+  assert.ok(publicPrices.sizes["175/65R15"].some((c) => c.brand === "Mazzini"));
 }
 
 {
