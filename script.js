@@ -227,6 +227,12 @@
     if (tyreBrand) tyreBrand.value = "";
   };
 
+  const tyreOptionsForSize = (size) => {
+    const fromBrands = tyrePrices?.brands?.[size];
+    if (fromBrands?.length) return fromBrands;
+    return tyrePrices?.sizes?.[size] || [];
+  };
+
   const fillTyreBrands = () => {
     if (!tyreBrand || !tyreBrandField) return;
     if (!tyreSizeComplete()) {
@@ -235,7 +241,7 @@
       tyreBrand.value = "";
       return;
     }
-    const models = tyrePrices?.brands?.[currentTyreSize()] || [];
+    const models = tyreOptionsForSize(currentTyreSize());
     tyreBrandField.hidden = !models.length;
     const keep = tyreBrand.value;
     const groups = ["Budget", "Mid-range", "Premium"]
@@ -260,9 +266,13 @@
     }
     const size = currentTyreSize();
     const brand = tyreBrand?.value || "";
+    const catalogue = tyreOptionsForSize(size);
+    // All brands: curated website cards when present; otherwise the full catalogue.
     const options = brand
-      ? (tyrePrices.brands?.[size] || []).filter((o) => o.brand === brand).sort((a, b) => a.price - b.price)
-      : tyrePrices.sizes[size] || [];
+      ? catalogue.filter((o) => o.brand === brand).sort((a, b) => a.price - b.price)
+      : tyrePrices.sizes?.[size]?.length
+        ? [...tyrePrices.sizes[size]].sort((a, b) => a.price - b.price)
+        : [...catalogue].sort((a, b) => a.price - b.price);
     if (!options.length) {
       const empty = document.createElement("p");
       empty.className = "tyre-quotes-empty";

@@ -94,17 +94,36 @@ function nicePattern(pattern) {
     .slice(0, 40);
 }
 
-/** Website cards: cheapest per tier, dropping a lower tier that is not cheaper than a higher one. */
+/** How many distinct brands to show per tier on the website (stock preferred, then cheapest). */
+const WEBSITE_BRANDS_PER_TIER = 3;
+
+/**
+ * Website cards: up to WEBSITE_BRANDS_PER_TIER brands per tier.
+ * A lower tier is dropped when its cheapest option is not cheaper than a higher tier.
+ */
 function websitePicks(rows, settings) {
   const usable = rows.filter((r) => num(r.cost_ex) && r.brand && r.brand !== "Other");
-  const picks = [];
+  const byTier = [];
   for (const tier of TIERS) {
     const cands = usable.filter((r) => tierOf(r.brand) === tier);
     if (!cands.length) continue;
-    cands.sort((a, b) => Number(inStock(b)) - Number(inStock(a)) || sellPrice(a, settings) - sellPrice(b, settings));
-    picks.push({ tier, row: cands[0], price: sellPrice(cands[0], settings) });
+    cands.sort(
+      (a, b) => Number(inStock(b)) - Number(inStock(a)) || sellPrice(a, settings) - sellPrice(b, settings)
+    );
+    const seen = new Set();
+    const picks = [];
+    for (const row of cands) {
+      const brandKey = String(row.brand).toLowerCase();
+      if (seen.has(brandKey)) continue;
+      seen.add(brandKey);
+      picks.push({ tier, row, price: sellPrice(row, settings) });
+      if (picks.length >= WEBSITE_BRANDS_PER_TIER) break;
+    }
+    byTier.push({ picks, cheapest: picks[0].price });
   }
-  return picks.filter((p, i) => picks.slice(i + 1).every((q) => p.price < q.price));
+  return byTier
+    .filter((t, i) => byTier.slice(i + 1).every((higher) => t.cheapest < higher.cheapest))
+    .flatMap((t) => t.picks);
 }
 
 function buildPublic(rows, settings, scrapedOn) {
@@ -134,16 +153,23 @@ function buildPublic(rows, settings, scrapedOn) {
     if (!picks.length) continue;
     sizes[size] = picks.map(({ tier, row, price }) => card(tier, row, price));
 
-    // Brand search: cheapest in-stock tyre per brand + pattern + load rating.
+    // Brand filter: cheapest tyre per brand + pattern + load (stock preferred when prices match).
     const byModel = new Map();
     for (const r of groups.get(size)) {
-      if (!num(r.cost_ex) || !r.brand || r.brand === "Other" || !inStock(r)) continue;
+      if (!num(r.cost_ex) || !r.brand || r.brand === "Other") continue;
       const c = card(tierOf(r.brand), r, sellPrice(r, settings));
       const key = `${c.brand}|${c.pattern}|${c.load}`.toUpperCase();
-      if (!byModel.has(key) || c.price < byModel.get(key).price) byModel.set(key, c);
+      const prev = byModel.get(key);
+      if (
+        !prev ||
+        c.price < prev.price ||
+        (c.price === prev.price && c.inStock && !prev.inStock)
+      ) {
+        byModel.set(key, c);
+      }
     }
     brands[size] = [...byModel.values()].sort(
-      (a, b) => a.brand.localeCompare(b.brand) || a.price - b.price
+      (a, b) => a.price - b.price || a.brand.localeCompare(b.brand) || a.pattern.localeCompare(b.pattern)
     );
   }
   return {
@@ -372,23 +398,32 @@ function diffCosts(oldRows, newRows) {
   };
 }
 
-/** Website card changes per size and tier (price, brand, or card added / removed). */
+function websiteCardKey(o) {
+  return `${o?.tier || ""}|${o?.brand || ""}|${o?.pattern || ""}|${o?.load || ""}`.toLowerCase();
+}
+
+/** Website card changes per size (price, brand, or card added / removed). */
 function diffWebsite(oldPublic, newPublic) {
   const changes = [];
   const sizes = new Set([...Object.keys(oldPublic.sizes || {}), ...Object.keys(newPublic.sizes || {})]);
   for (const size of sizes) {
-    const before = new Map((oldPublic.sizes[size] || []).map((o) => [o.tier, o]));
-    const after = new Map((newPublic.sizes[size] || []).map((o) => [o.tier, o]));
-    for (const tier of TIERS) {
-      const a = before.get(tier);
-      const b = after.get(tier);
-      if (!a && !b) continue;
-      if (a && b && a.price === b.price && a.brand === b.brand && a.pattern === b.pattern) continue;
-      changes.push({ size, tier, before: a || null, after: b || null });
+    const before = new Map((oldPublic.sizes[size] || []).map((o) => [websiteCardKey(o), o]));
+    const after = new Map((newPublic.sizes[size] || []).map((o) => [websiteCardKey(o), o]));
+    for (const key of new Set([...before.keys(), ...after.keys()])) {
+      const a = before.get(key);
+      const b = after.get(key);
+      if (a && b && a.price === b.price) continue;
+      const sample = b || a;
+      changes.push({ size, tier: sample.tier, before: a || null, after: b || null });
     }
   }
   const order = Object.keys(newPublic.sizes || {});
-  changes.sort((x, y) => order.indexOf(x.size) - order.indexOf(y.size) || TIERS.indexOf(x.tier) - TIERS.indexOf(y.tier));
+  changes.sort(
+    (x, y) =>
+      order.indexOf(x.size) - order.indexOf(y.size) ||
+      TIERS.indexOf(x.tier) - TIERS.indexOf(y.tier) ||
+      String(x.after?.brand || x.before?.brand || "").localeCompare(y.after?.brand || y.before?.brand || "")
+  );
   return changes;
 }
 
@@ -437,6 +472,8 @@ function exportCsv(rows, settings) {
 
 module.exports = {
   DEFAULT_SETTINGS,
+  WEBSITE_BRANDS_PER_TIER,
+  TIERS,
   normalizeSettings,
   normalizeSizeQuery,
   sizeCmp,
