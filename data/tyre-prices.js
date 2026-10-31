@@ -236,7 +236,7 @@ function popularSizesHtml(publicPrices, indent = "          ") {
     `${indent}    </tbody>`,
     `${indent}  </table>`,
     `${indent}</div>`,
-    `${indent}<p class="tyre-popular-note">Per tyre, fitted and balanced with a new valve, incl. GST and Tyrewise fee.` +
+    `${indent}<p class="tyre-popular-note">Per tyre, fitted and balanced, incl. GST and Tyrewise fee.` +
       `${updated ? ` Prices updated ${htmlText(updated)}.` : ""} Subject to stock.</p>`,
   ].join("\n");
 }

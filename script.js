@@ -374,7 +374,7 @@
             year: "numeric",
           });
           tyreQuotesNote.textContent =
-            `Prices are per tyre, fitted and balanced with a new valve, incl. GST and Tyrewise fee. Updated ${updated}. ` +
+            `Prices are per tyre, fitted and balanced, incl. GST and Tyrewise fee. Updated ${updated}. ` +
             "Subject to stock — we’ll confirm before ordering. Please match your car’s load/speed rating (e.g. 91H).";
           tyreQuotesNote.hidden = false;
         }
