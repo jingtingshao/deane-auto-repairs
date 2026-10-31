@@ -611,6 +611,47 @@ p {
   --svc-cta-ink: #fff;
 }
 
+.service-card-tyres {
+  align-items: stretch;
+}
+
+.service-card-tyres h3 {
+  min-height: 0;
+  margin-bottom: 12px;
+  font-size: clamp(28px, 2.3vw, 36px);
+}
+
+.service-card-banner {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto 16px;
+  padding: 8px 18px;
+  background: var(--navy);
+  color: #fff;
+  font: 700 12px / 1.2 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: center;
+  transform: skewX(-10deg);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.18);
+}
+
+.service-card-banner span {
+  display: inline-block;
+  transform: skewX(10deg);
+}
+
+.service-card-tyres .service-price strong {
+  font-size: clamp(52px, 4.4vw, 72px);
+  letter-spacing: -0.02em;
+}
+
+.service-card-tyres .service-price .from {
+  font-size: 13px;
+  color: rgba(17, 24, 39, 0.82);
+}
+
 .service-icon {
   display: none;
 }
@@ -634,7 +675,8 @@ p {
   color: var(--svc-muted);
 }
 
-.service-card-note + .service-includes {
+.service-card-note + .service-includes,
+.service-card-banner + .service-includes {
   margin-top: 0;
 }
 
