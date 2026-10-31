@@ -374,7 +374,7 @@
             year: "numeric",
           });
           tyreQuotesNote.textContent =
-            `Prices are per tyre, fitted, incl. GST and Tyrewise fee. Updated ${updated}. ` +
+            `Prices are per tyre, fitted and balanced with a new valve, incl. GST and Tyrewise fee. Updated ${updated}. ` +
             "Subject to stock — we’ll confirm before ordering. Please match your car’s load/speed rating (e.g. 91H).";
           tyreQuotesNote.hidden = false;
         }
@@ -389,6 +389,24 @@
     loadTyrePrices();
     (document.querySelector("#tyre-prices") || tyrePanel)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  const pickTyreSize = async (size) => {
+    const m = /^(\d{3})\/(\d{2})R(\d{2})$/.exec(size || "");
+    if (!m) return;
+    await loadTyrePrices();
+    if (!tyrePrices) return;
+    tyreWidth.value = m[1];
+    onTyreWidth();
+    tyreProfile.value = m[2];
+    onTyreProfile();
+    tyreRim.value = m[3];
+    onTyreRim();
+  };
+  document.querySelectorAll("[data-pick-tyre-size]").forEach((link) => {
+    link.addEventListener("click", () => {
+      pickTyreSize(link.dataset.pickTyreSize);
+    });
+  });
   if (tyrePanel) {
     if ("IntersectionObserver" in window) {
       const watcher = new IntersectionObserver(

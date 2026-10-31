@@ -5061,6 +5061,35 @@ app.use(
 );
 app.use("/report", express.static(path.join(ROOT, "report"), { dotfiles: "deny" }));
 app.use("/billing", express.static(path.join(ROOT, "billing"), { dotfiles: "deny" }));
+
+const TYRES_PAGE_FILE = path.join(ROOT, "tyres", "index.html");
+const POPULAR_TYRES_BLOCK = /([ \t]*)<!-- popular-tyre-sizes -->[\s\S]*?<!-- \/popular-tyre-sizes -->/;
+
+// Popular sizes on /tyres/ follow the prices last published in Admin; the file's own table is the fallback.
+app.get("/tyres/", (req, res, next) => {
+  if (req.path !== "/tyres/") return next();
+  let html;
+  try {
+    html = fs.readFileSync(TYRES_PAGE_FILE, "utf8");
+    const published = readPublishedTyrePrices();
+    const match = POPULAR_TYRES_BLOCK.exec(html);
+    const table = published && match ? tyrePricesLib.popularSizesHtml(published, match[1]) : "";
+    if (table) {
+      const indent = match[1];
+      html = html.replace(
+        POPULAR_TYRES_BLOCK,
+        () => `${indent}<!-- popular-tyre-sizes -->\n${table}\n${indent}<!-- /popular-tyre-sizes -->`
+      );
+    }
+  } catch (err) {
+    console.error("Tyres page render failed:", err.message || err);
+    return next();
+  }
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+  res.send(html);
+});
+
 app.use(express.static(ROOT, {
   index: "index.html",
   dotfiles: "deny",

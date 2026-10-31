@@ -180,6 +180,67 @@ function buildPublic(rows, settings, scrapedOn) {
   };
 }
 
+const POPULAR_SIZES = [
+  "175/65R14", "185/65R15", "195/65R15", "205/55R16", "205/65R16",
+  "215/60R16", "215/55R17", "225/45R17", "225/65R17", "235/55R18",
+];
+
+/** Cheapest card and cheapest Premium card for each popular size that has a website price. */
+function popularSizes(publicPrices, sizes = POPULAR_SIZES) {
+  const out = [];
+  for (const size of sizes) {
+    const cards = (publicPrices?.sizes?.[size] || []).filter((c) => Number(c.price) > 0);
+    if (!cards.length) continue;
+    const byPrice = [...cards].sort((a, b) => a.price - b.price);
+    const premium = byPrice.find((c) => c.tier === "Premium") || null;
+    out.push({ size, from: byPrice[0], premium: premium === byPrice[0] ? null : premium });
+  }
+  return out;
+}
+
+function htmlText(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Static table for /tyres/ so search engines can read fitted prices without running the finder. */
+function popularSizesHtml(publicPrices, indent = "          ") {
+  const rows = popularSizes(publicPrices);
+  if (!rows.length) return "";
+  const cell = (card, label) =>
+    card
+      ? `<td><strong>$${htmlText(card.price)}</strong> <span>${htmlText(label(card))}</span></td>`
+      : `<td><span>—</span></td>`;
+  const body = rows.map(
+    ({ size, from, premium }) =>
+      `${indent}      <tr><th scope="row"><a href="#tyre-prices" data-pick-tyre-size="${htmlText(size)}">${htmlText(size)}</a></th>` +
+      `${cell(from, (c) => `${c.brand} · ${c.tier}`)}${cell(premium, (c) => c.brand)}</tr>`
+  );
+  const updated = /^\d{4}-\d{2}-\d{2}$/.test(String(publicPrices?.updated || ""))
+    ? new Date(`${publicPrices.updated}T00:00:00Z`).toLocaleDateString("en-NZ", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      })
+    : "";
+  return [
+    `${indent}<div class="tyre-popular-wrap">`,
+    `${indent}  <table class="tyre-popular-table">`,
+    `${indent}    <thead><tr><th scope="col">Tyre size</th><th scope="col">Fitted from</th><th scope="col">Premium from</th></tr></thead>`,
+    `${indent}    <tbody>`,
+    ...body,
+    `${indent}    </tbody>`,
+    `${indent}  </table>`,
+    `${indent}</div>`,
+    `${indent}<p class="tyre-popular-note">Per tyre, fitted and balanced with a new valve, incl. GST and Tyrewise fee.` +
+      `${updated ? ` Prices updated ${htmlText(updated)}.` : ""} Subject to stock.</p>`,
+  ].join("\n");
+}
+
 const STOCK_NOISE = new Set([
   "ND", "ASY", "XL", "RF", "TL", "AS", "HT", "AT", "MT", "SUV", "TYRE", "TYRES", "NON",
   "DIRECTIONAL", "ASYMMETRIC", "ASYMMETRICAL", "PATTERN", "RUNFLAT",
@@ -482,6 +543,8 @@ module.exports = {
   sellPrice,
   websitePicks,
   buildPublic,
+  popularSizes,
+  popularSizesHtml,
   workshopTyreStock,
   withAvailability,
   searchBySize,
