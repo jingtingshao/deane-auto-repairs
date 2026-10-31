@@ -417,10 +417,15 @@ p {
 }
 
 .tyre-finder {
-  padding: 64px 0 72px;
+  padding: 56px 0 64px;
   background: var(--sign-navy);
   color: #fff;
   scroll-margin-top: var(--header-h);
+}
+
+/* Sit directly under the hero / trust bar so fitted prices are early on the page */
+.trust-bar + .tyre-finder {
+  padding-top: 48px;
 }
 
 .tyre-finder-head {
