@@ -194,11 +194,16 @@
       .filter(Boolean)
       .map(([, w, p, r]) => ({ w, p, r }));
 
-  const fillTyreSelect = (select, values, preferred) => {
+  const fillTyreSelect = (select, values, preferred, { allowEmpty = false, emptyLabel = "—" } = {}) => {
     if (!select) return;
     const sorted = [...new Set(values)].sort((a, b) => Number(a) - Number(b));
-    const keep = [preferred, select.value].find((v) => sorted.includes(v)) || sorted[0];
-    select.replaceChildren(...sorted.map((v) => new Option(v, v, false, v === keep)));
+    const keep = [preferred, select.value].find((v) => sorted.includes(v)) || (allowEmpty ? "" : sorted[0] || "");
+    const options = sorted.map((v) => new Option(v, v, false, v === keep));
+    if (allowEmpty) {
+      select.replaceChildren(new Option(emptyLabel, "", true, !keep), ...options);
+    } else {
+      select.replaceChildren(...options);
+    }
     select.value = keep || "";
   };
 
@@ -212,10 +217,24 @@
     notesField.value = [...kept, line].join("\n");
   };
 
+  const tyreSizeComplete = () => Boolean(tyreWidth?.value && tyreProfile?.value && tyreRim?.value);
+
   const currentTyreSize = () => `${tyreWidth.value}/${tyreProfile.value}R${tyreRim.value}`;
+
+  const clearTyreQuotes = () => {
+    tyreQuotes?.replaceChildren();
+    if (tyreBrandField) tyreBrandField.hidden = true;
+    if (tyreBrand) tyreBrand.value = "";
+  };
 
   const fillTyreBrands = () => {
     if (!tyreBrand || !tyreBrandField) return;
+    if (!tyreSizeComplete()) {
+      tyreBrandField.hidden = true;
+      tyreBrand.replaceChildren(new Option("All brands", ""));
+      tyreBrand.value = "";
+      return;
+    }
     const models = tyrePrices?.brands?.[currentTyreSize()] || [];
     tyreBrandField.hidden = !models.length;
     const keep = tyreBrand.value;
@@ -235,6 +254,10 @@
 
   const renderTyreQuotes = () => {
     if (!tyreQuotes || !tyrePrices) return;
+    if (!tyreSizeComplete()) {
+      clearTyreQuotes();
+      return;
+    }
     const size = currentTyreSize();
     const brand = tyreBrand?.value || "";
     const options = brand
@@ -291,14 +314,26 @@
   };
 
   const onTyreWidth = () => {
+    if (!tyreWidth.value) {
+      fillTyreSelect(tyreProfile, [], "", { allowEmpty: true, emptyLabel: "Profile" });
+      fillTyreSelect(tyreRim, [], "", { allowEmpty: true, emptyLabel: "Rim" });
+      clearTyreQuotes();
+      return;
+    }
     const sizes = tyreSizes().filter((s) => s.w === tyreWidth.value);
-    fillTyreSelect(tyreProfile, sizes.map((s) => s.p), tyreProfile.value);
-    onTyreProfile();
+    fillTyreSelect(tyreProfile, sizes.map((s) => s.p), "", { allowEmpty: true, emptyLabel: "Profile" });
+    fillTyreSelect(tyreRim, [], "", { allowEmpty: true, emptyLabel: "Rim" });
+    clearTyreQuotes();
   };
   const onTyreProfile = () => {
+    if (!tyreWidth.value || !tyreProfile.value) {
+      fillTyreSelect(tyreRim, [], "", { allowEmpty: true, emptyLabel: "Rim" });
+      clearTyreQuotes();
+      return;
+    }
     const sizes = tyreSizes().filter((s) => s.w === tyreWidth.value && s.p === tyreProfile.value);
-    fillTyreSelect(tyreRim, sizes.map((s) => s.r), tyreRim.value);
-    onTyreRim();
+    fillTyreSelect(tyreRim, sizes.map((s) => s.r), "", { allowEmpty: true, emptyLabel: "Rim" });
+    clearTyreQuotes();
   };
   const onTyreRim = () => {
     fillTyreBrands();
@@ -317,8 +352,10 @@
       .catch(() => getJson("/assets/tyre-prices.json"))
       .then((data) => {
         tyrePrices = data;
-        fillTyreSelect(tyreWidth, tyreSizes().map((s) => s.w), tyreWidth.value);
-        onTyreWidth();
+        fillTyreSelect(tyreWidth, tyreSizes().map((s) => s.w), "", { allowEmpty: true, emptyLabel: "Width" });
+        fillTyreSelect(tyreProfile, [], "", { allowEmpty: true, emptyLabel: "Profile" });
+        fillTyreSelect(tyreRim, [], "", { allowEmpty: true, emptyLabel: "Rim" });
+        clearTyreQuotes();
         tyreWidth.addEventListener("change", onTyreWidth);
         tyreProfile.addEventListener("change", onTyreProfile);
         tyreRim.addEventListener("change", onTyreRim);

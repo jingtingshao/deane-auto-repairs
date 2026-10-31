@@ -791,6 +791,10 @@ button.see-details {
   text-align: left;
 }
 
+.tyres-size-row label[hidden] {
+  display: none !important;
+}
+
 .tyres-size-row select {
   min-width: 88px;
   padding: 10px 12px;
