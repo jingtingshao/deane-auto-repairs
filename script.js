@@ -221,8 +221,16 @@
 
   const currentTyreSize = () => `${tyreWidth.value}/${tyreProfile.value}R${tyreRim.value}`;
 
+  const showTyreSizePrompt = () => {
+    if (!tyreQuotes) return;
+    const prompt = document.createElement("p");
+    prompt.className = "tyre-quotes-prompt";
+    prompt.textContent = "Select width, profile and rim to see fitted prices.";
+    tyreQuotes.replaceChildren(prompt);
+  };
+
   const clearTyreQuotes = () => {
-    tyreQuotes?.replaceChildren();
+    showTyreSizePrompt();
     if (tyreBrandField) tyreBrandField.hidden = true;
     if (tyreBrand) tyreBrand.value = "";
   };
