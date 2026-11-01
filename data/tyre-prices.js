@@ -171,6 +171,10 @@ function buildPublic(rows, settings, scrapedOn) {
     if (picks.length) {
       sizes[size] = picks.map(({ tier, row, price }) => card(tier, row, price));
     }
+
+    // Supplier deal: Linglong (Mid-range) cheaper than Budget → mark SPECIAL on that size.
+    markLinglongSpecial(brands[size]);
+    if (sizes[size]) markLinglongSpecial(sizes[size]);
   }
   return {
     updated: scrapedOn,
@@ -239,6 +243,20 @@ function popularSizesHtml(publicPrices, indent = "          ") {
     `${indent}<p class="tyre-popular-note">Per tyre, fitted and balanced, incl. GST and Tyrewise fee.` +
       `${updated ? ` Prices updated ${htmlText(updated)}.` : ""} Subject to stock.</p>`,
   ].join("\n");
+}
+
+/** Mark Linglong quotes SPECIAL when that fitted price undercuts the cheapest Budget for the size. */
+function markLinglongSpecial(cards) {
+  if (!cards?.length) return cards;
+  const budgetPrices = cards.filter((c) => c.tier === "Budget").map((c) => c.price).filter((p) => p != null);
+  if (!budgetPrices.length) return cards;
+  const cheapestBudget = Math.min(...budgetPrices);
+  for (const c of cards) {
+    if (String(c.brand || "").toLowerCase() === "linglong" && c.price < cheapestBudget) {
+      c.special = true;
+    }
+  }
+  return cards;
 }
 
 const STOCK_NOISE = new Set([
@@ -542,6 +560,7 @@ module.exports = {
   tierOf,
   sellPrice,
   websitePicks,
+  markLinglongSpecial,
   buildPublic,
   popularSizes,
   popularSizesHtml,

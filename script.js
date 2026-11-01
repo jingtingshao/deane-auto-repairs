@@ -281,10 +281,22 @@
       ...options.map((opt) => {
         const card = document.createElement("article");
         card.className = `tyre-quote tyre-quote-${opt.tier.toLowerCase().replace(/[^a-z]+/g, "-")}`;
+        if (opt.special) card.classList.add("tyre-quote-special");
+
+        const labels = document.createElement("div");
+        labels.className = "tyre-quote-labels";
 
         const tier = document.createElement("p");
         tier.className = "tyre-quote-tier";
         tier.textContent = opt.tier;
+        labels.append(tier);
+
+        if (opt.special) {
+          const special = document.createElement("p");
+          special.className = "tyre-quote-special-tag";
+          special.textContent = "Special";
+          labels.append(special);
+        }
 
         const name = document.createElement("h4");
         name.textContent = `${opt.brand} ${opt.pattern}`.trim();
@@ -309,12 +321,13 @@
         book.innerHTML = 'Book this tyre <span aria-hidden="true">→</span>';
         book.addEventListener("click", () => {
           if (helpSelect) helpSelect.value = "Tyres";
+          const specialNote = opt.special ? " SPECIAL" : "";
           addTyreNote(
-            `Tyre: ${size} ${opt.load} — ${opt.tier} ${opt.brand} ${opt.pattern} — ${formatDollars(opt.price)}/tyre fitted (website price ${tyrePrices.updated})`
+            `Tyre: ${size} ${opt.load} — ${opt.tier} ${opt.brand} ${opt.pattern}${specialNote} — ${formatDollars(opt.price)}/tyre fitted (website price ${tyrePrices.updated})`
           );
         });
 
-        card.append(tier, name, spec, price, stock, book);
+        card.append(labels, name, spec, price, stock, book);
         return card;
       })
     );

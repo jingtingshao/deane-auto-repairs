@@ -68,6 +68,22 @@ const settings = { ...DEFAULT_SETTINGS };
   );
   assert.ok(publicPrices.brands["175/65R15"].some((c) => c.brand === "Mazzini"));
   assert.ok(publicPrices.sizes["175/65R15"].some((c) => c.brand === "Mazzini"));
+  const linglong = publicPrices.sizes["175/65R15"].find((c) => c.brand === "Linglong");
+  assert.ok(linglong?.special, "Linglong cheaper than Budget should be SPECIAL");
+  assert.ok(publicPrices.brands["175/65R15"].find((c) => c.brand === "Linglong")?.special);
+}
+
+{
+  // Linglong dearer than Budget → no SPECIAL
+  const publicPrices = buildPublic(
+    [
+      row({ brand: "Mazzini", pattern: "A", cost_ex: 40, size: "185/65R15" }),
+      row({ brand: "Linglong", pattern: "Eco", cost_ex: 70, size: "185/65R15" }),
+    ],
+    settings,
+    "2026-11-01"
+  );
+  assert.ok(!publicPrices.sizes["185/65R15"].find((c) => c.brand === "Linglong")?.special);
 }
 
 {
