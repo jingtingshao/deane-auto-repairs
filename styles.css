@@ -416,20 +416,27 @@ p {
   color: var(--sign-navy);
 }
 
-.tyre-finder {
+.tyre-finder,
+.page-hero {
   padding: 64px 0 72px;
   background: var(--sign-navy);
   color: #fff;
   scroll-margin-top: var(--header-h);
 }
 
-.tyre-finder-head {
+.tyre-finder-head,
+.page-hero-head {
   max-width: 760px;
   margin: 0 auto 26px;
   text-align: center;
 }
 
-.tyre-finder-head .tyre-finder-kicker {
+.page-hero-head {
+  margin-bottom: 0;
+}
+
+.tyre-finder-head .tyre-finder-kicker,
+.page-hero-head .page-hero-kicker {
   margin: 0 0 12px;
   font: 700 13px / 1 var(--mono);
   letter-spacing: 0.14em;
@@ -438,23 +445,38 @@ p {
 }
 
 .tyre-finder-head h1,
-.tyre-finder-head h2 {
+.tyre-finder-head h2,
+.page-hero-head h1 {
   margin: 0 0 14px;
   font: 800 clamp(38px, 4.6vw, 62px) / 0.92 var(--display);
   text-transform: uppercase;
 }
 
 .tyre-finder-head h1 em,
-.tyre-finder-head h2 em {
+.tyre-finder-head h2 em,
+.page-hero-head h1 em {
   font-style: normal;
   color: var(--sign-yellow);
 }
 
-.tyre-finder-head p {
+.tyre-finder-head p,
+.page-hero-head p {
   margin: 0;
   font-size: 17px;
   line-height: 1.45;
   color: rgba(255, 255, 255, 0.82);
+}
+
+.page-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 26px;
+}
+
+.page-hero-actions .button {
+  gap: 18px;
 }
 
 .tyre-finder .tyres-detail {
@@ -783,6 +805,21 @@ button.see-details {
   text-align: left;
 }
 
+.service-more {
+  display: block;
+  margin-top: 12px;
+  color: var(--svc-ink);
+  font: 700 14px / 1.2 var(--body);
+  text-align: center;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.service-more:hover,
+.service-more:focus-visible {
+  opacity: 0.82;
+}
+
 .service-diesel-note {
   margin: 10px 0 0;
   text-align: center;
@@ -997,21 +1034,25 @@ button.see-details {
   color: var(--sign-yellow);
 }
 
-.tyre-section {
+.tyre-section,
+.page-section {
   padding: 72px 0;
   scroll-margin-top: var(--header-h);
 }
 
-.tyre-info {
+.tyre-info,
+.page-section-alt {
   background: #ebe7dc;
 }
 
-.tyre-section-head {
+.tyre-section-head,
+.page-section-head {
   max-width: 760px;
   margin-bottom: 28px;
 }
 
-.tyre-section-kicker {
+.tyre-section-kicker,
+.page-section-kicker {
   margin: 0 0 12px;
   font: 700 13px / 1 var(--mono);
   letter-spacing: 0.14em;
@@ -1019,19 +1060,22 @@ button.see-details {
   color: #687481;
 }
 
-.tyre-section h2 {
+.tyre-section h2,
+.page-section h2 {
   margin: 0 0 14px;
   font: 800 clamp(38px, 4.6vw, 56px) / 0.92 var(--display);
   text-transform: uppercase;
 }
 
-.tyre-section h2 em {
+.tyre-section h2 em,
+.page-section h2 em {
   color: #a86f00;
   font-style: italic;
   text-transform: none;
 }
 
-.tyre-section-head > p:last-child {
+.tyre-section-head > p:last-child,
+.page-section-head > p:last-child {
   margin: 0;
   font-size: 17px;
 }
@@ -1093,63 +1137,147 @@ button.see-details {
   color: #6b7280;
 }
 
-.tyre-info-copy {
+.tyre-info-copy,
+.page-copy {
   max-width: 760px;
 }
 
-.tyre-info-copy h3 {
+.tyre-info-copy h3,
+.page-copy h3 {
   margin: 30px 0 8px;
   font: 700 25px / 1.1 var(--display);
   text-transform: uppercase;
 }
 
 .tyre-info-copy p,
-.tyre-info-copy li {
+.tyre-info-copy li,
+.page-copy p,
+.page-copy li {
   font-size: 17px;
   line-height: 1.55;
 }
 
-.tyre-info-copy p {
+.tyre-info-copy p,
+.page-copy p {
   margin: 0 0 12px;
 }
 
-.tyre-info-copy ul {
+.tyre-info-copy ul,
+.page-copy ul {
   margin: 0 0 12px;
   padding-left: 1.2em;
 }
 
-.tyre-info-copy li + li {
+.tyre-info-copy li + li,
+.page-copy li + li {
   margin-top: 4px;
 }
 
-.tyre-faq-list {
+.tyre-faq-list,
+.faq-list {
   max-width: 760px;
   display: grid;
   gap: 10px;
 }
 
-.tyre-faq-list details {
+.tyre-faq-list details,
+.faq-list details {
   border: 1px solid rgba(13, 43, 92, 0.15);
   border-radius: 8px;
   background: #fff;
 }
 
-.tyre-faq-list summary {
+.tyre-faq-list summary,
+.faq-list summary {
   padding: 16px 18px;
   font: 700 20px / 1.2 var(--display);
   color: var(--navy);
   cursor: pointer;
 }
 
-.tyre-faq-list details p {
+.tyre-faq-list details p,
+.faq-list details p {
   margin: 0;
   padding: 0 18px 16px;
   font-size: 16px;
   line-height: 1.55;
 }
 
+.page-report-img {
+  width: 100%;
+  max-width: 460px;
+  margin: 8px 0 18px;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(2, 21, 52, 0.12);
+}
+
+.page-plans .service-card {
+  min-height: 0;
+}
+
+.page-notes {
+  max-width: 760px;
+  margin: 18px 0 0;
+  padding-left: 1.1rem;
+  color: #4b5563;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.page-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.page-links a {
+  display: block;
+  height: 100%;
+  padding: 18px 20px;
+  border: 1px solid rgba(13, 43, 92, 0.15);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--navy);
+  text-decoration: none;
+}
+
+.page-links a:hover,
+.page-links a:focus-visible {
+  border-color: var(--sign-yellow);
+  box-shadow: inset 0 -3px 0 var(--sign-yellow);
+}
+
+.page-links strong {
+  display: block;
+  font: 700 22px / 1.1 var(--display);
+  text-transform: uppercase;
+}
+
+.page-links span {
+  display: block;
+  margin-top: 6px;
+  font-size: 15px;
+  line-height: 1.4;
+  color: #4b5563;
+}
+
+.page-zh .page-hero-head h1,
+.page-zh .page-section h2 {
+  line-height: 1.15;
+  letter-spacing: 0;
+  word-break: keep-all;
+}
+
+.page-zh .page-section h2 em {
+  font-style: normal;
+}
+
 @media (max-width: 560px) {
-  .tyre-section {
+  .tyre-section,
+  .page-section {
     padding: 52px 0;
   }
 
@@ -1947,7 +2075,7 @@ footer {
   max-width: 420px;
 }
 
-.page-book .header-phone {
+.header-phone {
   display: inline-flex;
   align-items: center;
   gap: 0.35em;
@@ -1958,14 +2086,31 @@ footer {
   box-shadow: inset 0 0 0 1.5px var(--sign-yellow);
 }
 
+.header-end {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-lang {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  text-underline-offset: 0.2em;
+}
+
 @media (max-width: 560px) {
   .page-book .booking h2 {
     font-size: 2.6rem;
   }
 
-  .page-book .header-phone {
+  .header-phone {
     padding: 10px 12px;
     font-size: 14px;
+  }
+
+  .header-end {
+    gap: 10px;
   }
 }
 

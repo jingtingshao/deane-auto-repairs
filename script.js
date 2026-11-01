@@ -10,6 +10,25 @@
   const submitBtn = document.querySelector("[data-submit-btn]");
   const preferredDate = document.querySelector("#date");
   const helpSelect = document.querySelector("#help");
+  const submitLabel = submitBtn ? submitBtn.innerHTML : "";
+  const TEXT = document.documentElement.lang.startsWith("zh")
+    ? {
+        sunday: "请选择周一至周六，我们周日休息。",
+        sending: "发送中… <span>→</span>",
+        sendingStatus: "正在提交您的预约…",
+        success: "预约申请已收到。我们会尽快联系您，确认预约时间或商量调整。",
+        error:
+          '抱歉，暂时无法提交。请致电 <a href="tel:08006259827">0800 625 9827</a> 或发邮件至 <a href="mailto:admin@deaneauto.co.nz">admin@deaneauto.co.nz</a>。',
+      }
+    : {
+        sunday: "Please choose Monday to Saturday; we are closed on Sundays.",
+        sending: "Sending… <span>→</span>",
+        sendingStatus: "Sending your enquiry…",
+        success:
+          "Booking request received. We will contact you shortly to confirm the booking or discuss any changes.",
+        error:
+          'Sorry — we couldn’t send that just now. Please call <a href="tel:08006259827">0800 625 9827</a> or email <a href="mailto:admin@deaneauto.co.nz">admin@deaneauto.co.nz</a>.',
+      };
 
   if (year) year.textContent = String(new Date().getFullYear());
 
@@ -26,7 +45,7 @@
     preferredDate.addEventListener("input", () => {
       const selected = new Date(`${preferredDate.value}T00:00:00`);
       preferredDate.setCustomValidity(
-        selected.getDay() === 0 ? "Please choose Monday to Saturday; we are closed on Sundays." : ""
+        selected.getDay() === 0 ? TEXT.sunday : ""
       );
     });
   }
@@ -478,9 +497,7 @@
   const setLoading = (loading) => {
     if (!submitBtn) return;
     submitBtn.disabled = loading;
-    submitBtn.innerHTML = loading
-      ? "Sending… <span>→</span>"
-      : 'Request a booking <span>→</span>';
+    submitBtn.innerHTML = loading ? TEXT.sending : submitLabel;
   };
 
   if (form && status) {
@@ -507,7 +524,7 @@
       };
 
       setLoading(true);
-      setStatus("Sending your enquiry…", null);
+      setStatus(TEXT.sendingStatus, null);
 
       try {
         const response = await fetch(FORM_ENDPOINT, {
@@ -526,16 +543,9 @@
         }
 
         form.reset();
-        setStatus(
-          "Booking request received. We will contact you shortly to confirm the booking or discuss any changes.",
-          "is-success"
-        );
+        setStatus(TEXT.success, "is-success");
       } catch (error) {
-        setStatus(
-          'Sorry — we couldn’t send that just now. Please call <a href="tel:08006259827">0800 625 9827</a> or email <a href="mailto:admin@deaneauto.co.nz">admin@deaneauto.co.nz</a>.',
-          "is-error",
-          true
-        );
+        setStatus(TEXT.error, "is-error", true);
         console.error(error);
       } finally {
         setLoading(false);
