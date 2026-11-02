@@ -1,4 +1,5 @@
-"""Turn the navy-background logo artwork into a transparent PNG for the site header."""
+"""Build the site logo assets from the navy-background artwork:
+transparent header PNG, social / search share image, favicon and app icons."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,12 +10,25 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "assets" / "logo-deane-source.jpg"
 OUT = ROOT / "assets" / "logo-deane.png"
+SHARE_OUT = ROOT / "assets" / "og-share.jpg"
+FAVICON_OUT = ROOT / "favicon.ico"
+ICON_OUTS = {
+    ROOT / "assets" / "apple-touch-icon.png": 180,
+    ROOT / "assets" / "icon-192.png": 192,
+    ROOT / "assets" / "icon-512.png": 512,
+}
 # Output height; the header shows it at ≤72 CSS px, so this covers 3× screens.
 OUT_HEIGHT = 240
 # Colour distance from the backdrop at which a pixel becomes fully opaque.
 SOFT, FULL = 12, 70
 # styles.css --sign-yellow; the artwork's lemon yellow is pulled to this.
 SITE_YELLOW = np.array([0xE9, 0xA3, 0x05], dtype=np.float64)
+# styles.css --navy, used behind the logo on share images and icons.
+SITE_NAVY = (0x02, 0x15, 0x34)
+SHARE_SIZE = (1200, 630)
+# Google crops result thumbnails to a square, so the logo stays inside the centre 630 px.
+SHARE_LOGO_WIDTH = 600
+ICON_LOGO_SHARE = 0.9
 
 
 def match_site_yellow(color: np.ndarray) -> np.ndarray:
@@ -43,7 +57,8 @@ def backdrop_model(img: np.ndarray, band: int) -> np.ndarray:
     return design(xs.astype(float), ys.astype(float)) @ coef
 
 
-def main() -> None:
+def cutout() -> Image.Image:
+    """Full-resolution transparent logo, cropped to the artwork."""
     img = np.array(Image.open(SOURCE).convert("RGB")).astype(np.float64)
     back = backdrop_model(img, band=max(6, img.shape[1] // 80))
     diff = img - back
@@ -55,12 +70,36 @@ def main() -> None:
     out = Image.fromarray(rgba, "RGBA")
     bbox = out.getchannel("A").point(lambda v: 255 if v > 16 else 0).getbbox()
     pad = 6
-    out = out.crop((max(0, bbox[0] - pad), max(0, bbox[1] - pad), min(out.width, bbox[2] + pad), min(out.height, bbox[3] + pad)))
-    out = out.resize((round(out.width * OUT_HEIGHT / out.height), OUT_HEIGHT), Image.Resampling.LANCZOS)
+    return out.crop((max(0, bbox[0] - pad), max(0, bbox[1] - pad), min(out.width, bbox[2] + pad), min(out.height, bbox[3] + pad)))
+
+
+def on_navy(logo: Image.Image, size: tuple[int, int], logo_width: int) -> Image.Image:
+    """Logo centred on a solid site-navy canvas."""
+    scaled = logo.resize((logo_width, round(logo.height * logo_width / logo.width)), Image.Resampling.LANCZOS)
+    canvas = Image.new("RGBA", size, SITE_NAVY + (255,))
+    canvas.alpha_composite(scaled, ((size[0] - scaled.width) // 2, (size[1] - scaled.height) // 2))
+    return canvas.convert("RGB")
+
+
+def main() -> None:
+    logo = cutout()
+
+    header = logo.resize((round(logo.width * OUT_HEIGHT / logo.height), OUT_HEIGHT), Image.Resampling.LANCZOS)
     # A 256-colour palette keeps the header image light; the artwork is flat colour.
-    out = out.quantize(colors=256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE)
-    out.save(OUT, optimize=True)
-    print(f"{OUT.name} {out.width}x{out.height}")
+    header = header.quantize(colors=256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE)
+    header.save(OUT, optimize=True)
+    print(f"{OUT.name} {header.width}x{header.height}")
+
+    share = on_navy(logo, SHARE_SIZE, SHARE_LOGO_WIDTH)
+    share.save(SHARE_OUT, quality=90, optimize=True, progressive=True)
+    print(f"{SHARE_OUT.name} {share.width}x{share.height}")
+
+    icon = on_navy(logo, (512, 512), round(512 * ICON_LOGO_SHARE))
+    for path, size in ICON_OUTS.items():
+        icon.resize((size, size), Image.Resampling.LANCZOS).save(path, optimize=True)
+        print(f"{path.name} {size}x{size}")
+    icon.save(FAVICON_OUT, sizes=[(16, 16), (32, 32), (48, 48)])
+    print(f"{FAVICON_OUT.name} 16/32/48")
 
 
 if __name__ == "__main__":
