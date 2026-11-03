@@ -5,6 +5,8 @@ const assert = require("assert");
 const {
   DEFAULT_SETTINGS,
   WEBSITE_BRANDS_PER_TIER,
+  markupPctForCost,
+  sellPrice,
   websitePicks,
   buildPublic,
   diffWebsite,
@@ -15,6 +17,27 @@ function row({ brand, pattern, cost_ex, stock = "10", size = "205/55R16", load_s
 }
 
 const settings = { ...DEFAULT_SETTINGS };
+
+{
+  assert.strictEqual(markupPctForCost(50), 40);
+  assert.strictEqual(markupPctForCost(99.99), 40);
+  assert.strictEqual(markupPctForCost(100), 30);
+  assert.strictEqual(markupPctForCost(149), 30);
+  assert.strictEqual(markupPctForCost(150), 25);
+  assert.strictEqual(markupPctForCost(199), 25);
+  assert.strictEqual(markupPctForCost(200), 20);
+  assert.strictEqual(markupPctForCost(299), 20);
+  assert.strictEqual(markupPctForCost(300), 18);
+  assert.strictEqual(markupPctForCost(399), 18);
+  assert.strictEqual(markupPctForCost(400), 15);
+  assert.strictEqual(markupPctForCost(800), 15);
+
+  // Fitted price: cost × (1+markup) × 1.15 + fitting $30 + tyrewise 6.65×1.15
+  assert.strictEqual(sellPrice(row({ brand: "Mazzini", pattern: "A", cost_ex: 80 }), settings), 167);
+  assert.strictEqual(sellPrice(row({ brand: "Goodyear", pattern: "A", cost_ex: 120 }), settings), 218);
+  assert.strictEqual(sellPrice(row({ brand: "Michelin", pattern: "A", cost_ex: 250 }), settings), 383);
+  assert.strictEqual(sellPrice(row({ brand: "Michelin", pattern: "A", cost_ex: 450 }), settings), 633);
+}
 
 {
   const picks = websitePicks(

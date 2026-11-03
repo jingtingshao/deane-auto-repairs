@@ -7,7 +7,6 @@
   const resultsEl = document.getElementById("tyre-search-results");
   const tierFiltersEl = document.getElementById("tyre-tier-filters");
   const settingsForm = document.getElementById("tyre-settings-form");
-  const markupEl = document.getElementById("tyre-markup");
   const fittingEl = document.getElementById("tyre-fitting");
   const tyrewiseEl = document.getElementById("tyre-tyrewise");
   const publishInfoEl = document.getElementById("tyre-publish-info");
@@ -42,13 +41,12 @@
 
   function settingsLabel(s) {
     if (!s) return "";
-    return `markup ${s.markupPct}%, fitting ${money(s.fittingIncl, 0)}, Tyrewise ${s.includeTyrewise ? "included" : "left out"}`;
+    return `tiered markup 40%→15%, fitting ${money(s.fittingIncl, 0)}, Tyrewise ${s.includeTyrewise ? "included" : "left out"}`;
   }
 
   function sameSettings(a, b) {
     return (
       a && b &&
-      Number(a.markupPct) === Number(b.markupPct) &&
       Number(a.fittingIncl) === Number(b.fittingIncl) &&
       Boolean(a.includeTyrewise) === Boolean(b.includeTyrewise)
     );
@@ -74,7 +72,6 @@
     if (!meta) return;
     renderPublishInfo();
     const s = meta.settings;
-    if (markupEl) markupEl.value = s.markupPct;
     if (fittingEl) fittingEl.value = s.fittingIncl;
     if (tyrewiseEl) tyrewiseEl.value = s.includeTyrewise ? "yes" : "no";
     if (dataInfoEl) {
@@ -254,7 +251,6 @@
       const res = await Admin.api("/api/tyre-prices/settings", {
         method: "PUT",
         body: JSON.stringify({
-          markupPct: Number(markupEl.value),
           fittingIncl: Number(fittingEl.value),
           includeTyrewise: tyrewiseEl.value === "yes",
         }),
