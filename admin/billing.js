@@ -1814,7 +1814,14 @@ function updateActionButtons() {
     }
   }
 
-  convertBtn.hidden = !(doc.kind === "quote" && doc.status === "accepted" && !doc.invoiceId);
+  const unsaved = Boolean(doc.unsaved || !doc.id);
+  // Draft / sent / accepted quotes can convert without waiting for email Accept.
+  convertBtn.hidden = !(
+    doc.kind === "quote" &&
+    !unsaved &&
+    !doc.invoiceId &&
+    (doc.status === "draft" || doc.status === "sent" || doc.status === "accepted")
+  );
   if (openInvBtn) {
     openInvBtn.hidden = !(
       doc.kind === "quote" &&
@@ -1823,7 +1830,6 @@ function updateActionButtons() {
     );
   }
   if (reviseBtn) reviseBtn.hidden = !quoteLocked;
-  const unsaved = Boolean(doc.unsaved || !doc.id);
   const previewBtn = document.getElementById("btn-billing-preview");
   if (previewBtn) {
     previewBtn.hidden = doc.status === "void";
@@ -2031,7 +2037,15 @@ document.getElementById("btn-billing-email").addEventListener("click", async () 
 });
 
 document.getElementById("btn-billing-convert").addEventListener("click", async () => {
+  if (!currentBill?.id) return;
   try {
+    await billAutosave.flush();
+    if (currentBill.status === "draft" || currentBill.status === "sent") {
+      const ok = confirm(
+        "Convert this quote to an invoice now?\n\nYou do not need to email the customer first. Use this when they already agreed (e.g. at the counter)."
+      );
+      if (!ok) return;
+    }
     const invoice = await Admin.api(`/api/billing/${currentBill.id}/convert`, {
       method: "POST",
       body: "{}",

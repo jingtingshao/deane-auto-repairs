@@ -8395,11 +8395,34 @@ app.post("/api/billing/:id/convert", requireAdmin, requireCurrentBillingIfTech, 
   if (quote.kind !== "quote") {
     return res.status(400).json({ error: "Only quotes convert to invoices." });
   }
-  if (quote.status !== "accepted" && quote.status !== "invoiced") {
-    return res.status(400).json({ error: "Customer must accept the quote first." });
+  if (quote.status === "void") {
+    return res.status(400).json({ error: "This quote is no longer valid." });
+  }
+  // Workshop can convert draft/sent quotes without emailing the customer first.
+  // Customer Accept still auto-converts; this path is for walk-in / verbal agree.
+  if (
+    quote.status !== "draft" &&
+    quote.status !== "sent" &&
+    quote.status !== "accepted" &&
+    quote.status !== "invoiced"
+  ) {
+    return res.status(400).json({ error: "This quote cannot be converted." });
   }
   try {
     requireCustomerSnapshot(quote);
+    if (quote.status === "draft" || quote.status === "sent") {
+      const now = nowIso();
+      quote.status = "accepted";
+      quote.acceptedAt = now;
+      quote.updatedAt = now;
+      ensureHistory(quote);
+      appendHistory(quote, {
+        type: "accepted",
+        summary: "Quote accepted by workshop",
+        detail: "Converted to invoice without customer email accept",
+        amount: catalog.computeDocTotals(quote).totalIncl,
+      });
+    }
     const invoice = convertQuoteToInvoice(docs, quote);
     if (!invoice) return res.status(404).json({ error: "Invoice not found" });
     try {

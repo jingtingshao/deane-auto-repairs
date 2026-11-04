@@ -24,7 +24,7 @@ On Render, set `ADMIN_PIN` in Environment (not in Git). If it is missing or too 
 1. Sign in at `/admin/`
 2. **Jobs** — workshop job cards (status + parts ordered/received)
 3. **Reports** — digital service reports (checklist + photos)
-4. **Quotes & invoices** — WOF / Standard / Premium can go straight to invoice; repair work is a quote emailed to the customer, who must click Accept before work starts. After Accept, create a job card from the quote.
+4. **Quotes & invoices** — WOF / Standard / Premium can go straight to invoice; repair work is usually a quote (email for Accept, or workshop **Convert to invoice** when they already agreed). After Accept / convert, create a job card from the quote.
 5. Customer quote/invoice link: `http://localhost:5173/b/<id>`
 
 ## Business details
