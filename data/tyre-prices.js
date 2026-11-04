@@ -1,10 +1,21 @@
 const GST = 0.15;
 const DEFAULT_TYREWISE_EX = 6.65;
 const DEFAULT_SETTINGS = Object.freeze({
-  markupPct: 40,
   fittingIncl: 30,
   includeTyrewise: true,
 });
+/**
+ * Markup % of cost ex GST, by cost band (higher cost → lower %).
+ * Under $100 stays at 40%; $400+ drops to 15%.
+ */
+const MARKUP_BANDS = Object.freeze([
+  { minCost: 400, pct: 15 },
+  { minCost: 300, pct: 18 },
+  { minCost: 200, pct: 20 },
+  { minCost: 150, pct: 25 },
+  { minCost: 100, pct: 30 },
+  { minCost: 0, pct: 40 },
+]);
 // Tiers follow tyrehero.co.nz/brands (Oct 2026); anything not listed there is Budget
 // unless noted. Giti, Petlas, Cooper, CST and Marshal are not on TyreHero.
 const PREMIUM = new Set([
@@ -31,14 +42,22 @@ function num(value) {
 }
 
 function normalizeSettings(input = {}) {
-  const markup = num(input.markupPct);
   const fitting = num(input.fittingIncl);
   return {
-    markupPct: markup !== null && markup >= 0 && markup <= 300 ? markup : DEFAULT_SETTINGS.markupPct,
     fittingIncl: fitting !== null && fitting >= 0 && fitting <= 500 ? fitting : DEFAULT_SETTINGS.fittingIncl,
     includeTyrewise:
       input.includeTyrewise === undefined ? DEFAULT_SETTINGS.includeTyrewise : Boolean(input.includeTyrewise),
   };
+}
+
+/** Markup % for a tyre cost ex GST (tiered so dear tyres are not marked up as hard). */
+function markupPctForCost(cost) {
+  const c = Number(cost);
+  if (!Number.isFinite(c) || c < 0) return MARKUP_BANDS[MARKUP_BANDS.length - 1].pct;
+  for (const band of MARKUP_BANDS) {
+    if (c >= band.minCost) return band.pct;
+  }
+  return 40;
 }
 
 /** "2055516", "205 55 16", "205/55/r16" -> "205/55R16" */
@@ -80,7 +99,7 @@ function sellPrice(row, settings) {
   const cost = baseCost(row);
   if (cost === null) return null;
   const fee = num(row.tyrewise_ex) ?? DEFAULT_TYREWISE_EX;
-  const tyre = cost * (1 + settings.markupPct / 100) * (1 + GST);
+  const tyre = cost * (1 + markupPctForCost(cost) / 100) * (1 + GST);
   const tyrewise = settings.includeTyrewise ? fee * (1 + GST) : 0;
   return Math.ceil(tyre + settings.fittingIncl + tyrewise);
 }
@@ -551,9 +570,11 @@ function exportCsv(rows, settings) {
 
 module.exports = {
   DEFAULT_SETTINGS,
+  MARKUP_BANDS,
   WEBSITE_BRANDS_PER_TIER,
   TIERS,
   normalizeSettings,
+  markupPctForCost,
   normalizeSizeQuery,
   sizeCmp,
   inStock,

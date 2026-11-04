@@ -718,9 +718,8 @@
           <form id="tyre-settings-form" class="report-form">
             <fieldset>
               <legend>Selling price</legend>
-              <p class="muted small">Sell price per tyre = normal cost ex GST × (1 + markup) + GST + fitting + Tyrewise fee. Supplier specials are ignored, so a special that ends never puts the price under cost. Tiers follow tyrehero.co.nz/brands. The website shows up to three brands in each of Budget, Mid-range and Premium for each size. The Brand menu lists every brand for that size. If a Linglong price undercuts the cheapest Budget for that size, the website marks that Linglong quote Special.</p>
-              <div class="grid-3">
-                <label>Markup %<input id="tyre-markup" type="number" min="0" max="300" step="1" required /></label>
+              <p class="muted small">Sell price per tyre = normal cost ex GST × (1 + markup) + GST + fitting + Tyrewise fee. Markup falls as cost rises so dear tyres stay sensible: under $100 → 40%, $100–$149 → 30%, $150–$199 → 25%, $200–$299 → 20%, $300–$399 → 18%, $400+ → 15%. Supplier specials are ignored, so a special that ends never puts the price under cost. Brand tiers follow tyrehero.co.nz/brands. The website shows up to three brands in each of Budget, Mid-range and Premium for each size. The Brand menu lists every brand for that size. If a Linglong price undercuts the cheapest Budget for that size, the website marks that Linglong quote Special.</p>
+              <div class="grid-2">
                 <label>Fitting per tyre (incl GST)<input id="tyre-fitting" type="number" min="0" max="500" step="1" required /></label>
                 <label>Tyrewise fee
                   <select id="tyre-tyrewise">
@@ -1284,7 +1283,7 @@
     <script src="supplier-invoices.js?v=20261031readlimit"></script>
     <script src="suppliers.js?v=20261006suppliers"></script>
     <script src="parts-directory.js?v=20261021wreckers"></script>
-    <script src="tyre-prices.js?v=20261028workshopstock"></script>
+    <script src="tyre-prices.js?v=20261104tieredmarkup"></script>
     <script src="customers.js?v=20260906techcustomers"></script>
     <script src="referrals.js?v=20260906usedon"></script>
     <script src="sms-inbox.js?v=20260830yesno"></script>
