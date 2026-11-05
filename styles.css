@@ -4,6 +4,7 @@
   --sign-navy: #021534;
   --sign-yellow: #e9a305;
   --red: #e9a305;
+  --promo-red: #d62828;
   --cream: #f5f2ea;
   --lime: #e9a305;
   --line: #d4c7a4;
@@ -669,6 +670,48 @@ p {
 .service-card-banner span {
   display: inline-block;
   transform: skewX(10deg);
+}
+
+.service-card-promo {
+  position: relative;
+  overflow: hidden;
+}
+
+.service-card-promo h3 {
+  padding: 0 70px;
+}
+
+.service-card-ribbon {
+  position: absolute;
+  top: 26px;
+  right: -64px;
+  width: 230px;
+  margin: 0;
+  padding: 6px 0 7px;
+  background: var(--promo-red);
+  color: #fff;
+  font: 800 16px / 1.1 var(--mono);
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-transform: uppercase;
+  transform: rotate(45deg);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+.service-card-ribbon small {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.promo-tag {
+  display: inline-block;
+  padding: 5px 9px;
+  border-radius: 4px;
+  background: var(--promo-red);
+  color: #fff;
 }
 
 .service-card-tyres .service-price strong {
