@@ -1137,6 +1137,11 @@ button.see-details {
   color: #4b5563;
 }
 
+.battery-table td.battery-suits {
+  min-width: 180px;
+  white-space: normal;
+}
+
 .tyre-popular-note {
   max-width: 760px;
   margin: 12px 0 0;

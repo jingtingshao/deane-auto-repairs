@@ -90,6 +90,8 @@
     tyre: "Tyres",
     tires: "Tyres",
     tire: "Tyres",
+    battery: "Battery",
+    batteries: "Battery",
     repairs: "Repairs / other",
     diagnostics: "Repairs / other",
     "diagnostics-repairs": "Repairs / other",
