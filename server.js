@@ -32,6 +32,7 @@ const catalog = require("./data/catalog");
 const namesLib = require("./data/names");
 const jobsLib = require("./data/jobs");
 const inventoryLib = require("./data/inventory");
+const aaBatteries = require("./data/aa-batteries");
 const supplierProfiles = require("./data/supplier-profiles");
 const appointmentsLib = require("./data/appointments");
 const bookingRequestsLib = require("./data/booking-requests");
@@ -240,6 +241,7 @@ const BOOKING_REQUESTS_MAX = 200;
 const SUPPLIER_INVOICES_FILE = path.join(DATA_DIR, "supplier-invoices.json");
 const INVENTORY_FILE = path.join(DATA_DIR, "inventory.json");
 const INVENTORY_MOVEMENTS_FILE = path.join(DATA_DIR, "inventory-movements.json");
+const STOCK_IMPORTS_FILE = path.join(DATA_DIR, "stock-imports.json");
 const INVOICE_CANDIDATES_FILE = path.join(DATA_DIR, "invoice-candidates.json");
 const PART_AUDIT_FILE = path.join(DATA_DIR, "part-audit-log.json");
 const SMS_INBOUND_FILE = path.join(DATA_DIR, "sms-inbound.json");
@@ -9112,7 +9114,7 @@ app.post("/api/jobs/quick-cash", requireAdmin, (req, res) => {
         ...stockParts.map(({ item, qty }) => ({
           description: stockLineDescription(item),
           qty,
-          unitPriceIncl: Number(item.sellPrice) || 0,
+          ...catalog.stockLinePrice(item.sellPrice),
           stockItemId: item.id,
         })),
       ]);
@@ -9528,7 +9530,7 @@ function addJobPartsToInvoiceLines(invoice, parts) {
       id: randomUUID(),
       description: catalog.capitalizeLineDescription(description),
       qty: Number.isFinite(qty) && qty > 0 ? qty : 1,
-      unitPriceIncl: catalog.round2(Math.max(0, Number(part.sellPrice) || 0)),
+      ...catalog.stockLinePrice(part.sellPrice),
     });
     added += 1;
   }
@@ -10399,6 +10401,21 @@ function writeInventoryMovements(rows) {
   writeJsonArray(INVENTORY_MOVEMENTS_FILE, trimmed);
 }
 
+/** Load a supplier price list into stock once; deleting a line later does not bring it back. */
+function runStockImportOnce(importId, apply) {
+  const done = readJsonArray(STOCK_IMPORTS_FILE, "stock imports");
+  if (done.some((row) => row?.id === importId)) return;
+  const items = readInventoryItems();
+  const movements = readInventoryMovements();
+  const now = nowIso();
+  const result = apply(items, movements, now, () => randomUUID());
+  writeInventoryItems(items);
+  writeInventoryMovements(movements);
+  done.push({ id: importId, at: now, added: result.added.length, updated: result.updated.length });
+  writeJsonArray(STOCK_IMPORTS_FILE, done);
+  console.log(`Stock import ${importId}: ${result.added.length} added, ${result.updated.length} updated`);
+}
+
 function syncStockForEditedCandidate(before, after) {
   const items = readInventoryItems();
   const movements = readInventoryMovements();
@@ -11127,6 +11144,12 @@ function lanIPv4s() {
   } catch {
     return [];
   }
+}
+
+try {
+  runStockImportOnce(aaBatteries.IMPORT_ID, aaBatteries.applyToStock);
+} catch (err) {
+  console.error("Could not import AA battery price list:", err);
 }
 
 app.listen(PORT, "0.0.0.0", () => {

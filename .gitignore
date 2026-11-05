@@ -11,6 +11,7 @@ data/booking-requests.json
 data/supplier-invoices.json
 data/inventory.json
 data/inventory-movements.json
+data/stock-imports.json
 data/invoice-candidates.json
 data/part-audit-log.json
 data/sms-inbound.json
@@ -32,4 +33,7 @@ google-service-account.json
 
 # Local customer export PDFs (PII)
 exports/DAR-*.pdf
+
+# Local social media video work (large files)
+media/
 

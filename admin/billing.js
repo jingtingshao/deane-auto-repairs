@@ -2186,13 +2186,23 @@ window.addEventListener("beforeunload", () => {
 billingForm?.addEventListener("input", scheduleBillAutosave);
 billingForm?.addEventListener("change", scheduleBillAutosave);
 
+/** Retail prices set incl GST (e.g. $288) cannot be stored exactly ex GST, so snap back to the whole dollar. */
+function wholeDollarIncl(excl) {
+  const incl = (Number(excl) || 0) * 1.15;
+  const dollars = Math.round(incl);
+  return dollars > 0 && Math.abs(incl - dollars) < 0.01 ? dollars : 0;
+}
+
 function addLineFromStock(item) {
   if (!canEditLines(currentBill)) return;
   const description = [item?.name, item?.partNumber].filter(Boolean).join(" ");
+  const sell = Number(item?.sellPrice) || 0;
+  const incl = wholeDollarIncl(sell);
   const line = newLine({
     description,
     qty: 1,
-    unitPriceIncl: Number(item?.sellPrice) || 0,
+    unitPriceIncl: incl ? exclFromIncl(incl) : sell,
+    gstInclUnit: incl,
     stockItemId: item?.id || "",
   });
   const last = lineRows[lineRows.length - 1];

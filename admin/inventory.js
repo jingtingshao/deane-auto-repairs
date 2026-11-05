@@ -79,6 +79,13 @@
     return unit === "litre" ? `${text} L` : text;
   }
 
+  /** A retail price set incl GST (e.g. $288) is stored ex GST to the cent, so show the whole dollar again. */
+  function inclPrice(sell) {
+    const incl = (Number(sell) || 0) * 1.15;
+    const dollars = Math.round(incl);
+    return dollars > 0 && Math.abs(incl - dollars) < 0.01 ? dollars : Math.round(incl * 100) / 100;
+  }
+
   function formatMarkup(cost, sell) {
     const c = Number(cost) || 0;
     const s = Number(sell) || 0;
@@ -257,7 +264,7 @@
     const guide = suggestPrice(cost);
     const chosen = Number(sell);
     const sellPrice = Number.isFinite(chosen) ? Math.round(chosen * 100) / 100 : guide.sell;
-    const incl = Math.round(sellPrice * 1.15 * 100) / 100;
+    const incl = inclPrice(sellPrice);
     const per = unitKind === "litre" ? " per litre" : "";
     if (!(guide.cost > 0)) {
       return unitKind === "litre"
@@ -451,7 +458,7 @@
               <td>${Admin.escapeHtml(item.supplier || "—")}</td>
               <td>${Admin.escapeHtml(formatQty(item.qtyOnHand, item.unit))}</td>
               <td>${costCell(item, unit)}</td>
-              <td><strong>${money(item.sellPrice)}${unit}</strong><div class="muted small">${money(Math.round(item.sellPrice * 1.15 * 100) / 100)} incl</div></td>
+              <td><strong>${money(item.sellPrice)}${unit}</strong><div class="muted small">${money(inclPrice(item.sellPrice))} incl</div></td>
               <td>${formatMarkup(item.costPrice, item.sellPrice)}</td>
               <td class="supplier-line-actions">
                 <button type="button" class="ghost" data-history="${Admin.escapeAttr(item.id)}">History</button>

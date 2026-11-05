@@ -726,6 +726,13 @@ function quickCashMoney(n) {
   );
 }
 
+/** Stock retail set incl GST (e.g. $288) is stored ex GST to the cent; show the whole dollar. */
+function stockInclPrice(sellExcl) {
+  const incl = (Number(sellExcl) || 0) * 1.15;
+  const dollars = Math.round(incl);
+  return dollars > 0 && Math.abs(incl - dollars) < 0.01 ? dollars : incl;
+}
+
 function renderQuickCashParts() {
   const el = document.getElementById("quick-cash-parts-list");
   if (!el) return;
@@ -747,7 +754,7 @@ function renderQuickCashParts() {
           <td><input class="qty" type="number" min="0.25" step="0.25" data-qc-qty="${index}" value="${Admin.escapeAttr(
             String(part.qty)
           )}" /></td>
-          <td>${quickCashMoney((Number(part.sellPrice) || 0) * 1.15)}${unit}</td>
+          <td>${quickCashMoney(stockInclPrice(part.sellPrice))}${unit}</td>
           <td><button type="button" class="ghost" data-qc-remove="${index}">×</button></td>
         </tr>`;
       })
@@ -842,7 +849,7 @@ async function updateWorkMatches(text) {
         .join(" · ");
       return `<button type="button" class="stock-result" data-work-pick="${index}">
         <span><strong>${Admin.escapeHtml(item.name)}</strong><span class="muted small">${Admin.escapeHtml(meta)}</span></span>
-        <span class="stock-sell"><strong>${quickCashMoney((Number(item.sellPrice) || 0) * 1.15)}${unit}</strong><span class="muted small">incl. GST</span></span>
+        <span class="stock-sell"><strong>${quickCashMoney(stockInclPrice(item.sellPrice))}${unit}</strong><span class="muted small">incl. GST</span></span>
       </button>`;
     })
     .join("")}`;

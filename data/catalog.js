@@ -72,6 +72,21 @@ function advertisedInclFromExcl(excl) {
   return null;
 }
 
+/** Stock retail set incl GST (e.g. a $288 battery) is kept ex GST to the cent; recover the whole-dollar price. */
+function wholeDollarInclFromExcl(excl) {
+  const incl = (Number(excl) || 0) * (1 + GST_RATE);
+  const dollars = Math.round(incl);
+  return dollars > 0 && Math.abs(incl - dollars) < 0.01 ? dollars : 0;
+}
+
+/** Invoice line price fields for a stock sell price (ex GST). */
+function stockLinePrice(sellExcl) {
+  const incl = wholeDollarInclFromExcl(sellExcl);
+  return incl
+    ? { unitPriceIncl: exclFromIncl(incl), gstInclUnit: incl }
+    : { unitPriceIncl: round2(Math.max(0, Number(sellExcl) || 0)), gstInclUnit: 0 };
+}
+
 function lineAmounts(line) {
   const qty = Number(line?.qty) || 0;
   const inclUnit = round2(Number(line?.gstInclUnit) || 0);
@@ -457,6 +472,8 @@ module.exports = {
   gstFromIncl,
   exclFromIncl,
   advertisedInclFromExcl,
+  wholeDollarInclFromExcl,
+  stockLinePrice,
   lineAmounts,
   lineTotal,
   unitPriceGstIncl,
