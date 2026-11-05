@@ -1202,6 +1202,33 @@ button.see-details {
   color: #4b5563;
 }
 
+.battery-why {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+  gap: 48px;
+  align-items: center;
+}
+
+.battery-why-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(2, 21, 52, 0.12);
+}
+
+@media (max-width: 760px) {
+  .battery-why {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .battery-why-img {
+    max-width: 340px;
+    margin: 0 auto;
+  }
+}
+
 .battery-table td.battery-suits {
   min-width: 180px;
   white-space: normal;
