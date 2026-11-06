@@ -359,6 +359,38 @@ label.check input {
   background: rgba(255, 255, 255, 0.92);
 }
 
+.photo-cover-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.photo-order {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.3rem;
+  width: 120px;
+}
+
+.photo-order button {
+  flex: 1;
+  min-width: 0;
+  padding: 0.25rem 0.2rem;
+  font-size: 0.8rem;
+  line-height: 1.1;
+}
+
+.photo-order button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .check-group {
   margin-top: 1rem;
   padding-top: 0.75rem;

@@ -7318,6 +7318,28 @@ app.delete("/api/reports/:id/photo", requireAdmin, (req, res) => {
   res.json(withReportPhotos(reports[index]));
 });
 
+app.put("/api/reports/:id/photo-order", requireAdmin, (req, res) => {
+  const reports = readReports();
+  const index = reports.findIndex((r) => r.id === req.params.id);
+  if (index < 0) return res.status(404).json({ error: "Report not found" });
+  const existing = reportPhotoList(reports[index]);
+  const requested = Array.isArray(req.body?.photos)
+    ? req.body.photos.map((p) => String(p || "").trim()).filter(Boolean)
+    : [];
+  const sameSet =
+    requested.length === existing.length &&
+    new Set(requested).size === requested.length &&
+    requested.every((src) => existing.includes(src));
+  if (!sameSet) {
+    return res.status(400).json({ error: "Photo list changed. Please refresh and try again." });
+  }
+  reports[index].vehiclePhotos = requested;
+  reports[index].vehiclePhoto = requested[0] || "";
+  reports[index].updatedAt = nowIso();
+  writeReports(reports);
+  res.json(withReportPhotos(reports[index]));
+});
+
 app.delete("/api/reports/:id", requireAdmin, (req, res) => {
   const reports = readReports();
   const next = reports.filter((r) => r.id !== req.params.id);

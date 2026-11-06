@@ -1472,15 +1472,43 @@ function updatePhotos(report) {
     vehiclePhotosEl.innerHTML = "";
     return;
   }
+  const last = photos.length - 1;
   vehiclePhotosEl.innerHTML = photos
     .map(
-      (src) => `
+      (src, i) => `
       <span class="photo-thumb">
-        <img src="${escapeAttr(src)}" alt="Vehicle photo" />
+        <img src="${escapeAttr(src)}" alt="Vehicle photo ${i + 1}" />
         <button type="button" class="ghost photo-remove" data-photo="${escapeAttr(src)}" aria-label="Remove photo">×</button>
+        ${i === 0 ? `<span class="photo-cover-badge">Cover</span>` : ""}
+        <span class="photo-order">
+          <button type="button" class="ghost" data-photo-move="${i}" data-photo-to="${i - 1}" aria-label="Move photo left"${i === 0 ? " disabled" : ""}>←</button>
+          ${i === 0 ? "" : `<button type="button" class="ghost" data-photo-move="${i}" data-photo-to="0" aria-label="Set as cover photo">Cover</button>`}
+          <button type="button" class="ghost" data-photo-move="${i}" data-photo-to="${i + 1}" aria-label="Move photo right"${i === last ? " disabled" : ""}>→</button>
+        </span>
       </span>`
     )
     .join("");
+  vehiclePhotosEl.querySelectorAll("[data-photo-move]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!current) return;
+      const from = Number(btn.dataset.photoMove);
+      const to = Number(btn.dataset.photoTo);
+      if (to < 0 || to > last || from === to) return;
+      const next = [...photos];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      try {
+        current = await api(`/api/reports/${current.id}/photo-order`, {
+          method: "PUT",
+          body: JSON.stringify({ photos: next }),
+        });
+        updatePhotos(current);
+        showStatus(to === 0 ? "Cover photo set" : "Photo order saved");
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  });
   vehiclePhotosEl.querySelectorAll("[data-photo]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       if (!current) return;

@@ -140,7 +140,7 @@ function render(report, meta) {
     <section class="report-cover" aria-label="Report cover">
       <div class="cover-inner">
         <p class="cover-brand">
-          <img class="cover-logo" src="/images/deane-auto-logo.jpg" alt="Deane Auto Repairs" />
+          <img class="cover-logo" src="/assets/logo-deane.png?v=20261102y" alt="Deane Auto Repairs 鼎恩汽修" width="617" height="240" />
         </p>
         <p class="cover-tag">Digital service report</p>
         <h1 class="cover-title">${escapeHtml(jobLabel(report))}</h1>
