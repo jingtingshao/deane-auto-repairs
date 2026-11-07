@@ -746,6 +746,31 @@
 
           <div class="report-form">
             <fieldset>
+              <legend>Website tyre pictures</legend>
+              <p class="muted small">One picture per tyre model (brand + pattern). Supplier pictures download by themselves after each publish. Upload your own picture to replace any of them; yours is never overwritten.</p>
+              <p id="tyre-images-info" class="muted small"></p>
+              <div class="line-actions">
+                <button type="button" id="btn-tyre-images-download" class="ghost">Download missing supplier pictures</button>
+              </div>
+              <div class="grid-2">
+                <label class="list-search">
+                  Find a model
+                  <input id="tyre-images-search" type="search" placeholder="Brand or pattern, e.g. Linglong" autocomplete="off" />
+                </label>
+                <label>Show
+                  <select id="tyre-images-filter">
+                    <option value="missing">No picture yet</option>
+                    <option value="all">All models</option>
+                  </select>
+                </label>
+              </div>
+              <div id="tyre-images-list" class="tyre-images-list"></div>
+              <input id="tyre-images-file" type="file" accept="image/*" hidden />
+            </fieldset>
+          </div>
+
+          <div class="report-form">
+            <fieldset>
               <legend>Supplier price data</legend>
               <p id="tyre-data-info" class="muted small"></p>
               <p id="tyre-refresh-info" class="muted small"></p>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Tyre">
+  <circle cx="60" cy="60" r="54" fill="#2b2f36"/>
+  <circle cx="60" cy="60" r="54" fill="none" stroke="#1c1f24" stroke-width="10" stroke-dasharray="6 5"/>
+  <circle cx="60" cy="60" r="32" fill="#d7dbe0"/>
+  <circle cx="60" cy="60" r="24" fill="#eef0f2"/>
+  <circle cx="60" cy="60" r="7" fill="#9ca3af"/>
+  <g fill="#9ca3af">
+    <circle cx="60" cy="44" r="3"/>
+    <circle cx="75.2" cy="55" r="3"/>
+    <circle cx="69.4" cy="73" r="3"/>
+    <circle cx="50.6" cy="73" r="3"/>
+    <circle cx="44.8" cy="55" r="3"/>
+  </g>
+</svg>

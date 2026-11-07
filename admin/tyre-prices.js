@@ -323,9 +323,163 @@
     }
   });
 
+  const imagesInfoEl = document.getElementById("tyre-images-info");
+  const imagesListEl = document.getElementById("tyre-images-list");
+  const imagesSearchEl = document.getElementById("tyre-images-search");
+  const imagesFilterEl = document.getElementById("tyre-images-filter");
+  const imagesFileEl = document.getElementById("tyre-images-file");
+  const imagesDownloadBtn = document.getElementById("btn-tyre-images-download");
+  let imagesTimer = null;
+  let imagesPoll = null;
+  let uploadTarget = null;
+
+  function renderImagesInfo(data) {
+    if (!imagesInfoEl) return;
+    if (!data.published) {
+      imagesInfoEl.textContent = "Publish tyre prices first. Pictures are fetched for the tyres the website shows.";
+      if (imagesDownloadBtn) imagesDownloadBtn.disabled = true;
+      return;
+    }
+    const parts = [
+      `${data.withPicture} of ${data.total} tyre models on the website have a picture${data.manual ? ` (${data.manual} uploaded by you)` : ""}.`,
+    ];
+    if (!data.supplierLinks) {
+      parts.push("The saved supplier prices have no picture links yet. Press Refresh prices now (below), then Publish, and pictures will download.");
+    }
+    if (data.downloading) parts.push("Downloading supplier pictures now… this can take several minutes.");
+    else if (data.lastRun) {
+      const r = data.lastRun;
+      parts.push(
+        `Last download ${Admin.formatDateTimeShort(r.at)}: ${r.added || 0} new, ${r.failed || 0} failed, ${r.noPicture || 0} with no supplier picture.`
+      );
+    }
+    imagesInfoEl.textContent = parts.join(" ");
+    if (imagesDownloadBtn) {
+      imagesDownloadBtn.disabled = Boolean(data.downloading);
+      imagesDownloadBtn.textContent = data.downloading ? "Downloading…" : "Download missing supplier pictures";
+    }
+    if (data.downloading && !imagesPoll) {
+      imagesPoll = setInterval(async () => {
+        const next = await loadImages();
+        if (!next?.downloading) {
+          clearInterval(imagesPoll);
+          imagesPoll = null;
+        }
+      }, 10_000);
+    }
+  }
+
+  function renderImages(data) {
+    if (!imagesListEl) return;
+    if (!data.published) {
+      imagesListEl.innerHTML = "";
+      return;
+    }
+    if (!data.models.length) {
+      imagesListEl.innerHTML = `<div class="empty">${
+        imagesFilterEl?.value === "missing" && !imagesSearchEl?.value.trim() ? "Every tyre model on the website has a picture." : "No matching tyre models."
+      }</div>`;
+      return;
+    }
+    const more = data.matches > data.models.length ? `<p class="muted small">Showing ${data.models.length} of ${data.matches}. Type a brand or pattern to narrow it down.</p>` : "";
+    imagesListEl.innerHTML =
+      more +
+      data.models
+        .map((m) => {
+          const pic = m.img
+            ? `<img src="${Admin.escapeAttr(m.img)}" alt="" loading="lazy" />`
+            : `<span class="tyre-image-none">No picture</span>`;
+          const source =
+            m.source === "manual" ? "Your picture" : m.source === "supplier" ? `From ${m.from || "supplier"}` : m.supplierLinks ? "Supplier picture not downloaded yet" : "Supplier has no picture";
+          return `<div class="tyre-image-row" data-key="${Admin.escapeAttr(m.key)}">
+            <div class="tyre-image-thumb">${pic}</div>
+            <div class="tyre-image-text">
+              <strong>${Admin.escapeHtml(m.brand)} ${Admin.escapeHtml(m.pattern)}</strong>
+              <small class="muted">${Admin.escapeHtml(m.tier || "")} · ${m.sizes} size${m.sizes === 1 ? "" : "s"} · ${Admin.escapeHtml(source)}</small>
+            </div>
+            <div class="tyre-image-actions">
+              <button type="button" class="ghost" data-upload="1">${m.img ? "Replace" : "Upload"}</button>
+              ${m.source === "manual" ? '<button type="button" class="ghost" data-reset="1">Use supplier picture</button>' : ""}
+            </div>
+          </div>`;
+        })
+        .join("");
+    imagesListEl.querySelectorAll(".tyre-image-row").forEach((row) => {
+      const model = data.models.find((m) => m.key === row.dataset.key);
+      row.querySelector("[data-upload]")?.addEventListener("click", () => {
+        uploadTarget = model;
+        imagesFileEl?.click();
+      });
+      row.querySelector("[data-reset]")?.addEventListener("click", async () => {
+        if (!confirm(`Remove your picture for ${model.brand} ${model.pattern} and use the supplier picture?`)) return;
+        try {
+          const res = await Admin.api(`/api/tyre-images?key=${encodeURIComponent(model.key)}`, { method: "DELETE" });
+          showStatus(res.downloaded ? "Supplier picture is back." : "Your picture was removed. The supplier has no picture for this tyre.");
+          loadImages();
+        } catch (err) {
+          showStatus(err?.message || "Could not remove the picture.");
+        }
+      });
+    });
+  }
+
+  async function loadImages() {
+    if (!imagesListEl) return null;
+    const q = String(imagesSearchEl?.value || "").trim();
+    const missing = imagesFilterEl?.value !== "all";
+    try {
+      const data = await Admin.api(`/api/tyre-images?missing=${missing ? "1" : "0"}&q=${encodeURIComponent(q)}`);
+      renderImagesInfo(data);
+      renderImages(data);
+      return data;
+    } catch (err) {
+      showStatus(err?.message || "Could not load tyre pictures.");
+      return null;
+    }
+  }
+
+  imagesSearchEl?.addEventListener("input", () => {
+    if (imagesTimer) clearTimeout(imagesTimer);
+    imagesTimer = setTimeout(loadImages, 250);
+  });
+  imagesFilterEl?.addEventListener("change", loadImages);
+
+  imagesDownloadBtn?.addEventListener("click", async () => {
+    try {
+      await Admin.api("/api/tyre-images/download", { method: "POST", body: "{}" });
+      showStatus("Downloading supplier pictures. This page updates when it is done.");
+      loadImages();
+    } catch (err) {
+      showStatus(err?.message || "Could not start the download.");
+    }
+  });
+
+  imagesFileEl?.addEventListener("change", async () => {
+    const file = imagesFileEl.files?.[0];
+    imagesFileEl.value = "";
+    if (!file || !uploadTarget) return;
+    const form = new FormData();
+    form.append("brand", uploadTarget.brand);
+    form.append("pattern", uploadTarget.pattern);
+    form.append("file", file);
+    showStatus("Uploading picture…");
+    try {
+      await Admin.api("/api/tyre-images/upload", { method: "POST", body: form });
+      showStatus(`Picture saved for ${uploadTarget.brand} ${uploadTarget.pattern}. The website shows it straight away.`);
+      loadImages();
+    } catch (err) {
+      showStatus(err?.message || "Upload failed.");
+    } finally {
+      uploadTarget = null;
+    }
+  });
+
+  publishBtn?.addEventListener("click", () => setTimeout(loadImages, 1500));
+
   window.DeaneTyrePrices = {
     show() {
       loadMeta();
+      loadImages();
       if (searchEl && !searchEl.value) searchEl.value = "205/55R16";
       runSearch();
     },

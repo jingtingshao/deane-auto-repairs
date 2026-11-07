@@ -32,7 +32,7 @@ const TIERS = ["Budget", "Mid-range", "Premium"];
 const PATTERN_NOISE = /^(ND|ASY|ASYM\w*|ASS?Y\w*|ASSIMETRICAL|NON|NITRO|\+|-|&)$/i;
 const ROW_FIELDS = [
   "supplier", "category", "sku", "size", "brand", "pattern", "variant", "load_speed", "ply",
-  "features", "oe_fitments", "cost_ex", "special", "usual_ex", "rrp_incl", "tyrewise_ex", "stock",
+  "features", "oe_fitments", "cost_ex", "special", "usual_ex", "rrp_incl", "tyrewise_ex", "stock", "image",
 ];
 
 function num(value) {
@@ -444,6 +444,7 @@ function validateUpload(payload) {
     row.rrp_incl = num(row.rrp_incl);
     row.special = Boolean(row.special);
     row.stock = row.stock === null ? "" : String(row.stock);
+    row.image = /^https:\/\/[^\s"'<>]+$/i.test(String(row.image || "")) ? String(row.image) : null;
     if (!row.supplier || !row.size || row.cost_ex === null) continue;
     clean.push(row);
   }
@@ -582,6 +583,7 @@ module.exports = {
   sellPrice,
   websitePicks,
   markLinglongSpecial,
+  nicePattern,
   buildPublic,
   popularSizes,
   popularSizesHtml,

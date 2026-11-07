@@ -304,6 +304,22 @@
         card.className = `tyre-quote tyre-quote-${opt.tier.toLowerCase().replace(/[^a-z]+/g, "-")}`;
         if (opt.special) card.classList.add("tyre-quote-special");
 
+        const picture = document.createElement("div");
+        picture.className = `tyre-quote-picture${opt.img ? "" : " is-placeholder"}`;
+        const img = document.createElement("img");
+        img.src = opt.img || "/assets/tyre-placeholder.svg";
+        img.alt = opt.img ? `${opt.brand} ${opt.pattern} tyre` : "";
+        img.loading = "lazy";
+        img.decoding = "async";
+        img.width = 180;
+        img.height = 180;
+        img.addEventListener("error", () => {
+          picture.classList.add("is-placeholder");
+          img.alt = "";
+          img.src = "/assets/tyre-placeholder.svg";
+        }, { once: true });
+        picture.append(img);
+
         const labels = document.createElement("div");
         labels.className = "tyre-quote-labels";
 
@@ -348,7 +364,7 @@
           );
         });
 
-        card.append(labels, name, spec, price, stock, book);
+        card.append(picture, labels, name, spec, price, stock, book);
         return card;
       })
     );

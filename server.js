@@ -65,6 +65,7 @@ const driveBackup = require("./data/drive-backup");
 const websms = require("./data/websms");
 const tyrePricesLib = require("./data/tyre-prices");
 const tyreSuppliersLib = require("./data/tyre-suppliers");
+const tyreImagesLib = require("./data/tyre-images");
 
 const PORT = Number(process.env.PORT) || 5173;
 const pdfParseLegacy =
@@ -258,6 +259,13 @@ const UPLOADS_DIR = (() => {
   fs.mkdirSync(nested, { recursive: true });
   return nested;
 })();
+const tyreImages = tyreImagesLib.createStore({
+  indexFile: path.join(DATA_DIR, "tyre-images.json"),
+  dir: path.join(UPLOADS_DIR, "tyre-images"),
+  readJsonArray,
+  writeJsonArray,
+  sharp,
+});
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "").replace(/\/$/, "");
 const MAIL_FROM =
   process.env.MAIL_FROM ||
@@ -5032,6 +5040,14 @@ app.get("/uploads/:filename", (req, res) => {
       if (err && !res.headersSent) res.status(404).end();
     }
   );
+});
+app.get(`${tyreImagesLib.PUBLIC_PREFIX}:file`, (req, res) => {
+  const filePath = tyreImages.filePath(req.params.file);
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).end();
+  // A replaced picture gets a new file name, so the old one can be cached for long.
+  res.sendFile(filePath, {
+    headers: { "X-Content-Type-Options": "nosniff", "Cache-Control": "public, max-age=2592000, immutable" },
+  });
 });
 app.use((req, res, next) => {
   if (blockedStaticPath(req.path)) {
@@ -10778,7 +10794,7 @@ app.get("/api/public/tyre-prices", (req, res) => {
     const published = readPublishedTyrePrices();
     if (!published) return res.status(404).json({ error: "No tyre prices published yet" });
     const stockFor = tyrePricesLib.workshopTyreStock(readInventoryItems());
-    const body = JSON.stringify(tyrePricesLib.withAvailability(published, stockFor));
+    const body = JSON.stringify(tyreImages.attach(tyrePricesLib.withAvailability(published, stockFor)));
     res.setHeader("Cache-Control", "public, max-age=60");
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Vary", "Accept-Encoding");
@@ -11122,7 +11138,109 @@ app.post("/api/tyre-prices/publish", requireOwnerAdmin, (req, res) => {
       sizes: Object.keys(payload.sizes).length,
     };
     writeTyrePriceState(state);
+    runTyreImageDownload("publish");
     res.json(state.published);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+let tyreImageJob = null;
+
+/** Fetch supplier pictures for website tyre models that have none yet (runs in the background). */
+function runTyreImageDownload(reason, onlyKey = "") {
+  if (tyreImageJob) return tyreImageJob;
+  const published = readPublishedTyrePrices();
+  if (!published) return null;
+  tyreImageJob = tyreImages
+    .downloadMissing({
+      published,
+      rows: readTyrePriceRows(),
+      now: nowIso(),
+      onlyKey,
+      log: (msg) => console.log(`Tyre pictures: ${msg}`),
+    })
+    .then((result) => {
+      const state = readTyrePriceState();
+      state.lastImageRun = { at: nowIso(), reason, ...result };
+      writeTyrePriceState(state);
+      console.log(`Tyre pictures: ${result.added} downloaded, ${result.failed} failed, ${result.noPicture} with no supplier picture`);
+      return result;
+    })
+    .catch((err) => {
+      console.error("Tyre picture download failed:", err);
+      return { error: err.message };
+    })
+    .finally(() => {
+      tyreImageJob = null;
+    });
+  return tyreImageJob;
+}
+
+const tyreImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!/^image\//.test(file.mimetype)) {
+      return cb(Object.assign(new Error("Choose a picture (JPG, PNG or WebP)."), { status: 400 }));
+    }
+    cb(null, true);
+  },
+});
+
+app.get("/api/tyre-images", requireOwnerAdmin, (req, res) => {
+  try {
+    const published = readPublishedTyrePrices();
+    if (!published) return res.json({ total: 0, withPicture: 0, manual: 0, matches: 0, models: [], published: false });
+    const result = tyreImages.list({
+      published,
+      rows: readTyrePriceRows(),
+      query: req.query.q,
+      missingOnly: req.query.missing === "1",
+    });
+    res.json({
+      ...result,
+      published: true,
+      downloading: Boolean(tyreImageJob),
+      lastRun: readTyrePriceState().lastImageRun || null,
+      supplierLinks: readTyrePriceRows().some((r) => r.image),
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.post("/api/tyre-images/download", requireOwnerAdmin, (_req, res) => {
+  if (!readPublishedTyrePrices()) return res.status(400).json({ error: "Publish tyre prices first." });
+  const already = Boolean(tyreImageJob);
+  runTyreImageDownload("manual");
+  res.json({ started: true, already });
+});
+
+app.post("/api/tyre-images/upload", requireOwnerAdmin, tyreImageUpload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No picture uploaded." });
+    const entry = await tyreImages.saveManual({
+      brand: String(req.body?.brand || "").trim().slice(0, 80),
+      pattern: String(req.body?.pattern || "").trim().slice(0, 80),
+      buffer: req.file.buffer,
+      actor: nowActor(req),
+      now: nowIso(),
+    });
+    res.json({ key: entry.key, img: `${tyreImagesLib.PUBLIC_PREFIX}${entry.file}` });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+/** Drop the uploaded picture and go back to the supplier one. */
+app.delete("/api/tyre-images", requireOwnerAdmin, async (req, res) => {
+  try {
+    const key = String(req.query.key || "");
+    tyreImages.clear(key);
+    if (tyreImageJob) await tyreImageJob;
+    const result = (await runTyreImageDownload("reset", key)) || {};
+    res.json({ cleared: true, downloaded: result.added || 0 });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }

@@ -992,6 +992,28 @@ button.see-details {
   background: #fafaf7;
 }
 
+.tyre-quote-picture {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 150px;
+  margin: -6px 0 12px;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.tyre-quote-picture img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.tyre-quote-picture.is-placeholder img {
+  width: 96px;
+  height: 96px;
+  opacity: 0.35;
+}
+
 .tyre-quote-mid-range {
   border-top-color: var(--sign-yellow);
 }

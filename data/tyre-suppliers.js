@@ -145,7 +145,7 @@ const TYREMAX_PRODUCTS = `query readProductList($offset: Int, $limit: Int, $cate
   data: readProductList(offset: $offset, limit: $limit, category: $category, term: $term, consignment: $consignment, exclude: $exclude) {
     nodes {
       id sku title brandTitle loadSpeed oeFitments otherInfo plyRating treadName treadPattern
-      price rrp rrpGstIncl special tyrewiseChargePriceExclusive
+      price rrp rrpGstIncl special tyrewiseChargePriceExclusive apiImageURL
       publicStockData(filter: DEFAULT) { warehouse quantity quantityExceedMaxDisplay default available }
     }
     pageInfo { totalCount }
@@ -189,7 +189,7 @@ async function fetchTyremax({ email, password }) {
         out[key].push([
           n.sku, n.title, n.brandTitle, n.treadPattern, n.treadName, n.loadSpeed, n.plyRating, n.otherInfo,
           n.oeFitments, n.price, n.special, n.rrp, n.rrpGstIncl, n.tyrewiseChargePriceExclusive,
-          st.warehouse, st.quantity, st.quantityExceedMaxDisplay,
+          st.warehouse, st.quantity, st.quantityExceedMaxDisplay, n.apiImageURL || "",
         ]);
       }
       if (data.nodes.length < 100) break;
@@ -199,17 +199,26 @@ async function fetchTyremax({ email, password }) {
   return out;
 }
 
+/** Tyremax pictures live on their NetSuite account; the path carries the account number as c=. */
+function tyremaxImageUrl(src) {
+  const s = String(src || "");
+  const account = /[?&]c=(\d+)/.exec(s)?.[1];
+  if (/^https?:\/\//i.test(s)) return s;
+  return account && s.startsWith("/core/media/") ? `https://${account}.app.netsuite.com${s}` : null;
+}
+
 function convertTyremax(data) {
   const out = [];
   for (const [key, category] of [["car", "Car & 4WD"], ["lt", "Light Truck & TBR"]]) {
     for (const r of data[key] || []) {
-      const [sku, size, brand, pattern, variant, loadSpeed, ply, features, oe, price, special, usual, rrpIncl, twEx, , qty, qtyMore] = r;
+      const [sku, size, brand, pattern, variant, loadSpeed, ply, features, oe, price, special, usual, rrpIncl, twEx, , qty, qtyMore, img] = r;
       out.push(row({
         supplier: "Tyremax", category, sku, size: String(size || "").trim(), brand, pattern, variant,
         load_speed: loadSpeed, ply, features, oe_fitments: oe,
         cost_ex: money(price), special: Boolean(special), usual_ex: special ? money(usual) : null,
         rrp_incl: money(rrpIncl), tyrewise_ex: money(twEx),
         stock: qty === null || qty === undefined ? "" : qtyMore ? `${qty}+` : String(qty),
+        image: tyremaxImageUrl(img),
       }));
     }
   }
@@ -245,7 +254,7 @@ async function fetchWing({ email, password }) {
   const push = (n, catName) => {
     if (seen.has(n.id)) return;
     seen.add(n.id);
-    rows.push([n.id, catName, n.productName, n.mpn, n.sku, n.price1, n.price3, n.special, n.formatedStock, n.stock, n.status, n.slug]);
+    rows.push([n.id, catName, n.productName, n.mpn, n.sku, n.price1, n.price3, n.special, n.formatedStock, n.stock, n.status, n.slug, n.defaultSrc || n.groupSrc || ""]);
   };
   for (const [id, name] of [...cats, ...(parentId ? [[parentId, null]] : [])]) {
     for (let p = 0; p < 50; p++) {
@@ -261,7 +270,7 @@ async function fetchWing({ email, password }) {
 
 function convertWing(data) {
   const out = [];
-  for (const [pid, , name, mpn, sku, rrpEx, price, special, fstock, stock] of data.wing || []) {
+  for (const [pid, , name, mpn, sku, rrpEx, price, special, fstock, stock, , , src] of data.wing || []) {
     const p = parseTyreName(name, mpn, sku);
     if (!p || !price) continue;
     const stockText = fstock === null || fstock === undefined ? (!stock ? "Out of stock" : String(Math.trunc(stock))) : fstock;
@@ -271,6 +280,8 @@ function convertWing(data) {
       size: p.size, brand: p.brand, pattern: p.pattern, load_speed: p.loadSpeed, ply: p.ply,
       features: p.description, cost_ex: Number(price), special: Boolean(special),
       rrp_incl: rrpEx ? round2(Number(rrpEx) * 1.15) : null, tyrewise_ex: 6.65, stock: stockText,
+      // Wing leaves "attachment/images/" style placeholders on tyres with no picture.
+      image: /\.(jpe?g|png|webp)$/i.test(String(src || "")) ? `${WING}/${String(src).replace(/^\/+/, "")}` : null,
     }));
   }
   return out;
@@ -318,7 +329,7 @@ async function fetchValueTyres({ email: code, password }) {
       rows.push([
         n.id, n.product_code, n.description, n.brand?.name, n.sub_brand, n.pattern, n.type, n.direction?.name,
         n.price, n.was_price, n.rrp_price, n.is_custom_price, n.custom_price, n.is_stock_local, n.is_stock_national,
-        n.hscode?.price, n.discontinued, n.promotion_name, n.decibel_rating,
+        n.hscode?.price, n.discontinued, n.promotion_name, n.decibel_rating, n.image_url || "",
       ]);
     }
     await sleep(PAGE_DELAY_MS);
@@ -332,7 +343,7 @@ const VALUE_PATTERN_SKIP = /^(\(?\d{2,3}(\/\d{2,3})?[A-Z]?(XL)?\)?|\d{1,2}PLY|\d
 function convertValueTyres(data) {
   const out = [];
   for (const r of data.rows || []) {
-    const [, code, desc, brand, , , typ, direction, price, wasPrice, rrp, isCustom, customPrice, stockLocal, , fee, discontinued, promo] = r;
+    const [, code, desc, brand, , , typ, direction, price, wasPrice, rrp, isCustom, customPrice, stockLocal, , fee, discontinued, promo, , img] = r;
     const category = VALUE_TYPES[typ];
     if (!category) continue;
     const p = parseTyreName(desc, null, null);
@@ -352,6 +363,7 @@ function convertValueTyres(data) {
       cost_ex: cost, special: Boolean(wasPrice || promo), usual_ex: wasPrice ? Number(wasPrice) : null,
       rrp_incl: rrp ? Number(rrp) : null, tyrewise_ex: fee ? Number(fee) : null,
       stock: stockLocal === null || stockLocal === undefined ? "" : String(stockLocal),
+      image: /^https?:\/\//i.test(String(img || "")) ? String(img) : null,
     }));
   }
   return out;
@@ -407,7 +419,7 @@ async function fetchBlairs({ email, password }) {
         /* no price for this item */
       }
       const st = it.DeserializedDisplayLocationWithStock || {};
-      rows.push([it.Id, it.DisplayName, it.Sku, it.Brand, price, it.RecommendedRetailPrice, it.DisplayTariffPrice, st.Auckland, st.Nationwide, it.Url, ""]);
+      rows.push([it.Id, it.DisplayName, it.Sku, it.Brand, price, it.RecommendedRetailPrice, it.DisplayTariffPrice, st.Auckland, st.Nationwide, it.Url, "", it.ListingImageSrc || ""]);
     }
     await sleep(PAGE_DELAY_MS);
   }
@@ -426,7 +438,7 @@ function blairsName(name) {
 
 function convertBlairs(data) {
   const out = [];
-  for (const [pid, name, sku, brand, price, rrpEx, feeText, stockAkl] of data.rows || []) {
+  for (const [pid, name, sku, brand, price, rrpEx, feeText, stockAkl, , , , img] of data.rows || []) {
     if (/^[\d. ]+X/i.test(name) || !price) continue;
     const p = parseTyreName(blairsName(name), null, null);
     if (!p) continue;
@@ -439,6 +451,9 @@ function convertBlairs(data) {
       rrp_incl: rrpEx ? round2(Number(rrpEx) * 1.15) : null,
       tyrewise_ex: fee && fee < 100 ? fee : null,
       stock: stockAkl === null || stockAkl === undefined ? "" : String(stockAkl),
+      image: String(img || "").startsWith("/media/")
+        ? `${BLAIRS}${String(img).split("?")[0]}?mode=pad&width=600&height=600&bgcolor=ffffff`
+        : null,
     }));
   }
   return out;
