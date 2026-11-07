@@ -33,6 +33,7 @@ const namesLib = require("./data/names");
 const jobsLib = require("./data/jobs");
 const inventoryLib = require("./data/inventory");
 const aaBatteries = require("./data/aa-batteries");
+const vitoraTyres = require("./data/vitora-tyres");
 const supplierProfiles = require("./data/supplier-profiles");
 const appointmentsLib = require("./data/appointments");
 const bookingRequestsLib = require("./data/booking-requests");
@@ -11290,6 +11291,11 @@ try {
   runStockImportOnce(aaBatteries.IMPORT_ID, aaBatteries.applyToStock);
 } catch (err) {
   console.error("Could not import AA battery price list:", err);
+}
+try {
+  runStockImportOnce(vitoraTyres.IMPORT_ID, vitoraTyres.applyToStock);
+} catch (err) {
+  console.error("Could not import Vitora consignment tyres:", err);
 }
 
 app.listen(PORT, "0.0.0.0", () => {
