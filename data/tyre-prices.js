@@ -90,18 +90,15 @@ function tierOf(brand) {
   return "Budget";
 }
 
-/** Price basis is the normal (non-special) cost, so an ending special never undercuts. */
-function baseCost(row) {
-  return row.special && num(row.usual_ex) ? num(row.usual_ex) : num(row.cost_ex);
-}
-
+/**
+ * tyre × GST × (1 + markup) + stewardship × GST + fitting, rounded up to the dollar.
+ * Priced from today's trade cost, specials included; the weekly refresh moves prices when a special ends.
+ */
 function sellPrice(row, settings) {
-  const cost = baseCost(row);
+  const cost = num(row.cost_ex);
   if (cost === null) return null;
-  const fee = num(row.tyrewise_ex) ?? DEFAULT_TYREWISE_EX;
-  const tyre = cost * (1 + markupPctForCost(cost) / 100) * (1 + GST);
-  const tyrewise = settings.includeTyrewise ? fee * (1 + GST) : 0;
-  return Math.ceil(tyre + settings.fittingIncl + tyrewise);
+  const fee = settings.includeTyrewise ? num(row.tyrewise_ex) ?? DEFAULT_TYREWISE_EX : 0;
+  return Math.ceil(cost * (1 + GST) * (1 + markupPctForCost(cost) / 100) + fee * (1 + GST) + settings.fittingIncl);
 }
 
 function nicePattern(pattern) {

@@ -32,11 +32,16 @@ const settings = { ...DEFAULT_SETTINGS };
   assert.strictEqual(markupPctForCost(400), 15);
   assert.strictEqual(markupPctForCost(800), 15);
 
-  // Fitted price: cost × (1+markup) × 1.15 + fitting $30 + tyrewise 6.65×1.15
+  // Fitted price: tyre × 1.15 × (1+markup) + tyrewise 6.65 × 1.15 + fitting $30, rounded up
   assert.strictEqual(sellPrice(row({ brand: "Mazzini", pattern: "A", cost_ex: 80 }), settings), 167);
   assert.strictEqual(sellPrice(row({ brand: "Goodyear", pattern: "A", cost_ex: 120 }), settings), 218);
   assert.strictEqual(sellPrice(row({ brand: "Michelin", pattern: "A", cost_ex: 250 }), settings), 383);
   assert.strictEqual(sellPrice(row({ brand: "Michelin", pattern: "A", cost_ex: 450 }), settings), 633);
+  // A supplier special prices from the special cost, not the usual one.
+  assert.strictEqual(
+    sellPrice({ ...row({ brand: "Vitora", pattern: "Sportlife", cost_ex: 55.9 }), special: true, usual_ex: 96 }, settings),
+    128
+  );
 }
 
 {

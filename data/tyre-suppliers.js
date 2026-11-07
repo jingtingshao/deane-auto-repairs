@@ -419,7 +419,8 @@ async function fetchBlairs({ email, password }) {
         /* no price for this item */
       }
       const st = it.DeserializedDisplayLocationWithStock || {};
-      rows.push([it.Id, it.DisplayName, it.Sku, it.Brand, price, it.RecommendedRetailPrice, it.DisplayTariffPrice, st.Auckland, st.Nationwide, it.Url, "", it.ListingImageSrc || ""]);
+      const onSpecial = (it.ApplicableFlags || []).some((f) => /special/i.test(String(f?.DisplayName || "")));
+      rows.push([it.Id, it.DisplayName, it.Sku, it.Brand, price, it.RecommendedRetailPrice, it.DisplayTariffPrice, st.Auckland, st.Nationwide, it.Url, "", it.ListingImageSrc || "", onSpecial]);
     }
     await sleep(PAGE_DELAY_MS);
   }
@@ -438,7 +439,7 @@ function blairsName(name) {
 
 function convertBlairs(data) {
   const out = [];
-  for (const [pid, name, sku, brand, price, rrpEx, feeText, stockAkl, , , , img] of data.rows || []) {
+  for (const [pid, name, sku, brand, price, rrpEx, feeText, stockAkl, , , , img, onSpecial] of data.rows || []) {
     if (/^[\d. ]+X/i.test(name) || !price) continue;
     const p = parseTyreName(blairsName(name), null, null);
     if (!p) continue;
@@ -447,7 +448,7 @@ function convertBlairs(data) {
     out.push(row({
       supplier: "Blairs", category: commercial ? "Light Truck & TBR" : "Car & 4WD", sku: sku || String(pid),
       size: p.size, brand: brand === "Star trac" ? "Star Trac" : brand, pattern: p.pattern,
-      load_speed: p.loadSpeed, ply: p.ply, features: squash(name), cost_ex: Number(price),
+      load_speed: p.loadSpeed, ply: p.ply, features: squash(name), cost_ex: Number(price), special: Boolean(onSpecial),
       rrp_incl: rrpEx ? round2(Number(rrpEx) * 1.15) : null,
       tyrewise_ex: fee && fee < 100 ? fee : null,
       stock: stockAkl === null || stockAkl === undefined ? "" : String(stockAkl),

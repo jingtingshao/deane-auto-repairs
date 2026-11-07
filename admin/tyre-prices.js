@@ -41,7 +41,7 @@
 
   function settingsLabel(s) {
     if (!s) return "";
-    return `tiered markup 40%→15%, fitting ${money(s.fittingIncl, 0)}, Tyrewise ${s.includeTyrewise ? "included" : "left out"}`;
+    return `markup on the tyre by cost (40% under $100 down to 15% from $400), supplier specials used, fitting ${money(s.fittingIncl, 0)}, Tyrewise ${s.includeTyrewise ? "included" : "left out"}`;
   }
 
   function sameSettings(a, b) {
@@ -180,7 +180,7 @@
     const body = rows
       .map((r) => {
         const cost = r.special
-          ? `${money(r.costEx)} <span class="badge pay-overdue">Special</span><br /><small class="muted">Usual ${money(r.usualEx)}</small>`
+          ? `${money(r.costEx)} <span class="badge pay-overdue">Special</span>${r.usualEx ? `<br /><small class="muted">Usual ${money(r.usualEx)}</small>` : ""}`
           : money(r.costEx);
         const best =
           (r.cheapestInTier ? ' <span class="badge published">Cheapest</span>' : "") +
