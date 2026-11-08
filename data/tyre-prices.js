@@ -90,15 +90,28 @@ function tierOf(brand) {
   return "Budget";
 }
 
-/**
- * tyre × GST × (1 + markup) + stewardship × GST + fitting, rounded up to the dollar.
- * Priced from today's trade cost, specials included; the weekly refresh moves prices when a special ends.
- */
+/** tyre × GST × (1 + markup) + stewardship × GST + fitting, rounded up to the dollar. */
+function fittedPrice(tyreCost, stewardshipEx, settings) {
+  const fee = settings.includeTyrewise ? stewardshipEx ?? DEFAULT_TYREWISE_EX : 0;
+  return Math.ceil(tyreCost * (1 + GST) * (1 + markupPctForCost(tyreCost) / 100) + fee * (1 + GST) + settings.fittingIncl);
+}
+
+/** Priced from today's trade cost, specials included; the weekly refresh moves prices when a special ends. */
 function sellPrice(row, settings) {
   const cost = num(row.cost_ex);
   if (cost === null) return null;
-  const fee = settings.includeTyrewise ? num(row.tyrewise_ex) ?? DEFAULT_TYREWISE_EX : 0;
-  return Math.ceil(cost * (1 + GST) * (1 + markupPctForCost(cost) / 100) + fee * (1 + GST) + settings.fittingIncl);
+  return fittedPrice(cost, num(row.tyrewise_ex), settings);
+}
+
+/**
+ * Stock / invoice retail for one tyre = website fitted price less fitting, ex GST.
+ * Fitting goes on the invoice as its own line, so tyre + fitting matches the website.
+ */
+function stockSellExcl(tyreCost, stewardshipEx, settings) {
+  const s = normalizeSettings(settings);
+  const tyreIncl = fittedPrice(tyreCost, stewardshipEx > 0 ? stewardshipEx : null, s) - s.fittingIncl;
+  const cents = Math.round(tyreIncl * 100);
+  return (cents - Math.round((cents * 3) / 23)) / 100;
 }
 
 function nicePattern(pattern) {
@@ -577,7 +590,10 @@ module.exports = {
   sizeCmp,
   inStock,
   tierOf,
+  fittedPrice,
   sellPrice,
+  stockSellExcl,
+  DEFAULT_TYREWISE_EX,
   websitePicks,
   markLinglongSpecial,
   nicePattern,

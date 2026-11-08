@@ -93,7 +93,7 @@
     const parts = [];
     parts.push(
       saved.length
-        ? `Every Monday at 8am the server logs in and refreshes ${saved.join(", ")} automatically, then emails any price changes.`
+        ? `Every Monday at 8am the server logs in and refreshes ${saved.join(", ")}, publishes the new prices to the website, and emails the changes. If a refresh would drop a lot of sizes from the website it is not published, and the email says so.`
         : "No supplier logins saved on the server, so every Monday at 8am you get a reminder email instead."
     );
     if (saved.length && missing.length) parts.push(`No login saved for ${missing.join(", ")}.`);
@@ -103,8 +103,13 @@
     } else if (last) {
       const ok = (last.ok || []).map((o) => `${o.supplier} ${o.count}`).join(", ");
       const failed = (last.failures || []).map((f) => `${f.supplier} (${f.error})`).join("; ");
+      const published = last.publish
+        ? last.publish.ok
+          ? " Published to the website."
+          : ` Not published: ${last.publish.reason}`
+        : "";
       parts.push(
-        `Last refresh ${Admin.formatDateTimeShort(last.at)}: ${ok || "nothing downloaded"}${failed ? `. Failed: ${failed}` : ""}.`
+        `Last refresh ${Admin.formatDateTimeShort(last.at)}: ${ok || "nothing downloaded"}${failed ? `. Failed: ${failed}` : ""}.${published}`
       );
     }
     refreshInfoEl.textContent = parts.join(" ");
@@ -119,7 +124,11 @@
           clearInterval(refreshPoll);
           refreshPoll = null;
           runSearch();
-          showStatus("Price refresh finished. Any changes have been emailed.");
+          showStatus(
+            meta?.lastRefresh?.publish?.ok
+              ? "Price refresh finished and published to the website. Changes have been emailed."
+              : "Price refresh finished. Any changes have been emailed."
+          );
         }
       }, 10_000);
     }
@@ -280,7 +289,7 @@
   });
 
   refreshBtn?.addEventListener("click", async () => {
-    if (!confirm("Log in to the suppliers and download new prices now? This takes a few minutes.")) return;
+    if (!confirm("Log in to the suppliers, download new prices and publish them to the website? This takes a few minutes.")) return;
     try {
       await Admin.api("/api/tyre-prices/refresh", { method: "POST", body: "{}" });
       await loadMeta();

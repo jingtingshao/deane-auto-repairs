@@ -1440,40 +1440,56 @@ function renderCandidates() {
       e.stopPropagation();
       const rowEl = btn.closest("tr[data-id]");
       if (!rowEl || !current?.id) {
-        showStatus("Open a saved invoice first.");
+        if (btn.dataset.action === "stock") alert("Save this invoice first, then use Add to stock.");
+        else showStatus("Open a saved invoice first.");
         return;
       }
       const id = rowEl.dataset.id;
       if (btn.dataset.action === "stock") {
         const row = candidates.find((item) => item.id === id);
-        if (!row) return;
+        if (!row) {
+          alert("This line has changed. Reopen the invoice and try again.");
+          return;
+        }
+        // The status line sits at the top of the invoice, out of view next to the lines.
         if (row.stewardshipLine) {
-          showStatus("Stewardship stays on its own line. Add the tyre to stock and the fee is included.");
+          alert("Stewardship stays on its own line. Add the tyre to stock and the fee is included.");
           return;
         }
         if (row.stocked) {
-          showStatus("This part from this invoice is already in stock.");
+          alert("This part from this invoice is already in stock.");
           return;
         }
-        syncStewardshipFromInputs();
-        const qty = Number(rowEl.querySelector('[data-field="qty"]')?.value) || Number(row.qtyCandidate) || 1;
-        const tyre = Number(rowEl.querySelector('[data-field="costPrice"]')?.value);
-        const tyrePrice = Number.isFinite(tyre) ? money(tyre) : money(row.costPriceCandidate);
-        const fee = money(row.stewardshipFeeCandidate);
-        window.DeaneInventory?.openReceive?.({
-          name: rowEl.querySelector('[data-field="description"]')?.value || row.descriptionCandidate || "",
-          partNumber: rowEl.querySelector('[data-field="partNumber"]')?.value || row.partNumberCandidate || "",
-          qty,
-          tyrePrice: fee > 0 ? tyrePrice : undefined,
-          stewardshipFee: fee > 0 ? fee : undefined,
-          costPrice: fee > 0 ? money(tyrePrice + fee) : tyrePrice,
-          stewardshipCandidateId: fee > 0 ? row.stewardshipCandidateId || "" : "",
-          supplier: form?.elements?.supplier?.value || current.supplier || "",
-          invoiceNo: form?.elements?.invoiceNo?.value || current.invoiceNo || "",
-          supplierInvoiceId: current.id,
-          candidateId: row.id,
-          already: Boolean(row.stocked),
-        });
+        const label = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "Opening…";
+        try {
+          syncStewardshipFromInputs();
+          const qty = Number(rowEl.querySelector('[data-field="qty"]')?.value) || Number(row.qtyCandidate) || 1;
+          const tyre = Number(rowEl.querySelector('[data-field="costPrice"]')?.value);
+          const tyrePrice = Number.isFinite(tyre) ? money(tyre) : money(row.costPriceCandidate);
+          const fee = money(row.stewardshipFeeCandidate);
+          if (!window.DeaneInventory?.openReceive) throw new Error("Stock tools did not load. Refresh the page and try again.");
+          await window.DeaneInventory.openReceive({
+            name: rowEl.querySelector('[data-field="description"]')?.value || row.descriptionCandidate || "",
+            partNumber: rowEl.querySelector('[data-field="partNumber"]')?.value || row.partNumberCandidate || "",
+            qty,
+            tyrePrice: fee > 0 ? tyrePrice : undefined,
+            stewardshipFee: fee > 0 ? fee : undefined,
+            costPrice: fee > 0 ? money(tyrePrice + fee) : tyrePrice,
+            stewardshipCandidateId: fee > 0 ? row.stewardshipCandidateId || "" : "",
+            supplier: form?.elements?.supplier?.value || current.supplier || "",
+            invoiceNo: form?.elements?.invoiceNo?.value || current.invoiceNo || "",
+            supplierInvoiceId: current.id,
+            candidateId: row.id,
+            already: Boolean(row.stocked),
+          });
+        } catch (err) {
+          alert(`Could not open Add to stock: ${err?.message || err}`);
+        } finally {
+          btn.disabled = false;
+          btn.textContent = label;
+        }
         return;
       }
       if (btn.dataset.action === "smart-match") {

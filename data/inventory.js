@@ -34,6 +34,22 @@ const BANDS = [
 
 const GST_RATE = 0.15;
 const tyreStewardship = require("./tyre-stewardship");
+const tyrePrices = require("./tyre-prices");
+
+/** Website tyre price settings (fitting, Tyrewise); the server keeps this in step with Admin → Tyre prices. */
+let tyreSettings = tyrePrices.normalizeSettings({});
+
+function setTyreSettings(settings) {
+  tyreSettings = tyrePrices.normalizeSettings(settings || {});
+}
+
+/** Tyres sell at the website price less fitting, so tyre + fitting on an invoice matches the website. */
+function tyreSellPrice(item) {
+  const fee = Number(item?.stewardshipFee) > 0 ? Number(item.stewardshipFee) : 0;
+  const tyreCost = fee > 0 && Number(item?.tyrePrice) > 0 ? Number(item.tyrePrice) : Number(item?.costPrice) || 0;
+  if (!(tyreCost > 0)) return 0;
+  return tyrePrices.stockSellExcl(tyreCost, fee, tyreSettings);
+}
 
 const GUESS_RULES = [
   ["adblue", "adblue"],
@@ -138,11 +154,12 @@ function normalizeItem(raw) {
   const category = categoryById(raw?.category);
   const split = tyreStewardship.tyreCostFields(raw);
   const costPrice = split.costPrice;
-  const suggested = suggestPrice(costPrice);
   const sellRaw = raw?.sellPrice;
   const sellPrice =
     sellRaw == null || sellRaw === ""
-      ? suggested.sell
+      ? category?.id === "tyre"
+        ? tyreSellPrice({ ...split, costPrice })
+        : suggestPrice(costPrice).sell
       : roundMoney(Math.max(0, Number(sellRaw) || 0));
   return {
     id: cleanText(raw?.id, 80),
@@ -166,11 +183,17 @@ function normalizeItem(raw) {
 
 function presentItem(item) {
   const category = categoryById(item.category);
+  let price = suggestPrice(item.costPrice);
+  if (item.category === "tyre") {
+    const sell = tyreSellPrice(item);
+    const incl = roundMoney(sell * (1 + GST_RATE));
+    price = { ...price, band: "tyre", sell, sellMin: sell, sellMax: sell, sellIncl: incl, sellMinIncl: incl, sellMaxIncl: incl };
+  }
   return {
     ...item,
     categoryLabel: category ? category.label : "",
     unit: category ? category.unit : item.unit || "each",
-    price: suggestPrice(item.costPrice),
+    price,
   };
 }
 
@@ -569,6 +592,8 @@ module.exports = {
   roundMoney,
   categoryById,
   suggestPrice,
+  setTyreSettings,
+  tyreSellPrice,
   guessCategory,
   normalizeItem,
   presentItem,

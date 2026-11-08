@@ -252,6 +252,11 @@ function aucklandHour(date = new Date()) {
 }
 
 function startBackupScheduler({ dataDir, uploadsDir }) {
+  // A local copy of the server would upload its own (test) data and push real backups out of the folder.
+  if (!process.env.RENDER) {
+    console.log("Google Drive backup: daily schedule only runs on Render");
+    return;
+  }
   if (!backupConfigured()) {
     console.log(
       "Google Drive backup: not configured — run npm run backup:auth after adding OAuth client ID/secret"

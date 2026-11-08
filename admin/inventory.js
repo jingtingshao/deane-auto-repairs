@@ -49,6 +49,7 @@
   ];
 
   let categories = [];
+  let tyrePricing = null;
   let items = [];
   let categoryFilter = "";
   let editingId = "";
@@ -113,6 +114,28 @@
       sellMaxIncl: incl(sellMax),
       sellIncl: incl(sellMin),
     };
+  }
+
+  /** Same as the website: tyre × 1.15 × (1 + markup) + stewardship × 1.15 + fitting, rounded up; less fitting. */
+  function tyreRetail(tyreCost, stewardship) {
+    const p = tyrePricing || {};
+    const s = p.settings || { fittingIncl: 30, includeTyrewise: true };
+    const bands = p.markupBands || [{ minCost: 0, pct: 40 }];
+    const tyre = Number(tyreCost) || 0;
+    if (!(tyre > 0)) return null;
+    const fee = s.includeTyrewise ? (Number(stewardship) > 0 ? Number(stewardship) : Number(p.defaultStewardshipEx) || 6.65) : 0;
+    const pct = (bands.find((b) => tyre >= b.minCost) || bands[bands.length - 1]).pct;
+    const fitted = Math.ceil(tyre * 1.15 * (1 + pct / 100) + fee * 1.15 + Number(s.fittingIncl || 0));
+    const incl = fitted - Number(s.fittingIncl || 0);
+    const cents = Math.round(incl * 100);
+    return { tyre, fee, pct, fitting: Number(s.fittingIncl || 0), fitted, incl, sell: (cents - Math.round((cents * 3) / 23)) / 100 };
+  }
+
+  function tyreGuideText(t, sell) {
+    if (!t) return "Enter the tyre cost to see the sell price.";
+    const chosen = Number(sell);
+    const own = Number.isFinite(chosen) && Math.abs(chosen - t.sell) >= 0.005 ? ` This sell price is ${money(chosen)} ex GST, ${money(inclPrice(chosen))} incl.` : "";
+    return `Same as the website: tyre ${money(t.tyre)} × 1.15 × (1 + ${t.pct}%) + Tyrewise ${money(t.fee)} × 1.15 + fitting ${money(t.fitting)} = ${money(t.fitted)} fitted. Less fitting, the tyre sells at ${money(t.incl)} incl GST (${money(t.sell)} ex).${own}`;
   }
 
   function partKey(value) {
@@ -318,12 +341,41 @@
         .join("");
   }
 
+  /** Tyre retail for the stock editor, or null when the line is not a tyre. */
+  function editorTyre() {
+    if (form?.elements?.category?.value !== "tyre") return null;
+    return editorSplitOpen()
+      ? tyreRetail(form.elements.tyrePrice.value, form.elements.stewardshipFee.value)
+      : tyreRetail(form.elements.costPrice.value, 0);
+  }
+
+  function editorSuggestedSell() {
+    if (form?.elements?.category?.value === "tyre") return editorTyre()?.sell || 0;
+    return suggestPrice(form.elements.costPrice.value).sell;
+  }
+
+  function receiveTyre() {
+    if (receiveForm?.elements?.category?.value !== "tyre") return null;
+    return receiveSplitOpen()
+      ? tyreRetail(receiveForm.elements.tyrePrice.value, receiveForm.elements.stewardshipFee.value)
+      : tyreRetail(receiveShelfCost(), 0);
+  }
+
+  function receiveSuggestedSell() {
+    if (receiveForm?.elements?.category?.value === "tyre") return receiveTyre()?.sell || 0;
+    return suggestPrice(receiveShelfCost()).sell;
+  }
+
   function renderGuide() {
     if (!guideEl || !form) return;
     const splitNote = editorSplitOpen()
       ? `Tyre ${money(form.elements.tyrePrice.value)} + stewardship ${money(form.elements.stewardshipFee.value)} = stock cost ${money(form.elements.costPrice.value)}. `
       : "";
-    guideEl.textContent = splitNote + guideText(form.elements.costPrice.value, form.elements.sellPrice.value, currentUnit());
+    guideEl.textContent =
+      splitNote +
+      (form.elements.category.value === "tyre"
+        ? tyreGuideText(editorTyre(), form.elements.sellPrice.value)
+        : guideText(form.elements.costPrice.value, form.elements.sellPrice.value, currentUnit()));
     const unit = currentUnit();
     const qtyLabel = form.querySelector("[data-qty-label]");
     const costLabel = form.querySelector("[data-cost-label]");
@@ -345,7 +397,10 @@
     if (!receiveGuide || !receiveForm) return;
     const unit = receiveUnitKind();
     const shelfCost = unit === "litre" ? receiveShelfCost() : Number(receiveForm.elements.costPrice.value) || 0;
-    let text = guideText(shelfCost, receiveForm.elements.sellPrice.value, unit);
+    let text =
+      receiveForm.elements.category.value === "tyre"
+        ? tyreGuideText(receiveTyre(), receiveForm.elements.sellPrice.value)
+        : guideText(shelfCost, receiveForm.elements.sellPrice.value, unit);
     if (unit === "litre") {
       const litres = Number(receiveForm.elements.qty.value) || 0;
       const drum = Number(receiveForm.elements.costPrice.value) || 0;
@@ -376,6 +431,7 @@
   async function loadMeta() {
     const meta = await Admin.api("/api/inventory/meta");
     categories = Array.isArray(meta.categories) ? meta.categories : [];
+    tyrePricing = meta.tyrePricing || null;
     fillCategorySelect(form?.elements?.category, form?.elements?.category?.value || "");
     fillCategorySelect(receiveForm?.elements?.category, receiveForm?.elements?.category?.value || "");
     renderCategoryChips();
@@ -723,14 +779,15 @@
     if (!receiveForm || receiveSellTouched) return;
     const match = findStockMatch(receiveMatchInput());
     const saved = Number(match?.sellPrice);
-    if (match && saved > 0) {
+    // Tyres always follow the website formula, so a new cost moves the retail with it.
+    if (match && saved > 0 && receiveForm.elements.category.value !== "tyre") {
       receiveForm.elements.sellPrice.value = saved.toFixed(2);
       receiveKeptSell = true;
       return;
     }
     receiveKeptSell = false;
-    const guide = suggestPrice(receiveShelfCost());
-    receiveForm.elements.sellPrice.value = guide.sell ? guide.sell.toFixed(2) : "";
+    const sell = receiveSuggestedSell();
+    receiveForm.elements.sellPrice.value = sell ? sell.toFixed(2) : "";
   }
 
   function costsDiffer(match) {
@@ -831,8 +888,8 @@
       const typed = Number(form.elements.tyrePrice.value) || Number(form.elements.costPrice.value) || 0;
       setEditorSplit(null, { category: "tyre", tyrePrice: typed, fee: TYRE_STEWARDSHIP_EX_GST });
       if (!sellTouched) {
-        const guide = suggestPrice(form.elements.costPrice.value);
-        form.elements.sellPrice.value = guide.sell ? guide.sell.toFixed(2) : "";
+        const sell = editorSuggestedSell();
+        form.elements.sellPrice.value = sell ? sell.toFixed(2) : "";
       }
     } else if (!isTyre && editorSplitOpen()) {
       const tyreOnly = Number(form.elements.tyrePrice.value) || 0;
@@ -842,15 +899,15 @@
     renderGuide();
   });
   form?.elements?.costPrice?.addEventListener("input", () => {
-    const guide = suggestPrice(form.elements.costPrice.value);
-    if (!sellTouched) form.elements.sellPrice.value = guide.sell ? guide.sell.toFixed(2) : "";
+    const sell = editorSuggestedSell();
+    if (!sellTouched) form.elements.sellPrice.value = sell ? sell.toFixed(2) : "";
     renderGuide();
   });
   ["tyrePrice", "stewardshipFee"].forEach((field) => {
     form?.elements?.[field]?.addEventListener("input", () => {
       syncEditorSplit();
-      const guide = suggestPrice(form.elements.costPrice.value);
-      if (!sellTouched) form.elements.sellPrice.value = guide.sell ? guide.sell.toFixed(2) : "";
+      const sell = editorSuggestedSell();
+      if (!sellTouched) form.elements.sellPrice.value = sell ? sell.toFixed(2) : "";
       renderGuide();
     });
   });
@@ -944,8 +1001,8 @@
   function refreshReceivePrice() {
     if (!receiveForm) return;
     if (!receiveSellTouched && !receiveKeptSell) {
-      const guide = suggestPrice(receiveShelfCost());
-      receiveForm.elements.sellPrice.value = guide.sell ? guide.sell.toFixed(2) : "";
+      const sell = receiveSuggestedSell();
+      receiveForm.elements.sellPrice.value = sell ? sell.toFixed(2) : "";
     }
     renderReceiveGuide();
     receiveSummary({

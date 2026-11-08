@@ -10486,6 +10486,11 @@ app.get("/api/inventory/meta", requireOwnerAdmin, (_req, res) => {
     categories: inventoryLib.CATEGORIES,
     bands: inventoryLib.BANDS,
     gstRate: inventoryLib.GST_RATE,
+    tyrePricing: {
+      settings: readTyrePriceState().settings,
+      markupBands: tyrePricesLib.MARKUP_BANDS,
+      defaultStewardshipEx: tyrePricesLib.DEFAULT_TYREWISE_EX,
+    },
   });
 });
 
@@ -10847,6 +10852,7 @@ app.put("/api/tyre-prices/settings", requireOwnerAdmin, (req, res) => {
     state.settingsUpdatedAt = nowIso();
     state.settingsUpdatedBy = nowActor(req);
     writeTyrePriceState(state);
+    inventoryLib.setTyreSettings(state.settings);
     res.json({ settings: state.settings });
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
@@ -10864,10 +10870,19 @@ function tyreWebsiteChangeLine(change) {
   return `${change.size} ${change.tier}: ${label(change.before)} → ${label(change.after)}${diff}`;
 }
 
-async function sendTyrePriceChangeEmail({ intro, costs, website, scrapedOn, failures = [] }) {
+async function sendTyrePriceChangeEmail({ intro, costs, website, scrapedOn, failures = [], publish = null }) {
   if (!smtpConfigured()) return { skipped: "Email not configured" };
   const costChanges = costs?.changed || [];
-  if (!costChanges.length && !website.length && !failures.length) return { skipped: "No price changes" };
+  const publishFailed = Boolean(publish && !publish.ok);
+  if (!costChanges.length && !website.length && !failures.length && !publishFailed) return { skipped: "No price changes" };
+  const websiteHeading = publish?.ok
+    ? `WEBSITE PRICES CHANGED — published automatically (${website.length})`
+    : `WEBSITE PRICES THAT WILL CHANGE WHEN YOU PUBLISH (${website.length})`;
+  const footer = publish?.ok
+    ? `\nThe website already shows the new prices. Admin → Tyre prices:\n${adminUrl()}\n`
+    : publishFailed
+      ? `\nNOT PUBLISHED AUTOMATICALLY: ${publish.reason}\nThe website still shows the old prices. Check Admin → Tyre prices, then press Publish:\n${adminUrl()}\n`
+      : `\nThe website still shows the old prices until you press Publish in Admin → Tyre prices:\n${adminUrl()}\n`;
   const shownWebsite = website.slice(0, 60);
   const failureText = failures.length
     ? `COULD NOT REFRESH (old prices kept)\n${failures.map((f) => `${f.supplier}: ${f.error}`).join("\n")}\n\n`
@@ -10875,7 +10890,7 @@ async function sendTyrePriceChangeEmail({ intro, costs, website, scrapedOn, fail
   const text =
     `${intro} (prices from ${scrapedOn}).\n\n` +
     failureText +
-    `WEBSITE PRICES THAT WILL CHANGE WHEN YOU PUBLISH (${website.length})\n` +
+    `${websiteHeading}\n` +
     (website.length
       ? shownWebsite.map(tyreWebsiteChangeLine).join("\n") +
         (website.length > shownWebsite.length ? `\n…and ${website.length - shownWebsite.length} more.` : "")
@@ -10885,10 +10900,12 @@ async function sendTyrePriceChangeEmail({ intro, costs, website, scrapedOn, fail
       ? `${costs.up} went up, ${costs.down} went down. ${costs.added} new tyres, ${costs.removed} no longer listed.\n`
       : "No earlier prices to compare with.\n") +
     (costChanges.length ? "Full list attached (CSV).\n" : "") +
-    `\nThe website still shows the old prices until you press Publish in Admin → Tyre prices:\n${adminUrl()}\n`;
-  const subject = costChanges.length || website.length
-    ? `Tyre prices changed: ${website.length} website price${website.length === 1 ? "" : "s"}, ${costChanges.length} supplier cost${costChanges.length === 1 ? "" : "s"}${failures.length ? ` (${failures.length} supplier failed)` : ""}`
-    : `Tyre price refresh: ${failures.length} supplier${failures.length === 1 ? "" : "s"} failed`;
+    footer;
+  const subject = publishFailed
+    ? "Tyre prices NOT published automatically — please check"
+    : costChanges.length || website.length
+      ? `Tyre prices changed: ${website.length} website price${website.length === 1 ? "" : "s"}${publish?.ok ? " (published)" : ""}, ${costChanges.length} supplier cost${costChanges.length === 1 ? "" : "s"}${failures.length ? ` (${failures.length} supplier failed)` : ""}`
+      : `Tyre price refresh: ${failures.length} supplier${failures.length === 1 ? "" : "s"} failed`;
   await createMailer().sendMail({
     from: MAIL_FROM,
     to: business.email,
@@ -10901,8 +10918,29 @@ async function sendTyrePriceChangeEmail({ intro, costs, website, scrapedOn, fail
   return { sent: true, to: business.email };
 }
 
-/** Save a new full price list, compare it with the old one, and email any changes. */
-async function applyNewTyreRows({ rows, sources, scrapedOn, actor, intro, failures = [] }) {
+/** Write the website tyre prices from the saved supplier rows, then fetch any new pictures. */
+function publishTyrePrices(actor, rows = readTyrePriceRows()) {
+  if (!rows.length) throw Object.assign(new Error("Upload price data first."), { status: 400 });
+  const state = readTyrePriceState();
+  const payload = tyrePricesLib.buildPublic(rows, state.settings, state.scrapedOn || todayIso());
+  writeJsonArray(TYRE_PRICES_PUBLIC_FILE, [payload]);
+  state.published = {
+    at: nowIso(),
+    by: actor,
+    settings: state.settings,
+    scrapedOn: payload.updated,
+    sizes: Object.keys(payload.sizes).length,
+  };
+  writeTyrePriceState(state);
+  runTyreImageDownload("publish");
+  return state.published;
+}
+
+/** A refresh that lost a big share of the website sizes is held back for a person to check. */
+const AUTO_PUBLISH_MIN_SHARE = 0.8;
+
+/** Save a new full price list, compare it with the old one, optionally publish, and email any changes. */
+async function applyNewTyreRows({ rows, sources, scrapedOn, actor, intro, failures = [], autoPublish = false }) {
   const oldRows = readTyrePriceRows();
   const state = readTyrePriceState();
   const showingNow =
@@ -10914,16 +10952,34 @@ async function applyNewTyreRows({ rows, sources, scrapedOn, actor, intro, failur
   state.uploadedBy = actor;
   writeTyrePriceState(state);
 
+  const nextPublic = tyrePricesLib.buildPublic(rows, state.settings, scrapedOn);
   let costs = null;
   let website = [];
   if (oldRows.length) {
     costs = tyrePricesLib.diffCosts(oldRows, rows);
-    website = tyrePricesLib.diffWebsite(showingNow, tyrePricesLib.buildPublic(rows, state.settings, scrapedOn));
+    website = tyrePricesLib.diffWebsite(showingNow, nextPublic);
   }
+
+  let publish = null;
+  if (autoPublish) {
+    const before = Object.keys(showingNow?.sizes || {}).length;
+    const after = Object.keys(nextPublic.sizes || {}).length;
+    if (before && after < before * AUTO_PUBLISH_MIN_SHARE) {
+      publish = { ok: false, reason: `only ${after} tyre sizes would be on the website (now ${before}).` };
+    } else {
+      try {
+        publishTyrePrices(`${actor} (auto)`, rows);
+        publish = { ok: true, sizes: after };
+      } catch (err) {
+        publish = { ok: false, reason: err.message || "publish failed" };
+      }
+    }
+  }
+
   let email = { skipped: "First upload — nothing to compare" };
-  if (costs || failures.length) {
+  if (costs || failures.length || (publish && !publish.ok)) {
     try {
-      email = await sendTyrePriceChangeEmail({ intro, costs, website, scrapedOn, failures });
+      email = await sendTyrePriceChangeEmail({ intro, costs, website, scrapedOn, failures, publish });
     } catch (err) {
       console.error("Tyre price change email failed:", err);
       email = { error: err.message || "Email failed" };
@@ -10932,7 +10988,7 @@ async function applyNewTyreRows({ rows, sources, scrapedOn, actor, intro, failur
   const changes = costs
     ? { costsChanged: costs.changed.length, up: costs.up, down: costs.down, websiteChanged: website.length }
     : null;
-  return { changes, email };
+  return { changes, email, publish };
 }
 
 app.post("/api/tyre-prices/upload", requireOwnerAdmin, tyrePriceUpload.single("file"), async (req, res) => {
@@ -10999,6 +11055,7 @@ function runTyrePriceRefresh(reason, actor) {
         actor,
         intro: `${label} downloaded new prices from ${[...fresh].join(", ")}`,
         failures,
+        autoPublish: true,
       });
     } else if (failures.length && smtpConfigured()) {
       try {
@@ -11021,6 +11078,7 @@ function runTyrePriceRefresh(reason, actor) {
       failures,
       changes: outcome.changes,
       email: outcome.email,
+      publish: outcome.publish || null,
     };
     writeTyrePriceState(latest);
     return latest.lastRefresh;
@@ -11126,21 +11184,7 @@ function startTyrePriceReminderScheduler() {
 
 app.post("/api/tyre-prices/publish", requireOwnerAdmin, (req, res) => {
   try {
-    const rows = readTyrePriceRows();
-    if (!rows.length) return res.status(400).json({ error: "Upload price data first." });
-    const state = readTyrePriceState();
-    const payload = tyrePricesLib.buildPublic(rows, state.settings, state.scrapedOn || todayIso());
-    writeJsonArray(TYRE_PRICES_PUBLIC_FILE, [payload]);
-    state.published = {
-      at: nowIso(),
-      by: nowActor(req),
-      settings: state.settings,
-      scrapedOn: payload.updated,
-      sizes: Object.keys(payload.sizes).length,
-    };
-    writeTyrePriceState(state);
-    runTyreImageDownload("publish");
-    res.json(state.published);
+    res.json(publishTyrePrices(nowActor(req)));
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
@@ -11288,6 +11332,11 @@ function lanIPv4s() {
 }
 
 try {
+  inventoryLib.setTyreSettings(readTyrePriceState().settings);
+} catch (err) {
+  console.error("Could not read tyre price settings for stock:", err);
+}
+try {
   runStockImportOnce(aaBatteries.IMPORT_ID, aaBatteries.applyToStock);
 } catch (err) {
   console.error("Could not import AA battery price list:", err);
@@ -11296,6 +11345,21 @@ try {
   runStockImportOnce(vitoraTyres.IMPORT_ID, vitoraTyres.applyToStock);
 } catch (err) {
   console.error("Could not import Vitora consignment tyres:", err);
+}
+try {
+  runStockImportOnce("tyre-sell-website-formula-2026-11", (items) => {
+    const updated = [];
+    for (const item of items) {
+      if (item.category !== "tyre") continue;
+      const sell = inventoryLib.tyreSellPrice(item);
+      if (!(sell > 0) || sell === item.sellPrice) continue;
+      item.sellPrice = sell;
+      updated.push(item.partNumber || item.name);
+    }
+    return { added: [], updated };
+  });
+} catch (err) {
+  console.error("Could not reprice stock tyres:", err);
 }
 
 app.listen(PORT, "0.0.0.0", () => {
