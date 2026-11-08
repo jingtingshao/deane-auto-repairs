@@ -149,17 +149,22 @@ function render(doc) {
   const lineRows = (doc.lines || [])
     .map((line) => {
       const qty = Number(line.qty) || 0;
+      const unitExcl = Number(line.unitPriceIncl) || 0;
       const storedIncl = Math.round((Number(line.gstInclUnit) || 0) * 100) / 100;
+      const excl =
+        line.amounts?.net != null
+          ? line.amounts.net
+          : Math.round(qty * unitExcl * 100) / 100;
       const incl =
-        storedIncl > 0
-          ? storedIncl
-          : qty > 0 && line.amounts?.totalIncl != null
-            ? Math.round((Number(line.amounts.totalIncl) / qty) * 100) / 100
-            : Math.round((Number(line.unitPriceIncl) || 0) * 1.15 * 100) / 100;
+        line.amounts?.totalIncl != null
+          ? line.amounts.totalIncl
+          : storedIncl > 0
+            ? Math.round(qty * storedIncl * 100) / 100
+            : Math.round(qty * unitExcl * 1.15 * 100) / 100;
       return `<tr>
         <td>${escapeHtml(line.description)}</td>
         <td class="num">${escapeHtml(String(line.qty))}</td>
-        <td class="num">${money(line.unitPriceIncl)}</td>
+        <td class="num">${money(excl)}</td>
         <td class="num">${money(incl)}</td>
       </tr>`;
     })

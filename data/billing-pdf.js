@@ -344,8 +344,7 @@ function buildBillingPdf(doc) {
       for (const line of lines) {
         const desc = String(line.description || "").trim();
         const qty = Number(line.qty) || 0;
-        const unit = Number(line.unitPriceIncl) || 0;
-        const unitIncl = catalog.unitPriceGstIncl(line);
+        const amounts = catalog.lineAmounts(line);
         pdf.font("Helvetica").fontSize(10);
         const descHeight = pdf.heightOfString(desc, { width: widths.desc });
         ensureSpace(descHeight + 12);
@@ -355,8 +354,8 @@ function buildBillingPdf(doc) {
         const afterDesc = pdf.y;
         pdf.font("Helvetica").fontSize(10).fillColor("#1a2332");
         drawRight(String(qty), cols.price, y);
-        drawRight(money(unit), cols.total, y);
-        drawRight(money(unitIncl), contentRight, y);
+        drawRight(money(amounts.net), cols.total, y);
+        drawRight(money(amounts.totalIncl), contentRight, y);
         pdf.x = left;
         pdf.y = Math.max(afterDesc, y + 12) + 4;
       }
