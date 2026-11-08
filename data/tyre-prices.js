@@ -302,9 +302,19 @@ function stockTokens(text) {
   );
 }
 
+/** Load index + speed rating codes in a text, e.g. "91V", "106/104R". */
+function loadSpeedCodes(text) {
+  const codes = new Set();
+  const re = /(?:^|[^0-9A-Z/])(\d{2,3}(?:\/\d{2,3})?)\s?([HJKLMNPQRSTUVWY])(?![0-9A-Z])/g;
+  let m;
+  while ((m = re.exec(String(text || "").toUpperCase()))) codes.add(`${m[1]}${m[2]}`);
+  return codes;
+}
+
 /**
  * Workshop tyre stock (Admin → Stock, category Tyres, qty on hand > 0).
- * Returns (size, brand, pattern) => qty, matching size + brand + every tread-pattern word.
+ * Returns (size, brand, pattern, load) => qty, matching size + brand + every tread-pattern word,
+ * and the load / speed rating when both the stock line and the price row give one.
  */
 function workshopTyreStock(items) {
   const { parseTyreName } = require("./tyre-suppliers");
@@ -320,17 +330,20 @@ function workshopTyreStock(items) {
       brand: String(it.brand || "").toUpperCase().replace(/\s+/g, ""),
       text: `${text} ${it.brand || ""}`.toUpperCase().replace(/\s+/g, ""),
       tokens: stockTokens(text),
+      loads: loadSpeedCodes(`${it.name || ""} ${it.fitment || ""}`),
       qty: Number(it.qtyOnHand),
     });
   }
-  return (size, brand, pattern) => {
+  return (size, brand, pattern, load) => {
     const key = sizeCmp(size);
     const b = String(brand || "").toUpperCase().replace(/\s+/g, "");
     const want = stockTokens(pattern);
+    const wantLoads = loadSpeedCodes(load);
     let qty = 0;
     for (const s of list) {
       if (s.size !== key || !b || !(s.brand === b || s.text.includes(b))) continue;
       if (![...want].every((t) => s.tokens.has(t) || s.text.includes(t))) continue;
+      if (wantLoads.size && s.loads.size && ![...wantLoads].some((c) => s.loads.has(c))) continue;
       qty += s.qty;
     }
     return qty;
@@ -344,7 +357,7 @@ function withAvailability(publicPrices, stockFor) {
     for (const [size, options] of Object.entries(all || {})) {
       out[size] = options.map((o) => ({
         ...o,
-        availability: stockFor(size, o.brand, o.pattern) > 0 ? "workshop" : o.inStock ? "supplier" : "order",
+        availability: stockFor(size, o.brand, o.pattern, o.load) > 0 ? "workshop" : o.inStock ? "supplier" : "order",
       }));
     }
     return out;
@@ -422,7 +435,7 @@ function searchBySize(rows, query, settings, stockFor = () => 0) {
       tyrewiseEx: num(r.tyrewise_ex),
       stock: String(r.stock ?? ""),
       inStock: inStock(r),
-      workshopQty: stockFor(r.size, r.brand, r.pattern),
+      workshopQty: stockFor(r.size, r.brand, r.pattern, r.load_speed),
       sellPrice: sellPrice(r, settings),
       tier: tierOf(r.brand),
       cheapestInTier: picks.has(r),
