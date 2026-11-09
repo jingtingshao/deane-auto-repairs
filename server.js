@@ -34,6 +34,8 @@ const jobsLib = require("./data/jobs");
 const inventoryLib = require("./data/inventory");
 const aaBatteries = require("./data/aa-batteries");
 const vitoraTyres = require("./data/vitora-tyres");
+const my2016SparkPlugs = require("./data/my2016-spark-plugs");
+const my2016Filters = require("./data/my2016-filters");
 const supplierProfiles = require("./data/supplier-profiles");
 const appointmentsLib = require("./data/appointments");
 const bookingRequestsLib = require("./data/booking-requests");
@@ -11345,6 +11347,21 @@ try {
   runStockImportOnce(vitoraTyres.IMPORT_ID, vitoraTyres.applyToStock);
 } catch (err) {
   console.error("Could not import Vitora consignment tyres:", err);
+}
+try {
+  runStockImportOnce(my2016SparkPlugs.IMPORT_ID, my2016SparkPlugs.applyToStock);
+} catch (err) {
+  console.error("Could not import My2016 consignment spark plugs:", err);
+}
+try {
+  runStockImportOnce(my2016Filters.IMPORT_ID, my2016Filters.applyToStock);
+} catch (err) {
+  console.error("Could not import My2016 consignment filters:", err);
+}
+try {
+  runStockImportOnce(my2016Filters.AIR_IMPORT_ID, my2016Filters.applyAirToStock);
+} catch (err) {
+  console.error("Could not import My2016 consignment air filters:", err);
 }
 try {
   runStockImportOnce("tyre-sell-website-formula-2026-11", (items) => {
