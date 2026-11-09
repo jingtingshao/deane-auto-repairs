@@ -286,7 +286,7 @@ function render(doc) {
           ${(Array.isArray(shop.paymentTerms) && shop.paymentTerms.length
             ? shop.paymentTerms
             : [
-                "A 30% deposit may be required for repairs over $1,000.",
+                "Full payment may be required for special-order parts before we place the order.",
                 "Payment is due upon completion of the repair and before the vehicle is released.",
                 "Additional work will only be carried out with customer approval.",
                 "We may retain possession of the vehicle for unpaid amounts.",
