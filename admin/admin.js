@@ -222,7 +222,7 @@ function setOverline(text) {
 
 function setSection(name) {
   if (name === "billing") name = "quotes";
-  if (isTechnician() && (name === "dashboard" || name === "referrals" || name === "sms_inbox" || name === "supplier_invoices" || name === "suppliers" || name === "stock" || name === "tyre_prices")) {
+  if (isTechnician() && (name === "dashboard" || name === "referrals" || name === "sms_inbox" || name === "supplier_invoices" || name === "suppliers" || name === "stock" || name === "tyre_prices" || name === "cash_expenses")) {
     name = "calendar";
   }
   const dashboardSection = document.getElementById("dashboard-section");
@@ -238,6 +238,7 @@ function setSection(name) {
   const partsGuideSection = document.getElementById("parts-guide-section");
   const stockSection = document.getElementById("stock-section");
   const tyrePricesSection = document.getElementById("tyre-prices-section");
+  const cashExpensesSection = document.getElementById("cash-expenses-section");
   const btnNew = document.getElementById("btn-new");
   const billingOpen = name === "quotes" || name === "invoices";
   if (app) app.dataset.section = name;
@@ -254,6 +255,7 @@ function setSection(name) {
   if (partsGuideSection) partsGuideSection.hidden = name !== "parts_guide";
   if (stockSection) stockSection.hidden = name !== "stock";
   if (tyrePricesSection) tyrePricesSection.hidden = name !== "tyre_prices";
+  if (cashExpensesSection) cashExpensesSection.hidden = name !== "cash_expenses";
   if (btnNew) {
     if (
       name === "supplier_invoices" ||
@@ -263,7 +265,8 @@ function setSection(name) {
       name === "tyre_prices" ||
       name === "calendar" ||
       name === "sms_inbox" ||
-      name === "referrals"
+      name === "referrals" ||
+      name === "cash_expenses"
     ) {
       btnNew.hidden = true;
     } else {
@@ -286,6 +289,7 @@ function setSection(name) {
     parts_guide: "nav-parts-guide",
     stock: "nav-stock",
     tyre_prices: "nav-tyre-prices",
+    cash_expenses: "nav-cash-expenses",
   };
   Object.entries(navMap).forEach(([section, id]) => {
     document.getElementById(id)?.classList.toggle("active", name === section);
@@ -334,6 +338,11 @@ function setSection(name) {
     setOverline("TYRE PRICES");
     viewTitle.textContent = "Tyre prices";
     window.DeaneTyrePrices?.show?.();
+  }
+  if (name === "cash_expenses") {
+    setOverline("CASH OUT");
+    viewTitle.textContent = "Cash expenses";
+    window.DeaneCashExpenses?.show?.();
   }
   if (name === "customers") {
     setOverline("CUSTOMERS");
@@ -861,6 +870,10 @@ document.getElementById("nav-quotes")?.addEventListener("click", () => {
 document.getElementById("nav-invoices")?.addEventListener("click", () => {
   setSection("invoices");
   window.DeaneBilling?.showList({ kind: "invoice", filter: "all" });
+});
+
+document.getElementById("nav-cash-expenses")?.addEventListener("click", () => {
+  setSection("cash_expenses");
 });
 
 document.getElementById("nav-customers")?.addEventListener("click", () => {

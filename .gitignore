@@ -17,6 +17,7 @@ data/part-audit-log.json
 data/sms-inbound.json
 data/sms-log.json
 data/referrals.json
+data/cash-expenses.json
 data/backup-status.json
 data/tyre-price-rows.json
 data/tyre-price-settings.json

@@ -12,7 +12,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="admin.css?v=20261106photoorder" />
-    <link rel="stylesheet" href="admin-refresh.css?v=20261021capricorn" />
+    <link rel="stylesheet" href="admin-refresh.css?v=20261111cash" />
   </head>
   <body>
     <div id="login-view" class="login-view">
@@ -60,6 +60,7 @@
           <button type="button" id="nav-tyre-prices" data-admin-only><b>◍</b> Tyre prices</button>
           <button type="button" id="nav-quotes"><b>$</b> Quotes <i id="nav-quotes-count" hidden>0</i></button>
           <button type="button" id="nav-invoices"><b>$</b> Invoices <i id="nav-invoices-count" hidden>0</i></button>
+          <button type="button" id="nav-cash-expenses" data-admin-only><b>−</b> Cash out</button>
           <button type="button" id="nav-customers"><b>◉</b> Customers</button>
           <button type="button" id="nav-sms-inbox" data-admin-only><b>✉</b> SMS Inbox</button>
           <button type="button" id="nav-referrals" data-admin-only><b>🎁</b> Referrals</button>
@@ -835,6 +836,30 @@
           <div id="customers-list" class="report-list"></div>
         </section>
 
+        <section id="cash-expenses-section" hidden>
+          <p class="muted small">Record cash paid out. Each line is the date, who it was paid to, and the amount.</p>
+          <form id="cash-expense-form" class="report-form" novalidate>
+            <fieldset>
+              <legend>Add cash expense</legend>
+              <div class="grid-3">
+                <label>Date<input id="cash-expense-date" name="date" type="date" required /></label>
+                <label>Paid to<input id="cash-expense-name" name="name" type="text" maxlength="80" required autocomplete="off" placeholder="Name" /></label>
+                <label>Amount<input id="cash-expense-amount" name="amount" type="number" inputmode="decimal" min="0.01" step="0.01" required placeholder="0.00" /></label>
+              </div>
+              <p id="cash-expense-error" class="error" hidden></p>
+              <div class="line-actions">
+                <button type="submit" class="primary" id="cash-expense-submit">Add</button>
+              </div>
+            </fieldset>
+          </form>
+          <label class="list-search">
+            Search
+            <input id="cash-expense-search" type="search" placeholder="Name, date, or amount" autocomplete="off" />
+          </label>
+          <p id="cash-expense-total" class="cash-expense-total"></p>
+          <div id="cash-expense-list" class="report-list"></div>
+        </section>
+
         <section id="referrals-section" hidden>
           <p class="muted small">
             Earn <strong>$20</strong> for every successful referral. Credits stack, last 6 months,
@@ -1299,7 +1324,7 @@
       </div>
     </div>
 
-    <script src="admin.js?v=20261106photoorder"></script>
+    <script src="admin.js?v=20261111cash"></script>
     <script src="dashboard.js?v=20261017quickcash"></script>
     <script src="calendar.js?v=20261022hours"></script>
     <script src="jobs.js?v=20261019workmatch"></script>
@@ -1311,6 +1336,7 @@
     <script src="tyre-prices.js?v=20261104tieredmarkup"></script>
     <script src="customers.js?v=20260906techcustomers"></script>
     <script src="referrals.js?v=20260906usedon"></script>
+    <script src="cash-expenses.js?v=20261111cash"></script>
     <script src="sms-inbox.js?v=20260830yesno"></script>
     <script src="booking-alerts.js?v=20260904bookadded"></script>
   </body>

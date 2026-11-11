@@ -64,6 +64,7 @@ const {
   monthLongLabel,
 } = require("./data/nz-time");
 const referralsLib = require("./data/referrals");
+const cashExpensesLib = require("./data/cash-expenses");
 const driveBackup = require("./data/drive-backup");
 const websms = require("./data/websms");
 const tyrePricesLib = require("./data/tyre-prices");
@@ -251,6 +252,7 @@ const PART_AUDIT_FILE = path.join(DATA_DIR, "part-audit-log.json");
 const SMS_INBOUND_FILE = path.join(DATA_DIR, "sms-inbound.json");
 const SMS_LOG_FILE = path.join(DATA_DIR, "sms-log.json");
 const REFERRALS_FILE = path.join(DATA_DIR, "referrals.json");
+const CASH_EXPENSES_FILE = path.join(DATA_DIR, "cash-expenses.json");
 const TRUSTED_DEVICES_FILE = path.join(DATA_DIR, "trusted-devices.json");
 const TYRE_PRICE_ROWS_FILE = path.join(DATA_DIR, "tyre-price-rows.json");
 const TYRE_PRICE_SETTINGS_FILE = path.join(DATA_DIR, "tyre-price-settings.json");
@@ -390,6 +392,7 @@ for (const file of [
   SMS_INBOUND_FILE,
   SMS_LOG_FILE,
   REFERRALS_FILE,
+  CASH_EXPENSES_FILE,
   TRUSTED_DEVICES_FILE,
 ]) {
   if (!fs.existsSync(file)) writeJsonArray(file, []);
@@ -6019,6 +6022,46 @@ app.post("/api/referrals/:id/cancel", requireOwnerAdmin, (req, res) => {
     res.json({ ok: true, referral: result.referral });
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.get("/api/cash-expenses", requireOwnerAdmin, (req, res) => {
+  try {
+    const rows = readJsonArray(CASH_EXPENSES_FILE, "cash expenses");
+    res.json(cashExpensesLib.listExpenses(rows));
+  } catch (err) {
+    console.error("Cash expenses list failed:", err);
+    res.status(err.status || 500).json({ error: err.message || "Could not load cash expenses." });
+  }
+});
+
+app.post("/api/cash-expenses", requireOwnerAdmin, (req, res) => {
+  try {
+    const expense = cashExpensesLib.createExpense(req.body || {}, {
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+    });
+    const rows = readJsonArray(CASH_EXPENSES_FILE, "cash expenses");
+    rows.push(expense);
+    writeJsonArray(CASH_EXPENSES_FILE, rows);
+    res.status(201).json(expense);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message || "Could not save cash expense." });
+  }
+});
+
+app.delete("/api/cash-expenses/:id", requireOwnerAdmin, (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    const rows = readJsonArray(CASH_EXPENSES_FILE, "cash expenses");
+    const next = rows.filter((row) => String(row?.id || "") !== id);
+    if (next.length === rows.length) {
+      return res.status(404).json({ error: "That cash expense was not found." });
+    }
+    writeJsonArray(CASH_EXPENSES_FILE, next);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || "Could not delete cash expense." });
   }
 });
 

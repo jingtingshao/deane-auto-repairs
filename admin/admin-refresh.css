@@ -99,6 +99,9 @@
 .sidebar nav {
   display: grid;
   gap: 5px;
+  min-height: 0;
+  overflow: auto;
+  flex: 1;
 }
 
 .sidebar nav button {
@@ -1065,6 +1068,21 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--green, #25855a);
+}
+
+.cash-expense-total {
+  margin: 0.15rem 0 0.75rem;
+  font-weight: 700;
+}
+
+.cash-expense-table {
+  min-width: 0;
+}
+
+.cash-expense-table .cash-expense-actions {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
 }
 
 @keyframes booking-alert-pop {
