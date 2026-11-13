@@ -3991,13 +3991,9 @@ function ensureViewToken(doc) {
 
 function stampInvoiceIssueDate(doc) {
   if (!doc || doc.kind !== "invoice" || doc.status === "void") return;
-  if (doc.status === "draft") {
-    doc.issuedAt = todayIso();
-    return;
-  }
-  if (!isoDateOnly(doc.issuedAt)) {
-    doc.issuedAt = isoDateOnly(doc.sentAt) || isoDateOnly(doc.createdAt) || todayIso();
-  }
+  if (isoDateOnly(doc.issuedAt)) return;
+  doc.issuedAt =
+    isoDateOnly(doc.sentAt) || isoDateOnly(doc.createdAt) || todayIso();
 }
 
 function publicViewTokenOk(doc, raw) {
@@ -4083,6 +4079,10 @@ function derivePaymentStatus(amountPaid, totalIncl) {
 }
 
 function billingAnchorDate(doc) {
+  if (doc?.kind === "invoice") {
+    const issued = isoDateOnly(doc.issuedAt);
+    if (issued) return issued;
+  }
   return String(doc?.sentAt || doc?.createdAt || doc?.updatedAt || "");
 }
 
@@ -4280,6 +4280,7 @@ function describeFieldChanges(before, after) {
     ["notes", "Notes"],
     ["internalNotes", "Workshop notes"],
     ["validUntil", "Valid until"],
+    ["issuedAt", "Invoice date"],
   ];
   const details = [];
   for (const [field, label] of labels) {
@@ -4436,14 +4437,11 @@ function issueBillingDoc(doc, req, body) {
     doc.acceptToken = newAcceptToken();
   }
   ensureViewToken(doc);
-  if (doc.kind === "invoice") {
-    if (doc.status === "draft") doc.issuedAt = todayIso();
-    else stampInvoiceIssueDate(doc);
-  }
+  if (doc.kind === "invoice") stampInvoiceIssueDate(doc);
   if (doc.status === "draft") {
     doc.status = "sent";
     doc.sentAt = nowIso();
-    if (doc.kind === "invoice") doc.issuedAt = todayIso();
+    if (doc.kind === "invoice") stampInvoiceIssueDate(doc);
   }
   doc.updatedAt = nowIso();
   return billingPublicUrl(req, body, doc);
@@ -7536,7 +7534,10 @@ app.post("/api/billing", requireAdmin, (req, res) => {
     updatedAt: now,
     sentAt: "",
     acceptedAt: "",
-    issuedAt: preset.kind === "invoice" ? today : "",
+    issuedAt:
+      preset.kind === "invoice"
+        ? isoDateOnly(req.body?.issuedAt) || today
+        : "",
     validUntil:
       preset.kind === "quote"
         ? String(req.body?.validUntil || "").trim() ||
@@ -7723,6 +7724,10 @@ app.put("/api/billing/:id", requireAdmin, requireCurrentBillingIfTech, (req, res
       current.kind === "quote" && body.validUntil != null
         ? String(body.validUntil)
         : current.validUntil,
+    issuedAt:
+      current.kind === "invoice" && body.issuedAt != null
+        ? isoDateOnly(body.issuedAt) || current.issuedAt || todayIso()
+        : current.issuedAt || "",
     lines: nextLines,
     discountIncl,
     discountNote,
