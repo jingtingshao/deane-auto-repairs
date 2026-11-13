@@ -36,6 +36,7 @@ const aaBatteries = require("./data/aa-batteries");
 const vitoraTyres = require("./data/vitora-tyres");
 const my2016SparkPlugs = require("./data/my2016-spark-plugs");
 const my2016Filters = require("./data/my2016-filters");
+const topstarBrakePads = require("./data/topstar-brake-pads");
 const supplierProfiles = require("./data/supplier-profiles");
 const appointmentsLib = require("./data/appointments");
 const bookingRequestsLib = require("./data/booking-requests");
@@ -11405,6 +11406,11 @@ try {
   runStockImportOnce(my2016Filters.AIR_IMPORT_ID, my2016Filters.applyAirToStock);
 } catch (err) {
   console.error("Could not import My2016 consignment air filters:", err);
+}
+try {
+  runStockImportOnce(topstarBrakePads.IMPORT_ID, topstarBrakePads.applyToStock);
+} catch (err) {
+  console.error("Could not import Topstar consignment brake pads:", err);
 }
 try {
   runStockImportOnce("tyre-sell-website-formula-2026-11", (items) => {
