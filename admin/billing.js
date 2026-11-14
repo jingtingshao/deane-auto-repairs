@@ -1069,26 +1069,14 @@ function suggestedConsumablePrice() {
   return consumableDefaultExcl(repairExclForConsumable(lineRows));
 }
 
-function plusCalendarMonths(iso, months) {
-  const parts = String(iso || "")
-    .slice(0, 10)
-    .split("-")
-    .map(Number);
-  if (parts.length < 3 || !parts[0]) return "";
-  let year = parts[0];
-  let month = parts[1] + Number(months || 0);
-  let day = parts[2];
-  while (month > 12) {
-    month -= 12;
-    year += 1;
-  }
-  while (month < 1) {
-    month += 12;
-    year -= 1;
-  }
-  const last = new Date(year, month, 0).getDate();
-  if (day > last) day = last;
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+function plusDays(iso, days) {
+  const raw = String(iso || "").slice(0, 10);
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return "";
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (Number.isNaN(d.getTime())) return "";
+  d.setUTCDate(d.getUTCDate() + Number(days || 0));
+  return d.toISOString().slice(0, 10);
 }
 
 function invoiceLinesHaveWof() {
@@ -1098,7 +1086,7 @@ function invoiceLinesHaveWof() {
 function syncWofExpiryField() {
   const fieldset = document.getElementById("billing-wof-expiry-fieldset");
   const input = document.getElementById("billing-wof-expiry");
-  const plusBtns = document.querySelectorAll("[data-wof-months]");
+  const plusBtns = document.querySelectorAll("[data-wof-days]");
   const show = currentBill?.kind === "invoice" && currentBill.status !== "void" && invoiceLinesHaveWof();
   if (fieldset) fieldset.hidden = !show;
   const editable = show && canEditCustomer(currentBill);
@@ -1932,12 +1920,12 @@ document.getElementById("billing-wof-expiry")?.addEventListener("change", () => 
   if (!canEditCustomer(currentBill)) return;
   scheduleBillAutosave();
 });
-document.querySelectorAll("[data-wof-months]").forEach((btn) => {
+document.querySelectorAll("[data-wof-days]").forEach((btn) => {
   btn.addEventListener("click", () => {
     if (!canEditCustomer(currentBill)) return;
     const input = document.getElementById("billing-wof-expiry");
     if (!input) return;
-    input.value = plusCalendarMonths(Admin.todayIso(), Number(btn.dataset.wofMonths) || 12);
+    input.value = plusDays(Admin.todayIso(), Number(btn.dataset.wofDays) || 364);
     scheduleBillAutosave();
   });
 });
