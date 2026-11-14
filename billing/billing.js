@@ -60,7 +60,6 @@ function todayIsoNz() {
 }
 
 function invoiceIssueIso(doc) {
-  if (doc.status === "draft") return todayIsoNz();
   const raw = String(doc.issuedAt || doc.sentAt || doc.createdAt || "").slice(0, 10);
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
   return todayIsoNz();

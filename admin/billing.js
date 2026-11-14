@@ -81,7 +81,7 @@ function canEditCustomer(doc) {
 }
 
 function setBillingFieldsEditable(editable) {
-  ["notes", "validUntil"].forEach((name) => {
+  ["notes", "validUntil", "issuedAt"].forEach((name) => {
     const el = billingInput(name);
     if (!el) return;
     el.readOnly = !editable;
@@ -1439,6 +1439,7 @@ function collectBill() {
   };
   if (currentBill?.jobId) payload.jobId = currentBill.jobId;
   if (currentBill?.kind === "invoice") {
+    payload.issuedAt = billingInput("issuedAt")?.value || "";
     payload.payments = paymentRows.map((p) => ({ ...p }));
     payload.wofExpiry = invoiceLinesHaveWof()
       ? String(document.getElementById("billing-wof-expiry")?.value || "").trim()
@@ -1921,6 +1922,11 @@ document.getElementById("billing-plate-find")?.addEventListener("keydown", (even
   if (event.key === "Enter") event.preventDefault();
 });
 billingForm?.addEventListener("submit", (event) => event.preventDefault());
+
+document.getElementById("billing-field-issuedAt")?.addEventListener("change", () => {
+  if (!currentBill || currentBill.kind !== "invoice" || !canEditCustomer(currentBill)) return;
+  scheduleBillAutosave();
+});
 
 document.getElementById("billing-wof-expiry")?.addEventListener("change", () => {
   if (!canEditCustomer(currentBill)) return;

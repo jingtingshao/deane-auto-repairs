@@ -351,8 +351,26 @@ async function integrationTests(base, dataDir) {
     assert.equal(preview.data.number, inv.number);
     assert.equal(preview.data.kind, "invoice");
     pass("draft invoice preview URL with view token");
+
+    const customDate = "2026-10-05";
+    const updated = await api(base, cookie, "PUT", `/api/billing/${inv.id}`, {
+      customerId: customerA.id,
+      customerName: "Smoke Alpha",
+      customerEmail: "shared.smoke@example.com",
+      customerPhone: "0211111001",
+      registration: "SMK001",
+      vehicle: "Toyota",
+      issuedAt: customDate,
+      lines: inv.lines,
+    });
+    assert.equal(updated.res.status, 200, updated.data?.error || updated.text);
+    assert.equal(updated.data.issuedAt, customDate);
+    const reloaded = await api(base, cookie, "GET", `/api/billing/${inv.id}`);
+    assert.equal(reloaded.res.status, 200, reloaded.data?.error || reloaded.text);
+    assert.equal(reloaded.data.issuedAt, customDate);
+    pass("invoice issuedAt can be changed and saved");
   } catch (err) {
-    fail("draft invoice preview URL with view token", err);
+    fail("draft invoice preview URL with view token / issuedAt edit", err);
   }
 
   try {
