@@ -5,6 +5,7 @@ const path = require("path");
 const PDFDocument = require("pdfkit");
 const catalog = require("./catalog");
 const business = require("./business");
+const referrals = require("./referrals");
 const { logoPath } = require("./customer-email");
 const { todayIso } = require("./nz-time");
 const {
@@ -61,6 +62,10 @@ function buildBillingPdf(doc) {
       const left = pdf.page.margins.left;
       const totals = catalog.computeDocTotals(doc);
       const isInvoice = doc.kind === "invoice";
+      const payment = isInvoice
+        ? referrals.invoicePaymentSummary(doc, totals)
+        : null;
+      const paidInFull = Boolean(payment?.paidInFull);
       const title = isInvoice ? "Tax Invoice" : "Quote";
       const SIGN_NAVY = "#021534";
       const SIGN_YELLOW = "#e9a305";
@@ -212,24 +217,31 @@ function buildBillingPdf(doc) {
       }
 
       function payFooterHeight() {
-        const terms = business.paymentTerms || [];
         let h = 8;
         pdf.font("Helvetica-Bold").fontSize(11);
         h += pdf.currentLineHeight() + 4;
         pdf.font("Helvetica").fontSize(10);
-        h +=
-          pdf.heightOfString(`Bank account name: ${business.bankAccountName}`, {
-            width: pageWidth,
-          }) + 2;
-        h +=
-          pdf.heightOfString(`Bank account number: ${business.bankAccount}`, {
-            width: pageWidth,
-          }) + 8;
-        pdf.font("Helvetica-Bold").fontSize(10);
-        h += pdf.currentLineHeight() + 4;
-        pdf.font("Helvetica").fontSize(10);
-        for (const line of terms) {
-          h += pdf.heightOfString(`• ${line}`, { width: pageWidth }) + 2;
+        if (paidInFull) {
+          h +=
+            pdf.heightOfString("Nothing to pay — payment received. Thank you.", {
+              width: pageWidth,
+            }) + 4;
+        } else {
+          const terms = business.paymentTerms || [];
+          h +=
+            pdf.heightOfString(`Bank account name: ${business.bankAccountName}`, {
+              width: pageWidth,
+            }) + 2;
+          h +=
+            pdf.heightOfString(`Bank account number: ${business.bankAccount}`, {
+              width: pageWidth,
+            }) + 8;
+          pdf.font("Helvetica-Bold").fontSize(10);
+          h += pdf.currentLineHeight() + 4;
+          pdf.font("Helvetica").fontSize(10);
+          for (const line of terms) {
+            h += pdf.heightOfString(`• ${line}`, { width: pageWidth }) + 2;
+          }
         }
         if (!isInvoice) {
           pdf.font("Helvetica").fontSize(9);
@@ -294,21 +306,30 @@ function buildBillingPdf(doc) {
           .lineWidth(1)
           .stroke();
         y += 8;
-        pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(11);
-        pdf.text("How to pay", left, y, { width: pageWidth });
-        pdf.fillColor("#1a2332").font("Helvetica").fontSize(10);
-        pdf.text(`Bank account name: ${business.bankAccountName}`, left, pdf.y, {
-          width: pageWidth,
-        });
-        pdf.text(`Bank account number: ${business.bankAccount}`, left, pdf.y, {
-          width: pageWidth,
-        });
-        pdf.moveDown(0.35);
-        pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(10);
-        pdf.text("Payment terms", left, pdf.y, { width: pageWidth });
-        pdf.fillColor("#1a2332").font("Helvetica").fontSize(10);
-        for (const line of business.paymentTerms || []) {
-          pdf.text(`• ${line}`, left, pdf.y, { width: pageWidth });
+        if (paidInFull) {
+          pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(11);
+          pdf.text("Payment", left, y, { width: pageWidth });
+          pdf.fillColor("#1a2332").font("Helvetica-Bold").fontSize(10);
+          pdf.text("Nothing to pay — payment received. Thank you.", left, pdf.y, {
+            width: pageWidth,
+          });
+        } else {
+          pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(11);
+          pdf.text("How to pay", left, y, { width: pageWidth });
+          pdf.fillColor("#1a2332").font("Helvetica").fontSize(10);
+          pdf.text(`Bank account name: ${business.bankAccountName}`, left, pdf.y, {
+            width: pageWidth,
+          });
+          pdf.text(`Bank account number: ${business.bankAccount}`, left, pdf.y, {
+            width: pageWidth,
+          });
+          pdf.moveDown(0.35);
+          pdf.fillColor("#0d47a1").font("Helvetica-Bold").fontSize(10);
+          pdf.text("Payment terms", left, pdf.y, { width: pageWidth });
+          pdf.fillColor("#1a2332").font("Helvetica").fontSize(10);
+          for (const line of business.paymentTerms || []) {
+            pdf.text(`• ${line}`, left, pdf.y, { width: pageWidth });
+          }
         }
         if (!isInvoice) {
           pdf.moveDown(0.45);
@@ -369,7 +390,14 @@ function buildBillingPdf(doc) {
           pdf.heightOfString(String(doc.notes).trim(), { width: pageWidth });
       }
       const discountRows = Number(totals.discountIncl) > 0 ? 14 : 0;
-      ensureSpaceAboveFooter(90 + notesHeight + discountRows);
+      const paymentRows =
+        isInvoice && payment
+          ? 14 +
+            (payment.amountPaid > 0 ? 14 : 0) +
+            (payment.referralCreditTotal > 0 ? 14 : 0) +
+            14
+          : 0;
+      ensureSpaceAboveFooter(90 + notesHeight + discountRows + paymentRows);
       const totalsLabelX = cols.price;
       pdf
         .moveTo(totalsLabelX, pdf.y)
@@ -400,6 +428,19 @@ function buildBillingPdf(doc) {
       }
       row("GST (15%)", money(totals.gst));
       row("Total incl. GST", money(totals.totalIncl), true);
+      if (isInvoice && payment) {
+        if (payment.amountPaid > 0) {
+          row("Amount paid", `−${money(payment.amountPaid)}`);
+        }
+        if (payment.referralCreditTotal > 0) {
+          row("Referral credits", `−${money(payment.referralCreditTotal)}`);
+        }
+        row(
+          paidInFull ? "Nothing to pay" : "Balance due",
+          money(payment.balanceDue),
+          true
+        );
+      }
       pdf.x = left;
 
       if (doc.notes) {
