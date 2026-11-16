@@ -76,11 +76,15 @@ function isServiceOrLabourLine(description) {
   return isPackageServiceLine(d) || isLabourLine(d);
 }
 
+function isStewardshipLine(description) {
+  return /stewardship/i.test(String(description || ""));
+}
+
 /** Invoice lines that must not become job card parts. */
 function isNonPartInvoiceLine(description) {
   const d = String(description || "").trim();
   if (!d) return true;
-  return isServiceOrLabourLine(d) || isConsumableLine(d);
+  return isServiceOrLabourLine(d) || isConsumableLine(d) || isStewardshipLine(d);
 }
 
 function normalizePart(part = {}, idFallback = "") {

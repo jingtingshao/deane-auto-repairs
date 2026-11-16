@@ -9201,12 +9201,17 @@ app.post("/api/jobs/quick-cash", requireAdmin, (req, res) => {
       };
       const lines = normalizeLines([
         line,
-        ...stockParts.map(({ item, qty }) => ({
-          description: stockLineDescription(item),
-          qty,
-          ...catalog.stockLinePrice(item.sellPrice),
-          stockItemId: item.id,
-        })),
+        ...stockParts.flatMap(({ item, qty }) => {
+          const description = stockLineDescription(item);
+          if (item.category !== "tyre") {
+            return [{ description, qty, ...catalog.stockLinePrice(item.sellPrice), stockItemId: item.id }];
+          }
+          const split = catalog.tyreSaleSplit(item.sellPrice);
+          return [
+            { description, qty, ...split.tyre, stockItemId: item.id },
+            { description: "Tyre stewardship fee", qty, ...split.fee },
+          ];
+        }),
       ]);
       invoice = {
         id: randomUUID(),
@@ -9616,12 +9621,36 @@ function addJobPartsToInvoiceLines(invoice, parts) {
     const key = invoiceLineKey(description);
     if (lines.some((line) => invoiceLineKey(line.description) === key)) continue;
     const qty = Number(part.qty);
-    lines.push({
-      id: randomUUID(),
-      description: catalog.capitalizeLineDescription(description),
-      qty: Number.isFinite(qty) && qty > 0 ? qty : 1,
-      ...catalog.stockLinePrice(part.sellPrice),
-    });
+    const lineQty = Number.isFinite(qty) && qty > 0 ? qty : 1;
+    const stockItem = resolveJobStockItem(readInventoryItems(), part);
+    if (stockItem?.category === "tyre") {
+      const split = catalog.tyreSaleSplit(part.sellPrice);
+      lines.push({
+        id: randomUUID(),
+        description: catalog.capitalizeLineDescription(description),
+        qty: lineQty,
+        ...split.tyre,
+        stockItemId: stockItem.id,
+      });
+      if (!lines.some((line) => invoiceLineKey(line.description) === "tyre stewardship fee")) {
+        lines.push({
+          id: randomUUID(),
+          description: "Tyre stewardship fee",
+          qty: lineQty,
+          ...split.fee,
+        });
+      } else {
+        const feeLine = lines.find((line) => invoiceLineKey(line.description) === "tyre stewardship fee");
+        if (feeLine) feeLine.qty = (Number(feeLine.qty) || 0) + lineQty;
+      }
+    } else {
+      lines.push({
+        id: randomUUID(),
+        description: catalog.capitalizeLineDescription(description),
+        qty: lineQty,
+        ...catalog.stockLinePrice(part.sellPrice),
+      });
+    }
     added += 1;
   }
   if (!added) return 0;
@@ -10044,6 +10073,48 @@ app.put("/api/supplier-invoices/:invoiceId", requireOwnerAdmin, (req, res) => {
   }
 });
 
+function unlinkUploadRef(ref, stillUsed) {
+  if (stillUsed.has(ref)) return;
+  const name = path.basename(String(ref || ""));
+  if (!name || name === "." || name === "..") return;
+  const filePath = path.join(UPLOADS_DIR, name);
+  if (path.dirname(filePath) !== UPLOADS_DIR) return;
+  fs.unlink(filePath, () => {});
+}
+
+app.delete("/api/supplier-invoices/:invoiceId/images", requireOwnerAdmin, (req, res) => {
+  try {
+    const ref = String(req.body?.ref || "").trim();
+    if (!ref.startsWith("/uploads/")) {
+      return res.status(400).json({ error: "Choose a photo to remove." });
+    }
+    const rows = readSupplierInvoices();
+    const index = rows.findIndex((row) => row.id === req.params.invoiceId);
+    if (index < 0) return res.status(404).json({ error: "Supplier invoice not found" });
+    const before = normalizeSupplierInvoice(rows[index]);
+    const refs = (before.imageRefs || []).map((item) => String(item || "").trim()).filter(Boolean);
+    const removeAt = refs.indexOf(ref);
+    if (removeAt < 0) return res.status(404).json({ error: "That photo is not on this invoice." });
+    refs.splice(removeAt, 1);
+    const next = normalizeSupplierInvoice({
+      ...rows[index],
+      imageRefs: refs,
+      updatedAt: nowIso(),
+      updatedBy: nowActor(req),
+    });
+    rows[index] = next;
+    writeSupplierInvoices(rows);
+    const stillUsed = new Set(
+      rows.flatMap((row) => (Array.isArray(row.imageRefs) ? row.imageRefs : []))
+    );
+    unlinkUploadRef(ref, stillUsed);
+    writePartAudit("supplierInvoice", next.id, "update", before, next, req, "photo removed");
+    res.json(next);
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
 app.delete("/api/supplier-invoices/:invoiceId", requireOwnerAdmin, (req, res) => {
   const rows = readSupplierInvoices();
   const index = rows.findIndex((row) => row.id === req.params.invoiceId);
@@ -10056,14 +10127,7 @@ app.delete("/api/supplier-invoices/:invoiceId", requireOwnerAdmin, (req, res) =>
   const stillUsed = new Set(
     remaining.flatMap((row) => (Array.isArray(row.imageRefs) ? row.imageRefs : []))
   );
-  for (const ref of invoice.imageRefs || []) {
-    if (stillUsed.has(ref)) continue;
-    const name = path.basename(String(ref || ""));
-    if (!name || name === "." || name === "..") continue;
-    const filePath = path.join(UPLOADS_DIR, name);
-    if (path.dirname(filePath) !== UPLOADS_DIR) continue;
-    fs.unlink(filePath, () => {});
-  }
+  for (const ref of invoice.imageRefs || []) unlinkUploadRef(ref, stillUsed);
   writePartAudit("supplierInvoice", invoice.id, "delete", invoice, null, req, "invoice deleted");
   res.json({ ok: true });
 });

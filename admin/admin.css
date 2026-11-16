@@ -1030,36 +1030,57 @@ label.check input {
 }
 
 .supplier-preview-tile {
+  position: relative;
+  width: 160px;
+  min-height: 110px;
+}
+
+.supplier-preview-open {
   display: block;
+  width: 100%;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #f7f8fb;
   overflow: hidden;
   cursor: zoom-in;
-  width: 160px;
-  min-height: 110px;
 }
 
-.supplier-preview-tile img {
+.supplier-preview-open img {
   display: block;
   width: 160px;
   height: 110px;
   object-fit: cover;
 }
 
-.supplier-preview-tile.is-pdf {
+.supplier-preview-open.is-pdf {
   display: grid;
   place-content: center;
   gap: 0.2rem;
+  min-height: 110px;
   text-align: center;
   font-weight: 700;
   color: var(--blue);
 }
 
-.supplier-preview-tile.is-pdf small {
+.supplier-preview-open.is-pdf small {
   font-weight: 500;
   color: var(--muted);
+}
+
+.supplier-preview-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--red);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
 .supplier-invoice-lightbox {

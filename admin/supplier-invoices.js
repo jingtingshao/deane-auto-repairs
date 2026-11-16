@@ -673,20 +673,42 @@ function renderInvoicePreview(invoice) {
   }
   photosEl.innerHTML = items
     .map((src) => {
-      if (isPdfRef(src)) {
-        return `<button type="button" class="supplier-preview-tile is-pdf" data-preview-src="${Admin.escapeAttr(src)}">
+      const open = isPdfRef(src)
+        ? `<button type="button" class="supplier-preview-open is-pdf" data-preview-src="${Admin.escapeAttr(src)}">
             <span>PDF</span>
             <small>Tap to open</small>
+          </button>`
+        : `<button type="button" class="supplier-preview-open" data-preview-src="${Admin.escapeAttr(src)}">
+            <img src="${Admin.escapeAttr(src)}" alt="Supplier invoice" />
           </button>`;
-      }
-      return `<button type="button" class="supplier-preview-tile" data-preview-src="${Admin.escapeAttr(src)}">
-          <img src="${Admin.escapeAttr(src)}" alt="Supplier invoice" />
-        </button>`;
+      return `<div class="supplier-preview-tile${isPdfRef(src) ? " is-pdf" : ""}">
+          ${open}
+          <button type="button" class="supplier-preview-remove" data-remove-src="${Admin.escapeAttr(src)}">Remove</button>
+        </div>`;
     })
     .join("");
   photosEl.querySelectorAll("[data-preview-src]").forEach((btn) => {
     btn.addEventListener("click", () => openInvoiceLightbox(btn.dataset.previewSrc));
   });
+  photosEl.querySelectorAll("[data-remove-src]").forEach((btn) => {
+    btn.addEventListener("click", () => removeInvoicePhoto(btn.dataset.removeSrc));
+  });
+}
+
+async function removeInvoicePhoto(src) {
+  if (!current?.id || !src || readingInvoice) return;
+  if (!confirm("Remove this photo? Part lines already read from it stay. Delete those lines if they came from this photo.")) return;
+  try {
+    const invoice = await Admin.api(`/api/supplier-invoices/${current.id}/images`, {
+      method: "DELETE",
+      body: JSON.stringify({ ref: src }),
+    });
+    current = invoice;
+    renderInvoicePreview(current);
+    showStatus("Photo removed.");
+  } catch (err) {
+    alert(err.message || "Could not remove this photo.");
+  }
 }
 
 const READ_LIMIT_PER_PAGE_MS = 100 * 1000;

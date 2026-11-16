@@ -59,6 +59,8 @@ function capitalizeLineDescription(value) {
 
 const LABOUR_DEFAULT_EXCL = 100;
 const labourDefaultedIds = new Set();
+const TYRE_STEWARDSHIP_EXCL = 6.65;
+const tyreFeeLineIds = new Map();
 
 function isPlainLabourDescription(value) {
   return /^labou?r$/i.test(String(value || "").trim());
@@ -1240,6 +1242,7 @@ function renderLines() {
         }
       } else if (field === "qty") {
         line.qty = Number(input.value) || 0;
+        syncTyreFeeQty(line);
       } else {
         line[field] = input.value;
         if (field === "description") applyLabourDefault(line, row);
@@ -1261,7 +1264,14 @@ function renderLines() {
   billingLinesEl.querySelectorAll("[data-remove]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const index = Number(btn.dataset.remove);
-      lineRows.splice(index, 1);
+      const line = lineRows[index];
+      const removeIds = new Set(line?.id ? [line.id] : []);
+      const fee = line ? pairedFeeLine(line) : null;
+      if (fee?.id) removeIds.add(fee.id);
+      for (const [tyreId, id] of tyreFeeLineIds) {
+        if (tyreId === line?.id || id === line?.id || id === fee?.id) tyreFeeLineIds.delete(tyreId);
+      }
+      lineRows = lineRows.filter((row) => !removeIds.has(row.id));
       if (!lineRows.length) lineRows = [newLine()];
       renderLines();
       scheduleBillAutosave();
@@ -2219,24 +2229,77 @@ function wholeDollarIncl(excl) {
   return dollars > 0 && Math.abs(incl - dollars) < 0.01 ? dollars : 0;
 }
 
+function tyreSaleSplit(sellExcl) {
+  const incl = wholeDollarIncl(sellExcl);
+  const priced = incl
+    ? { unitPriceIncl: exclFromIncl(incl), gstInclUnit: incl }
+    : { unitPriceIncl: round2(Math.max(0, Number(sellExcl) || 0)), gstInclUnit: 0 };
+  const feeIncl = round2(TYRE_STEWARDSHIP_EXCL * 1.15);
+  const fee = { unitPriceIncl: exclFromIncl(feeIncl), gstInclUnit: feeIncl };
+  if (priced.gstInclUnit > feeIncl) {
+    const tyreIncl = round2(priced.gstInclUnit - feeIncl);
+    return { tyre: { unitPriceIncl: exclFromIncl(tyreIncl), gstInclUnit: tyreIncl }, fee };
+  }
+  return {
+    tyre: {
+      unitPriceIncl: round2(Math.max(0, Number(priced.unitPriceIncl) - TYRE_STEWARDSHIP_EXCL)),
+      gstInclUnit: 0,
+    },
+    fee: { unitPriceIncl: TYRE_STEWARDSHIP_EXCL, gstInclUnit: 0 },
+  };
+}
+
+function pairedFeeLine(tyreLine) {
+  const feeId = tyreFeeLineIds.get(tyreLine?.id);
+  if (feeId) {
+    const linked = lineRows.find((row) => row.id === feeId);
+    if (linked) return linked;
+    tyreFeeLineIds.delete(tyreLine.id);
+  }
+  const index = lineRows.indexOf(tyreLine);
+  const next = lineRows[index + 1];
+  if (next && /^tyre stewardship fee$/i.test(String(next.description || "").trim())) return next;
+  return null;
+}
+
+function syncTyreFeeQty(tyreLine) {
+  const fee = pairedFeeLine(tyreLine);
+  if (!fee) return;
+  fee.qty = tyreLine.qty;
+  const index = lineRows.indexOf(fee);
+  const feeQty = billingLinesEl?.querySelector(`tr[data-index="${index}"] [data-field="qty"]`);
+  if (feeQty) feeQty.value = String(fee.qty);
+  const totalCell = billingLinesEl?.querySelector(`tr[data-index="${index}"] .total`);
+  if (totalCell) totalCell.textContent = money(lineAmounts(fee).totalIncl);
+}
+
 function addLineFromStock(item) {
   if (!canEditLines(currentBill)) return;
   const description = [item?.name, item?.partNumber].filter(Boolean).join(" ");
   const sell = Number(item?.sellPrice) || 0;
   const incl = wholeDollarIncl(sell);
+  const split = item?.category === "tyre" ? tyreSaleSplit(sell) : null;
   const line = newLine({
     description,
     qty: 1,
-    unitPriceIncl: incl ? exclFromIncl(incl) : sell,
-    gstInclUnit: incl,
+    unitPriceIncl: split ? split.tyre.unitPriceIncl : incl ? exclFromIncl(incl) : sell,
+    gstInclUnit: split ? split.tyre.gstInclUnit : incl,
     stockItemId: item?.id || "",
   });
+  const feeLine = split
+    ? newLine({
+        description: "Tyre stewardship fee",
+        qty: 1,
+        unitPriceIncl: split.fee.unitPriceIncl,
+        gstInclUnit: split.fee.gstInclUnit,
+      })
+    : null;
+  if (feeLine) tyreFeeLineIds.set(line.id, feeLine.id);
   const last = lineRows[lineRows.length - 1];
-  if (last && !String(last.description || "").trim() && !(Number(last.unitPriceIncl) > 0)) {
-    lineRows[lineRows.length - 1] = line;
-  } else {
-    lineRows.push(line);
-  }
+  const replaceBlank = last && !String(last.description || "").trim() && !(Number(last.unitPriceIncl) > 0);
+  if (replaceBlank) lineRows.pop();
+  lineRows.push(line);
+  if (feeLine) lineRows.push(feeLine);
   renderLines();
   renderTotals();
   scheduleBillAutosave();

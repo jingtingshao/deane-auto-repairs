@@ -87,6 +87,32 @@ function stockLinePrice(sellExcl) {
     : { unitPriceIncl: round2(Math.max(0, Number(sellExcl) || 0)), gstInclUnit: 0 };
 }
 
+const TYRE_STEWARDSHIP_EXCL = 6.65;
+
+/**
+ * The stock sell price already includes the Tyrewise fee.
+ * Split it into the tyre line and a $6.65 ex GST stewardship line so the invoice total stays the same.
+ */
+function tyreSaleSplit(sellExcl) {
+  const priced = stockLinePrice(sellExcl);
+  const feeIncl = round2(TYRE_STEWARDSHIP_EXCL * (1 + GST_RATE));
+  const fee = { unitPriceIncl: exclFromIncl(feeIncl), gstInclUnit: feeIncl };
+  if (priced.gstInclUnit > feeIncl) {
+    const tyreIncl = round2(priced.gstInclUnit - feeIncl);
+    return {
+      tyre: { unitPriceIncl: exclFromIncl(tyreIncl), gstInclUnit: tyreIncl },
+      fee,
+    };
+  }
+  return {
+    tyre: {
+      unitPriceIncl: round2(Math.max(0, Number(priced.unitPriceIncl) - TYRE_STEWARDSHIP_EXCL)),
+      gstInclUnit: 0,
+    },
+    fee: { unitPriceIncl: TYRE_STEWARDSHIP_EXCL, gstInclUnit: 0 },
+  };
+}
+
 function lineAmounts(line) {
   const qty = Number(line?.qty) || 0;
   const inclUnit = round2(Number(line?.gstInclUnit) || 0);
@@ -389,6 +415,13 @@ const QUICK_ADDS = [
     unitPriceIncl: PRICE.labourHour,
   },
   {
+    label: "+ Tyre stewardship $6.65",
+    description: "Tyre stewardship fee",
+    qty: 1,
+    unitPriceIncl: exclFromIncl(round2(TYRE_STEWARDSHIP_EXCL * (1 + GST_RATE))),
+    gstInclUnit: round2(TYRE_STEWARDSHIP_EXCL * (1 + GST_RATE)),
+  },
+  {
     id: "consumable",
     label: "+ Consumable",
     description: "Consumable",
@@ -474,6 +507,8 @@ module.exports = {
   advertisedInclFromExcl,
   wholeDollarInclFromExcl,
   stockLinePrice,
+  TYRE_STEWARDSHIP_EXCL,
+  tyreSaleSplit,
   lineAmounts,
   lineTotal,
   unitPriceGstIncl,
