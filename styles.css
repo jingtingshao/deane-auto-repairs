@@ -76,6 +76,86 @@ a[href^="tel:"] {
   top: 1rem;
 }
 
+body.promo-open {
+  overflow: hidden;
+}
+
+.promo-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(2, 21, 52, 0.82);
+}
+
+.promo-modal-card {
+  width: min(440px, 100%);
+  padding: 36px 28px 28px;
+  background: #fff;
+  color: var(--sign-navy);
+  text-align: center;
+  border: 6px solid var(--sign-yellow);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.promo-kicker {
+  margin: 0 0 8px;
+  font: 700 13px / 1 var(--mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #9a6b00;
+}
+
+.promo-modal-card h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(3.2rem, 10vw, 4.6rem);
+  line-height: 0.9;
+  letter-spacing: 0.02em;
+}
+
+.promo-price {
+  margin: 10px 0 0;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(5.5rem, 18vw, 8rem);
+  line-height: 0.85;
+  color: var(--sign-navy);
+}
+
+.promo-until {
+  margin: 12px 0 26px;
+  font: 700 18px / 1.2 var(--mono);
+  letter-spacing: 0.08em;
+}
+
+.promo-close {
+  width: 100%;
+  padding: 14px 18px;
+  border: 0;
+  background: var(--sign-yellow);
+  color: var(--sign-navy);
+  font-family: var(--display);
+  font-size: 1.45rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.promo-close:hover,
+.promo-close:focus-visible {
+  background: #f2b423;
+}
+
+.promo-close:focus-visible {
+  outline: 3px solid var(--sign-navy);
+  outline-offset: 3px;
+}
+
 .hp-field {
   position: absolute;
   left: -9999px;

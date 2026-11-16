@@ -1,6 +1,37 @@
 (() => {
   const FORM_ENDPOINT = "/api/booking";
 
+  const promo = document.querySelector("#wof-promo");
+  if (promo) {
+    const expires = new Date("2027-01-01T00:00:00+13:00");
+    if (Date.now() >= expires.getTime()) {
+      promo.remove();
+      document.body.classList.remove("promo-open");
+    } else {
+      const closeBtn = promo.querySelector("[data-promo-close]");
+      const background = [...document.body.children].filter((el) => el !== promo);
+      background.forEach((el) => el.setAttribute("inert", ""));
+      const closePromo = () => {
+        promo.remove();
+        document.body.classList.remove("promo-open");
+        background.forEach((el) => el.removeAttribute("inert"));
+      };
+      closeBtn.addEventListener("click", closePromo);
+      promo.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closePromo();
+          return;
+        }
+        if (event.key === "Tab") {
+          event.preventDefault();
+          closeBtn.focus();
+        }
+      });
+      closeBtn.focus();
+    }
+  }
+
   const header = document.querySelector("[data-header]");
   const nav = document.querySelector("[data-nav]");
   const toggle = document.querySelector("[data-nav-toggle]");

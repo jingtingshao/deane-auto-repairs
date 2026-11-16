@@ -35,7 +35,7 @@
       href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Mono:wght@400;500&family=Kaushan+Script&family=Source+Sans+3:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=20261108tyreimg" />
+    <link rel="stylesheet" href="styles.css?v=20261115wof" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -87,7 +87,24 @@
       }
     </script>
   </head>
-  <body>
+  <body class="promo-open">
+    <div
+      class="promo-modal"
+      id="wof-promo"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="wof-promo-title"
+      aria-describedby="wof-promo-until"
+    >
+      <div class="promo-modal-card">
+        <p class="promo-kicker">Limited time</p>
+        <h2 id="wof-promo-title">WOF SPECIAL</h2>
+        <p class="promo-price">$49</p>
+        <p class="promo-until" id="wof-promo-until">TILL 31/12/2026</p>
+        <button class="promo-close" type="button" data-promo-close>Close</button>
+      </div>
+    </div>
+
     <a class="skip-link" href="#main">Skip to content</a>
 
     <header class="site-header" data-header>
@@ -747,6 +764,6 @@
       </div>
     </footer>
 
-    <script src="script.js?v=20261108tyreimg"></script>
+    <script src="script.js?v=20261115wof"></script>
   </body>
 </html>
