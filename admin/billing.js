@@ -57,6 +57,35 @@ function capitalizeLineDescription(value) {
   return lower.charAt(0).toLocaleUpperCase("en-NZ") + lower.slice(1);
 }
 
+const LABOUR_DEFAULT_EXCL = 100;
+const labourDefaultedIds = new Set();
+
+function isPlainLabourDescription(value) {
+  return /^labou?r$/i.test(String(value || "").trim());
+}
+
+/** A line written as Labor or Labour starts at $100 ex GST, until a price is typed. */
+function applyLabourDefault(line, row) {
+  const price = Number(line.unitPriceIncl) || 0;
+  const incl = Number(line.gstInclUnit) || 0;
+  if (isPlainLabourDescription(line.description)) {
+    if (price === 0 && incl === 0) {
+      line.unitPriceIncl = LABOUR_DEFAULT_EXCL;
+      line.gstInclUnit = 0;
+      labourDefaultedIds.add(line.id);
+      const exclInput = row.querySelector('[data-field="unitPriceIncl"]');
+      if (exclInput) exclInput.value = String(LABOUR_DEFAULT_EXCL);
+    }
+    return;
+  }
+  if (labourDefaultedIds.has(line.id) && price === LABOUR_DEFAULT_EXCL && incl === 0) {
+    line.unitPriceIncl = 0;
+    labourDefaultedIds.delete(line.id);
+    const exclInput = row.querySelector('[data-field="unitPriceIncl"]');
+    if (exclInput) exclInput.value = "0";
+  }
+}
+
 function newLine(partial = {}) {
   return {
     id: partial.id || crypto.randomUUID(),
@@ -1199,7 +1228,9 @@ function renderLines() {
           const exclInput = row.querySelector('[data-field="unitPriceIncl"]');
           if (exclInput) exclInput.value = String(line.unitPriceIncl);
         }
+        labourDefaultedIds.delete(line.id);
       } else if (field === "unitPriceIncl") {
+        labourDefaultedIds.delete(line.id);
         line.gstInclUnit = 0;
         line.unitPriceIncl = Number(input.value) || 0;
         const inclInput = row.querySelector('[data-field="gstInclUnit"]');
@@ -1211,6 +1242,7 @@ function renderLines() {
         line.qty = Number(input.value) || 0;
       } else {
         line[field] = input.value;
+        if (field === "description") applyLabourDefault(line, row);
       }
       const totalCell = row.querySelector(".total");
       if (totalCell) totalCell.textContent = money(lineAmounts(line).totalIncl);
