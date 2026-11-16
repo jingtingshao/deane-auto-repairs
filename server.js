@@ -10546,7 +10546,7 @@ app.get("/api/inventory/meta", requireOwnerAdmin, (_req, res) => {
 });
 
 app.get("/api/inventory/suggest", requireOwnerAdmin, (req, res) => {
-  res.json(inventoryLib.suggestPrice(req.query.cost));
+  res.json(inventoryLib.suggestPrice(req.query.cost, req.query.category));
 });
 
 app.get("/api/inventory/suppliers", requireOwnerAdmin, (_req, res) => {
@@ -11416,6 +11416,11 @@ try {
   runStockImportOnce(topstarBrakePads.IMPORT_ID, topstarBrakePads.applyToStock);
 } catch (err) {
   console.error("Could not import Topstar consignment brake pads:", err);
+}
+try {
+  runStockImportOnce("filter-markup-150-2026-11", (items) => inventoryLib.repriceFilters(items));
+} catch (err) {
+  console.error("Could not reprice stock filters:", err);
 }
 try {
   runStockImportOnce("tyre-sell-website-formula-2026-11", (items) => {

@@ -10,6 +10,8 @@
     { max: 500, minPct: 40, maxPct: 50, label: "$250–$500" },
     { max: null, minPct: 25, maxPct: 40, label: "$500+" },
   ];
+  const FILTER_CATEGORIES = new Set(["oil_filter", "air_filter", "cabin_filter"]);
+  const FILTER_MARKUP = 150;
 
   const GUESS_RULES = [
     ["adblue", "adblue"],
@@ -96,12 +98,27 @@
     return `${text}%`;
   }
 
-  function suggestPrice(cost) {
+  function suggestPrice(cost, category) {
     const c = Math.round(Math.max(0, Number(cost) || 0) * 100) / 100;
+    const incl = (amount) => Math.round((amount * 1.15 + Number.EPSILON) * 100) / 100;
+    if (FILTER_CATEGORIES.has(category)) {
+      const sell = c > 0 ? Math.round(c * (1 + FILTER_MARKUP / 100) * 100) / 100 : 0;
+      return {
+        cost: c,
+        band: "Filters",
+        markupMin: FILTER_MARKUP,
+        markupMax: FILTER_MARKUP,
+        sellMin: sell,
+        sellMax: sell,
+        sell,
+        sellMinIncl: incl(sell),
+        sellMaxIncl: incl(sell),
+        sellIncl: incl(sell),
+      };
+    }
     const band = BANDS.find((row) => row.max == null || c <= row.max) || BANDS[BANDS.length - 1];
     const sellMin = c > 0 ? Math.round(c * (1 + band.minPct / 100) * 100) / 100 : 0;
     const sellMax = c > 0 ? Math.round(c * (1 + band.maxPct / 100) * 100) / 100 : 0;
-    const incl = (amount) => Math.round((amount * 1.15 + Number.EPSILON) * 100) / 100;
     return {
       cost: c,
       band: band.label,
@@ -283,8 +300,8 @@
     }
   }
 
-  function guideText(cost, sell, unitKind) {
-    const guide = suggestPrice(cost);
+  function guideText(cost, sell, unitKind, category) {
+    const guide = suggestPrice(cost, category);
     const chosen = Number(sell);
     const sellPrice = Number.isFinite(chosen) ? Math.round(chosen * 100) / 100 : guide.sell;
     const incl = inclPrice(sellPrice);
@@ -294,7 +311,11 @@
         ? "Enter the drum cost and how many litres are in it. The sell price is per litre."
         : "Enter the supplier cost to see the suggested sell price.";
     }
-    return `Markup ${guide.markupMin}–${guide.markupMax}% (${guide.band}). Suggested sell ${money(guide.sellMin)}–${money(guide.sellMax)}${per} ex GST (${money(guide.sellMinIncl)}–${money(guide.sellMaxIncl)} incl). This sell price is ${money(sellPrice)}${per} ex GST, ${money(incl)} incl.`;
+    const rule =
+      guide.markupMin === guide.markupMax
+        ? `Markup ${guide.markupMin}%. Suggested sell ${money(guide.sell)}${per} ex GST (${money(guide.sellIncl)} incl).`
+        : `Markup ${guide.markupMin}–${guide.markupMax}% (${guide.band}). Suggested sell ${money(guide.sellMin)}–${money(guide.sellMax)}${per} ex GST (${money(guide.sellMinIncl)}–${money(guide.sellMaxIncl)} incl).`;
+    return `${rule} This sell price is ${money(sellPrice)}${per} ex GST, ${money(incl)} incl.`;
   }
 
   function receiveUnitKind() {
@@ -351,7 +372,7 @@
 
   function editorSuggestedSell() {
     if (form?.elements?.category?.value === "tyre") return editorTyre()?.sell || 0;
-    return suggestPrice(form.elements.costPrice.value).sell;
+    return suggestPrice(form.elements.costPrice.value, form.elements.category.value).sell;
   }
 
   function receiveTyre() {
@@ -363,7 +384,7 @@
 
   function receiveSuggestedSell() {
     if (receiveForm?.elements?.category?.value === "tyre") return receiveTyre()?.sell || 0;
-    return suggestPrice(receiveShelfCost()).sell;
+    return suggestPrice(receiveShelfCost(), receiveForm.elements.category.value).sell;
   }
 
   function renderGuide() {
@@ -375,7 +396,7 @@
       splitNote +
       (form.elements.category.value === "tyre"
         ? tyreGuideText(editorTyre(), form.elements.sellPrice.value)
-        : guideText(form.elements.costPrice.value, form.elements.sellPrice.value, currentUnit()));
+        : guideText(form.elements.costPrice.value, form.elements.sellPrice.value, currentUnit(), form.elements.category.value));
     const unit = currentUnit();
     const qtyLabel = form.querySelector("[data-qty-label]");
     const costLabel = form.querySelector("[data-cost-label]");
@@ -400,7 +421,7 @@
     let text =
       receiveForm.elements.category.value === "tyre"
         ? tyreGuideText(receiveTyre(), receiveForm.elements.sellPrice.value)
-        : guideText(shelfCost, receiveForm.elements.sellPrice.value, unit);
+        : guideText(shelfCost, receiveForm.elements.sellPrice.value, unit, receiveForm.elements.category.value);
     if (unit === "litre") {
       const litres = Number(receiveForm.elements.qty.value) || 0;
       const drum = Number(receiveForm.elements.costPrice.value) || 0;
@@ -713,14 +734,14 @@
     results.innerHTML = rows
       .slice(0, 8)
       .map((item, index) => {
-        const price = item.price || suggestPrice(item.costPrice);
+        const price = item.price || suggestPrice(item.costPrice, item.category);
         const unit = item.unit === "litre" ? " / L" : "";
         const meta = [item.partNumber, item.fitment, item.supplier, formatQty(item.qtyOnHand, item.unit) + " on hand"]
           .filter(Boolean)
           .join(" · ");
         return `<button type="button" class="stock-result" data-pick="${index}">
           <span><strong>${Admin.escapeHtml(item.name)}</strong><span class="muted small">${Admin.escapeHtml(meta)}</span></span>
-          <span class="stock-sell"><strong>${money(item.sellPrice)}${unit}</strong><span class="muted small">suggested ${money(price.sellMin)}–${money(price.sellMax)} ex GST</span></span>
+          <span class="stock-sell"><strong>${money(item.sellPrice)}${unit}</strong><span class="muted small">${price.markupMin === price.markupMax ? `${price.markupMin}% markup` : `suggested ${money(price.sellMin)}–${money(price.sellMax)} ex GST`}</span></span>
         </button>`;
       })
       .join("");
@@ -887,14 +908,14 @@
     if (isTyre && !editorSplitOpen()) {
       const typed = Number(form.elements.tyrePrice.value) || Number(form.elements.costPrice.value) || 0;
       setEditorSplit(null, { category: "tyre", tyrePrice: typed, fee: TYRE_STEWARDSHIP_EX_GST });
-      if (!sellTouched) {
-        const sell = editorSuggestedSell();
-        form.elements.sellPrice.value = sell ? sell.toFixed(2) : "";
-      }
     } else if (!isTyre && editorSplitOpen()) {
       const tyreOnly = Number(form.elements.tyrePrice.value) || 0;
       setEditorSplit(null);
       if (tyreOnly) form.elements.costPrice.value = roundMoney(tyreOnly).toFixed(2);
+    }
+    if (!sellTouched) {
+      const sell = editorSuggestedSell();
+      form.elements.sellPrice.value = sell ? sell.toFixed(2) : "";
     }
     renderGuide();
   });

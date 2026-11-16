@@ -1,6 +1,6 @@
 /** My2016 consignment filters.
  * Sheet prices are ex GST. Opening qty is 1 of each sort.
- * Retail is the stock markup band minimum, same as Add to stock.
+ * Retail is cost ex GST × 2.5 (150% markup), same as other filters.
  */
 
 const inventoryLib = require("./inventory");
@@ -45,7 +45,7 @@ function stockLine(part) {
     supplier: SUPPLIER,
     fitment: "Cabin filter",
     costPrice: BUY_EX,
-    sellPrice: inventoryLib.suggestPrice(BUY_EX).sell,
+    sellPrice: inventoryLib.suggestPrice(BUY_EX, "cabin_filter").sell,
     qtyOnHand: QTY,
     notes: "Consignment",
   };
@@ -163,7 +163,7 @@ function airStockLine([part, buy]) {
     supplier: SUPPLIER,
     fitment: "Air filter",
     costPrice: buy,
-    sellPrice: inventoryLib.suggestPrice(buy).sell,
+    sellPrice: inventoryLib.suggestPrice(buy, "air_filter").sell,
     qtyOnHand: QTY,
     notes: "Consignment",
   };

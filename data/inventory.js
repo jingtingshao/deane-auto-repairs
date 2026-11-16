@@ -32,6 +32,10 @@ const BANDS = [
   { max: null, minPct: 25, maxPct: 40, label: "$500+" },
 ];
 
+/** Oil, air, and cabin filters sell at one markup, not the cost bands. */
+const FILTER_CATEGORIES = new Set(["oil_filter", "air_filter", "cabin_filter"]);
+const FILTER_MARKUP = 150;
+
 const GST_RATE = 0.15;
 const tyreStewardship = require("./tyre-stewardship");
 const tyrePrices = require("./tyre-prices");
@@ -118,8 +122,28 @@ function bandFor(cost) {
   return BANDS[BANDS.length - 1];
 }
 
-function suggestPrice(cost) {
+function isFilterCategory(category) {
+  return FILTER_CATEGORIES.has(category);
+}
+
+function suggestPrice(cost, category) {
   const c = roundMoney(Math.max(0, Number(cost) || 0));
+  if (isFilterCategory(category)) {
+    const sell = c > 0 ? roundMoney(c * (1 + FILTER_MARKUP / 100)) : 0;
+    const incl = roundMoney(sell * (1 + GST_RATE));
+    return {
+      cost: c,
+      band: "Filters",
+      markupMin: FILTER_MARKUP,
+      markupMax: FILTER_MARKUP,
+      sellMin: sell,
+      sellMax: sell,
+      sell,
+      sellMinIncl: incl,
+      sellMaxIncl: incl,
+      sellIncl: incl,
+    };
+  }
   const band = bandFor(c);
   const sellMin = c > 0 ? roundMoney(c * (1 + band.minPct / 100)) : 0;
   const sellMax = c > 0 ? roundMoney(c * (1 + band.maxPct / 100)) : 0;
@@ -135,6 +159,19 @@ function suggestPrice(cost) {
     sellMaxIncl: roundMoney(sellMax * (1 + GST_RATE)),
     sellIncl: roundMoney(sellMin * (1 + GST_RATE)),
   };
+}
+
+/** Set every oil, air, and cabin filter to cost × 2.5. Other stock is left alone. */
+function repriceFilters(items) {
+  const updated = [];
+  for (const item of items || []) {
+    if (!isFilterCategory(item?.category)) continue;
+    const sell = suggestPrice(item.costPrice, item.category).sell;
+    if (!(Number(item.costPrice) > 0) || sell === item.sellPrice) continue;
+    item.sellPrice = sell;
+    updated.push(item.partNumber || item.name);
+  }
+  return { added: [], updated };
 }
 
 function guessCategory(text) {
@@ -159,7 +196,7 @@ function normalizeItem(raw) {
     sellRaw == null || sellRaw === ""
       ? category?.id === "tyre"
         ? tyreSellPrice({ ...split, costPrice })
-        : suggestPrice(costPrice).sell
+        : suggestPrice(costPrice, category?.id).sell
       : roundMoney(Math.max(0, Number(sellRaw) || 0));
   return {
     id: cleanText(raw?.id, 80),
@@ -183,7 +220,7 @@ function normalizeItem(raw) {
 
 function presentItem(item) {
   const category = categoryById(item.category);
-  let price = suggestPrice(item.costPrice);
+  let price = suggestPrice(item.costPrice, item.category);
   if (item.category === "tyre") {
     const sell = tyreSellPrice(item);
     const incl = roundMoney(sell * (1 + GST_RATE));
@@ -587,11 +624,14 @@ function applyAdjust(item, input, now) {
 module.exports = {
   CATEGORIES,
   BANDS,
+  FILTER_MARKUP,
   GST_RATE,
   stockError,
   roundMoney,
   categoryById,
+  isFilterCategory,
   suggestPrice,
+  repriceFilters,
   setTyreSettings,
   tyreSellPrice,
   guessCategory,
