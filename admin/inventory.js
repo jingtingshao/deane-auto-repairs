@@ -14,7 +14,7 @@
     oil_filter: 150,
     air_filter: 150,
     cabin_filter: 150,
-    brake_pad: 150,
+    brake_pad: 200,
     wiper_blade: 200,
   };
 

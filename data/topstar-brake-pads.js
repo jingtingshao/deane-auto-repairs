@@ -1,7 +1,7 @@
 /** Topstar brake pads consignment (Jap + Euro), lists dated 15/10/2026.
  * Buy: Jap $25 incl GST → ex GST below; Euro from $30+ (tiers $30/$35/$40/$45 not mapped per part).
  * Qty is sets on the consignment sheets. Parts on both lists are one SKU (fitment merged, qty max).
- * Retail is cost ex GST × 2.5 (150% markup).
+ * Retail is cost ex GST × 3 (200% markup).
  */
 
 const inventoryLib = require("./inventory");

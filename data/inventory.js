@@ -41,7 +41,7 @@ const FIXED_MARKUP = {
   oil_filter: 150,
   air_filter: 150,
   cabin_filter: 150,
-  brake_pad: 150,
+  brake_pad: 200,
   wiper_blade: 200,
 };
 
@@ -200,7 +200,7 @@ function repriceFilters(items) {
   return repriceCategory(items, isFilterCategory);
 }
 
-/** Set every brake pad to cost × 2.5. Other stock is left alone. */
+/** Set every brake pad to cost × 3. Other stock is left alone. */
 function repriceBrakePads(items) {
   return repriceCategory(items, (category) => category === BRAKE_PAD_CATEGORY);
 }

@@ -11428,6 +11428,11 @@ try {
   console.error("Could not reprice stock brake pads:", err);
 }
 try {
+  runStockImportOnce("brake-pad-markup-200-2026-11", (items) => inventoryLib.repriceBrakePads(items));
+} catch (err) {
+  console.error("Could not reprice stock brake pads:", err);
+}
+try {
   runStockImportOnce("wiper-markup-200-2026-11", (items) => inventoryLib.repriceWipers(items));
 } catch (err) {
   console.error("Could not reprice stock wiper blades:", err);
