@@ -10,8 +10,13 @@
     { max: 500, minPct: 40, maxPct: 50, label: "$250–$500" },
     { max: null, minPct: 25, maxPct: 40, label: "$500+" },
   ];
-  const FILTER_CATEGORIES = new Set(["oil_filter", "air_filter", "cabin_filter"]);
-  const FILTER_MARKUP = 150;
+  const FIXED_MARKUP = {
+    oil_filter: 150,
+    air_filter: 150,
+    cabin_filter: 150,
+    brake_pad: 150,
+    wiper_blade: 200,
+  };
 
   const GUESS_RULES = [
     ["adblue", "adblue"],
@@ -101,13 +106,15 @@
   function suggestPrice(cost, category) {
     const c = Math.round(Math.max(0, Number(cost) || 0) * 100) / 100;
     const incl = (amount) => Math.round((amount * 1.15 + Number.EPSILON) * 100) / 100;
-    if (FILTER_CATEGORIES.has(category)) {
-      const sell = c > 0 ? Math.round(c * (1 + FILTER_MARKUP / 100) * 100) / 100 : 0;
+    const fixed = FIXED_MARKUP[category];
+    if (Number.isFinite(fixed)) {
+      const sell = c > 0 ? Math.round(c * (1 + fixed / 100) * 100) / 100 : 0;
+      const band = category === "brake_pad" ? "Brake pads" : category === "wiper_blade" ? "Wiper blades" : "Filters";
       return {
         cost: c,
-        band: "Filters",
-        markupMin: FILTER_MARKUP,
-        markupMax: FILTER_MARKUP,
+        band,
+        markupMin: fixed,
+        markupMax: fixed,
         sellMin: sell,
         sellMax: sell,
         sell,

@@ -1,7 +1,7 @@
 /** Topstar brake pads consignment (Jap + Euro), lists dated 15/10/2026.
  * Buy: Jap $25 incl GST → ex GST below; Euro from $30+ (tiers $30/$35/$40/$45 not mapped per part).
  * Qty is sets on the consignment sheets. Parts on both lists are one SKU (fitment merged, qty max).
- * Retail is the stock markup band minimum, same as Add to stock.
+ * Retail is cost ex GST × 2.5 (150% markup).
  */
 
 const inventoryLib = require("./inventory");
@@ -272,7 +272,7 @@ function stockLine([part, application, qty, range]) {
     supplier: SUPPLIER,
     fitment: `${rangeLabel(range)} · ${application}`,
     costPrice: buy,
-    sellPrice: inventoryLib.suggestPrice(buy).sell,
+    sellPrice: inventoryLib.suggestPrice(buy, "brake_pad").sell,
     qtyOnHand: qty,
     notes: "Consignment · set",
   };

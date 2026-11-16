@@ -32,9 +32,18 @@ const BANDS = [
   { max: null, minPct: 25, maxPct: 40, label: "$500+" },
 ];
 
-/** Oil, air, and cabin filters sell at one markup, not the cost bands. */
+/** These categories sell at one markup, not the cost bands. */
 const FILTER_CATEGORIES = new Set(["oil_filter", "air_filter", "cabin_filter"]);
+const BRAKE_PAD_CATEGORY = "brake_pad";
+const WIPER_CATEGORY = "wiper_blade";
 const FILTER_MARKUP = 150;
+const FIXED_MARKUP = {
+  oil_filter: 150,
+  air_filter: 150,
+  cabin_filter: 150,
+  brake_pad: 150,
+  wiper_blade: 200,
+};
 
 const GST_RATE = 0.15;
 const tyreStewardship = require("./tyre-stewardship");
@@ -126,16 +135,29 @@ function isFilterCategory(category) {
   return FILTER_CATEGORIES.has(category);
 }
 
+function fixedMarkupPercent(category) {
+  const pct = FIXED_MARKUP[category];
+  return Number.isFinite(pct) ? pct : null;
+}
+
+function fixedMarkupBand(category) {
+  if (category === BRAKE_PAD_CATEGORY) return "Brake pads";
+  if (category === WIPER_CATEGORY) return "Wiper blades";
+  if (isFilterCategory(category)) return "Filters";
+  return "Fixed";
+}
+
 function suggestPrice(cost, category) {
   const c = roundMoney(Math.max(0, Number(cost) || 0));
-  if (isFilterCategory(category)) {
-    const sell = c > 0 ? roundMoney(c * (1 + FILTER_MARKUP / 100)) : 0;
+  const fixed = fixedMarkupPercent(category);
+  if (fixed != null) {
+    const sell = c > 0 ? roundMoney(c * (1 + fixed / 100)) : 0;
     const incl = roundMoney(sell * (1 + GST_RATE));
     return {
       cost: c,
-      band: "Filters",
-      markupMin: FILTER_MARKUP,
-      markupMax: FILTER_MARKUP,
+      band: fixedMarkupBand(category),
+      markupMin: fixed,
+      markupMax: fixed,
       sellMin: sell,
       sellMax: sell,
       sell,
@@ -161,17 +183,31 @@ function suggestPrice(cost, category) {
   };
 }
 
-/** Set every oil, air, and cabin filter to cost × 2.5. Other stock is left alone. */
-function repriceFilters(items) {
+function repriceCategory(items, match) {
   const updated = [];
   for (const item of items || []) {
-    if (!isFilterCategory(item?.category)) continue;
+    if (!match(item?.category)) continue;
     const sell = suggestPrice(item.costPrice, item.category).sell;
     if (!(Number(item.costPrice) > 0) || sell === item.sellPrice) continue;
     item.sellPrice = sell;
     updated.push(item.partNumber || item.name);
   }
   return { added: [], updated };
+}
+
+/** Set every oil, air, and cabin filter to cost × 2.5. Other stock is left alone. */
+function repriceFilters(items) {
+  return repriceCategory(items, isFilterCategory);
+}
+
+/** Set every brake pad to cost × 2.5. Other stock is left alone. */
+function repriceBrakePads(items) {
+  return repriceCategory(items, (category) => category === BRAKE_PAD_CATEGORY);
+}
+
+/** Set every wiper blade to cost × 3. Other stock is left alone. */
+function repriceWipers(items) {
+  return repriceCategory(items, (category) => category === WIPER_CATEGORY);
 }
 
 function guessCategory(text) {
@@ -632,6 +668,8 @@ module.exports = {
   isFilterCategory,
   suggestPrice,
   repriceFilters,
+  repriceBrakePads,
+  repriceWipers,
   setTyreSettings,
   tyreSellPrice,
   guessCategory,
