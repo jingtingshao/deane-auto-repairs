@@ -628,6 +628,62 @@ function patchSupplierField(rows, field) {
   return changed;
 }
 
+function retargetStockId(rows, field, fromIds, toId) {
+  let changed = false;
+  for (const row of rows || []) {
+    if (!fromIds.has(row?.[field])) continue;
+    row[field] = toId;
+    changed = true;
+  }
+  return changed;
+}
+
+/** Fold the split Wing Tyre 225/65R17 Mazzini Ecosaver lines into one stock item. */
+function mergeWingMazzini225() {
+  const items = readJsonArray(INVENTORY_FILE, "inventory");
+  const jobs = readJsonArray(JOBS_FILE, "jobs");
+  const docs = readJsonArray(BILLING_FILE, "billing");
+  const referenced = new Set();
+  for (const job of jobs) {
+    for (const part of job.parts || []) {
+      if (part.stockItemId) referenced.add(part.stockItemId);
+    }
+  }
+  for (const doc of docs) {
+    for (const line of doc.lines || []) {
+      if (line.stockItemId) referenced.add(line.stockItemId);
+    }
+  }
+  const plan = inventoryLib.planMazzini225Merge(items, referenced);
+  if (!plan) return;
+  const dropIds = new Set(plan.dropIds);
+  const keeper = items.find((item) => item.id === plan.keeperId);
+  if (!keeper) return;
+  keeper.name = plan.name;
+  keeper.partNumber = plan.partNumber;
+  keeper.supplier = supplierNames.canonicalSupplierName(keeper.supplier || "Wing Tyre");
+  keeper.qtyOnHand = plan.qty;
+  keeper.updatedAt = nowIso();
+  const kept = items.filter((item) => !dropIds.has(item.id));
+  writeJsonArray(INVENTORY_FILE, kept);
+  if (dropIds.size) {
+    const movements = readJsonArray(INVENTORY_MOVEMENTS_FILE, "inventory movements");
+    if (retargetStockId(movements, "itemId", dropIds, keeper.id)) {
+      writeJsonArray(INVENTORY_MOVEMENTS_FILE, movements);
+    }
+    let jobsChanged = false;
+    for (const job of jobs) {
+      if (retargetStockId(job.parts, "stockItemId", dropIds, keeper.id)) jobsChanged = true;
+    }
+    if (jobsChanged) writeJobs(jobs);
+    let billingChanged = false;
+    for (const doc of docs) {
+      if (retargetStockId(doc.lines, "stockItemId", dropIds, keeper.id)) billingChanged = true;
+    }
+    if (billingChanged) writeJsonArray(BILLING_FILE, docs);
+  }
+}
+
 /** Write Wing Tyre / Value Tyres onto existing stock, invoices, and job parts. */
 function unifyStoredSupplierNames() {
   const invoices = readSupplierInvoices();
@@ -11484,6 +11540,7 @@ try {
 }
 try {
   unifyStoredSupplierNames();
+  mergeWingMazzini225();
 } catch (err) {
   console.error("Could not unify supplier names:", err);
 }

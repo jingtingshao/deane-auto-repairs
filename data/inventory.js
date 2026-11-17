@@ -284,6 +284,40 @@ function nameMustMatch(category) {
   return category === "tyre";
 }
 
+const MAZZINI_225_NAME = "225/65R17(102H) H/T MAZZINI ECOSAVER ND";
+const MAZZINI_225_PART = "225/65R17";
+
+/** The two Wing Tyre lines for this size are the same Ecosaver, split by a duplicated invoice name. */
+function isWingMazzini225(item) {
+  if (item?.category !== "tyre") return false;
+  if (supplierNames.supplierMatchKey(item.supplier) !== "wing tyre") return false;
+  const hay = `${item.name || ""} ${item.partNumber || ""}`.toLowerCase().replace(/\s+/g, "");
+  return hay.includes("225/65r17") && hay.includes("mazzini");
+}
+
+function planMazzini225Merge(items, referencedIds) {
+  const hits = (items || []).filter(isWingMazzini225);
+  if (!hits.length) return null;
+  const referenced = referencedIds instanceof Set ? referencedIds : new Set(referencedIds || []);
+  const keeper =
+    hits.find((item) => referenced.has(item.id)) ||
+    hits.slice().sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")))[0];
+  const dropIds = hits.filter((item) => item.id !== keeper.id).map((item) => item.id);
+  const qty = roundQty(hits.reduce((sum, item) => sum + (Number(item.qtyOnHand) || 0), 0));
+  const tidy =
+    keeper.name !== MAZZINI_225_NAME ||
+    String(keeper.partNumber || "") !== MAZZINI_225_PART ||
+    roundQty(keeper.qtyOnHand) !== qty;
+  if (!dropIds.length && !tidy) return null;
+  return {
+    keeperId: keeper.id,
+    dropIds,
+    qty,
+    name: MAZZINI_225_NAME,
+    partNumber: MAZZINI_225_PART,
+  };
+}
+
 function findMatch(items, input) {
   const category = input.category;
   const key = partKey(input.partNumber);
@@ -675,6 +709,7 @@ module.exports = {
   tyreSellPrice,
   guessCategory,
   normalizeItem,
+  planMazzini225Merge,
   presentItem,
   searchItems,
   applyReceive,
