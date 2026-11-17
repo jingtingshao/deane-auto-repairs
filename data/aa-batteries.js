@@ -1,13 +1,18 @@
 /** AA Battery Service consignment batteries.
  * Buy = BP Buy Price list (effective 1 Sep 2025), ex GST.
- * Retail = Recommended Retail Price list (effective 1 Jul 2025), incl GST; stock keeps it ex GST.
- * Deep cycle 5503 / 5601 / 5862 are POA and 7702 has no buy price yet, so they are left out.
+ * Retail = Recommended Retail Price list (effective 1 Dec 2025), incl GST (kept for reference).
+ * Sell (fitted, incl GST) = buy × 1.15 GST + $35 markup + $30 install, rounded to the dollar.
+ * Stock keeps sellPrice ex GST. Deep cycle 5503 / 5601 / 5862 are POA and 7702 has no buy
+ * price yet, so they are left out.
  */
 
 const inventoryLib = require("./inventory");
 
-const IMPORT_ID = "aa-batteries-2025-09";
+const IMPORT_ID = "aa-batteries-cost-markup35-fit30-2026-11";
 const SUPPLIER = "AA Battery Service";
+/** Flat markup and fitting added after GST on cost; both are GST-inclusive dollars. */
+const MARKUP_INCL = 35;
+const FITTING_INCL = 30;
 
 // [part, description, type, warranty years, CCA, RC mins, 20hr Ah, buy ex GST, retail incl GST, qty on hand]
 const BATTERIES = [
@@ -61,8 +66,15 @@ const BATTERIES = [
   ["7501", "Watercraft", "Calcium", 2, 600, 125, 73, 131.62, 352, 0],
 ];
 
+/** Fitted retail incl GST: buy × GST + markup + fitting, whole dollars. */
+function fittedInclGst(buyEx) {
+  const buy = Number(buyEx) || 0;
+  return Math.round(buy * (1 + inventoryLib.GST_RATE) + MARKUP_INCL + FITTING_INCL);
+}
+
 function stockLine([part, description, type, years, cca, rc, ah, buy, retailIncl, qty]) {
   const kind = description === type ? description : `${description} ${type}`;
+  const fittedIncl = fittedInclGst(buy);
   return {
     category: "battery",
     name: `AA ${part} ${kind} battery`,
@@ -71,9 +83,9 @@ function stockLine([part, description, type, years, cca, rc, ah, buy, retailIncl
     supplier: SUPPLIER,
     fitment: `${cca} CCA · RC ${rc} min · ${ah}Ah · ${years} year warranty`,
     costPrice: buy,
-    sellPrice: inventoryLib.roundMoney(retailIncl / (1 + inventoryLib.GST_RATE)),
+    sellPrice: inventoryLib.roundMoney(fittedIncl / (1 + inventoryLib.GST_RATE)),
     qtyOnHand: qty,
-    notes: "Consignment",
+    notes: `Consignment · AA RRP $${retailIncl} incl`,
   };
 }
 
@@ -115,4 +127,12 @@ function applyToStock(items, movements, now, newId) {
   return { added, updated };
 }
 
-module.exports = { IMPORT_ID, BATTERIES, stockLine, applyToStock };
+module.exports = {
+  IMPORT_ID,
+  BATTERIES,
+  MARKUP_INCL,
+  FITTING_INCL,
+  fittedInclGst,
+  stockLine,
+  applyToStock,
+};

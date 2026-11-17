@@ -97,7 +97,7 @@ Oil & filter included up to **4L** (Standard / Premium) or **5L** (Diesel / 4WD)
 | Coolant replacement | $99 |
 | Cooling system pressure test | $49 |
 | Radiator flush | $129 |
-| Battery install (bought here) | Free |
+| Battery install (bought here) | Included in fitted price |
 | Battery install (customer-supplied) | $30 |
 | Spark plug replacement | From $99 + parts |
 | Ignition coil replacement | From $59 + parts |
