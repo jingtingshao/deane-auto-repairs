@@ -34,7 +34,17 @@
     return `$${money(value).toFixed(2)}`;
   }
 
-  function supplierGroupKey(value) {
+  const SAME_SUPPLIER = {
+    "wing tyres": "wing tyre",
+    "wing of the car": "wing tyre",
+    "value tyre": "value tyres",
+  };
+  const SUPPLIER_TITLE = {
+    "wing tyre": "Wing Tyre",
+    "value tyres": "Value Tyres",
+  };
+
+  function supplierBaseKey(value) {
     let name = String(value || "")
       .trim()
       .toLowerCase()
@@ -56,6 +66,15 @@
       break;
     }
     return parts.join(" ");
+  }
+
+  function supplierGroupKey(value) {
+    const key = supplierBaseKey(value);
+    return SAME_SUPPLIER[key] || key;
+  }
+
+  function supplierTitle(key, fallback) {
+    return SUPPLIER_TITLE[key] || fallback;
   }
 
   function invoiceWhen(row) {
@@ -84,7 +103,7 @@
       const lines = visibleLines(latest);
       list.push({
         key,
-        name: String(latest.supplier || "").trim() || key,
+        name: supplierTitle(key, String(latest.supplier || "").trim() || key),
         names: group.map((row) => String(row.supplier || "").trim()).filter(Boolean),
         invoices: group,
         latest,

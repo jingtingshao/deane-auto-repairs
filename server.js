@@ -38,6 +38,7 @@ const my2016SparkPlugs = require("./data/my2016-spark-plugs");
 const my2016Filters = require("./data/my2016-filters");
 const topstarBrakePads = require("./data/topstar-brake-pads");
 const supplierProfiles = require("./data/supplier-profiles");
+const supplierNames = require("./data/supplier-names");
 const appointmentsLib = require("./data/appointments");
 const bookingRequestsLib = require("./data/booking-requests");
 const { buildBillingPdf, safeFilename } = require("./data/billing-pdf");
@@ -612,6 +613,37 @@ function validateAppointmentInput(body = {}, { partial = false } = {}) {
 
 function readSupplierInvoices() {
   return readJsonArray(SUPPLIER_INVOICES_FILE, "supplier invoices");
+}
+
+function patchSupplierField(rows, field) {
+  let changed = false;
+  for (const row of rows || []) {
+    const current = row?.[field];
+    if (!String(current || "").trim()) continue;
+    const next = supplierNames.canonicalSupplierName(current);
+    if (next === current) continue;
+    row[field] = next;
+    changed = true;
+  }
+  return changed;
+}
+
+/** Write Wing Tyre / Value Tyres onto existing stock, invoices, and job parts. */
+function unifyStoredSupplierNames() {
+  const invoices = readSupplierInvoices();
+  if (patchSupplierField(invoices, "supplier")) writeSupplierInvoices(invoices);
+  const candidates = readInvoiceCandidates();
+  if (patchSupplierField(candidates, "supplierCandidate")) writeInvoiceCandidates(candidates);
+  const items = readJsonArray(INVENTORY_FILE, "inventory");
+  if (patchSupplierField(items, "supplier")) writeJsonArray(INVENTORY_FILE, items);
+  const movements = readJsonArray(INVENTORY_MOVEMENTS_FILE, "inventory movements");
+  if (patchSupplierField(movements, "supplier")) writeJsonArray(INVENTORY_MOVEMENTS_FILE, movements);
+  const jobs = readJsonArray(JOBS_FILE, "jobs");
+  let jobsChanged = false;
+  for (const job of jobs) {
+    if (patchSupplierField(job?.parts, "supplier")) jobsChanged = true;
+  }
+  if (jobsChanged) writeJobs(jobs);
 }
 
 function writeSupplierInvoices(rows) {
@@ -1409,10 +1441,7 @@ function toRatio(value) {
 }
 
 function normalizeSupplierName(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
+  return supplierNames.supplierMatchKey(value);
 }
 
 function normalizeInvoiceNo(value) {
@@ -1487,7 +1516,7 @@ function validateSupplierInvoiceInput(body = {}) {
 function normalizeSupplierInvoice(row = {}) {
   return {
     id: String(row.id || "").trim(),
-    supplier: String(row.supplier || "").trim(),
+    supplier: supplierNames.canonicalSupplierName(row.supplier),
     invoiceNo: String(row.invoiceNo || "").trim(),
     invoiceDate: String(row.invoiceDate || "").trim(),
     subtotal: toMoney(row.subtotal),
@@ -1518,7 +1547,7 @@ function normalizeCandidate(row = {}) {
     descriptionCandidate: String(row.descriptionCandidate || "").trim(),
     qtyCandidate: Math.max(0, Math.round(Number(row.qtyCandidate) || 1)),
     costPriceCandidate: toMoney(row.costPriceCandidate),
-    supplierCandidate: String(row.supplierCandidate || "").trim(),
+    supplierCandidate: supplierNames.canonicalSupplierName(row.supplierCandidate),
     confidence: toRatio(row.confidence),
     suggestedJobId: String(row.suggestedJobId || "").trim(),
     suggestedPartId: String(row.suggestedPartId || "").trim(),
@@ -1950,11 +1979,13 @@ function parseSupplierInvoiceText(rawText, options = {}) {
       fromSupplier ||
       lines.find((line) => /^[A-Z][A-Z\s&.'-]{2,}$/.test(line) && !/invoice|bill to|date/i.test(line)) ||
       "";
-  const supplier = topstar
-    ? "Topstar New Zealand"
-    : profile
-      ? profile.name
-      : supplierLine.replace(/\s+sample.*$/i, "").trim();
+  const supplier = supplierNames.canonicalSupplierName(
+    topstar
+      ? "Topstar New Zealand"
+      : profile
+        ? profile.name
+        : supplierLine.replace(/\s+sample.*$/i, "").trim()
+  );
 
   const invoiceNoLine = lines.findIndex((line) => /^invoice\s*number$/i.test(line));
   const invoiceNo = profile?.invoiceNo
@@ -10619,7 +10650,7 @@ app.get("/api/inventory/suppliers", requireOwnerAdmin, (_req, res) => {
     if (item.supplier) names.add(item.supplier);
   }
   for (const invoice of readSupplierInvoices()) {
-    const name = String(invoice?.supplier || "").trim();
+    const name = supplierNames.canonicalSupplierName(invoice?.supplier);
     if (name) names.add(name);
   }
   res.json([...names].sort((a, b) => a.localeCompare(b)));
@@ -11450,6 +11481,11 @@ try {
   inventoryLib.setTyreSettings(readTyrePriceState().settings);
 } catch (err) {
   console.error("Could not read tyre price settings for stock:", err);
+}
+try {
+  unifyStoredSupplierNames();
+} catch (err) {
+  console.error("Could not unify supplier names:", err);
 }
 try {
   runStockImportOnce(aaBatteries.IMPORT_ID, aaBatteries.applyToStock);

@@ -48,6 +48,7 @@ const FIXED_MARKUP = {
 const GST_RATE = 0.15;
 const tyreStewardship = require("./tyre-stewardship");
 const tyrePrices = require("./tyre-prices");
+const supplierNames = require("./supplier-names");
 
 /** Website tyre price settings (fitting, Tyrewise); the server keeps this in step with Admin → Tyre prices. */
 let tyreSettings = tyrePrices.normalizeSettings({});
@@ -240,7 +241,7 @@ function normalizeItem(raw) {
     name: cleanText(raw?.name, 160),
     partNumber: cleanText(raw?.partNumber, 80),
     brand: cleanText(raw?.brand, 80),
-    supplier: cleanText(raw?.supplier, 120),
+    supplier: supplierNames.canonicalSupplierName(cleanText(raw?.supplier, 120)),
     fitment: cleanText(raw?.fitment, 240),
     unit: category ? category.unit : "each",
     qtyOnHand: Math.max(0, roundQty(raw?.qtyOnHand)),

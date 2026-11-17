@@ -1,5 +1,7 @@
 /** Workshop job cards — internal only, not customer-facing. */
 
+const supplierNames = require("./supplier-names");
+
 const JOB_STATUSES = [
   { id: "waiting_parts", label: "Waiting parts" },
   { id: "in_progress", label: "In progress" },
@@ -117,7 +119,7 @@ function normalizePart(part = {}, idFallback = "") {
   const ordered = received ? true : Boolean(part.ordered);
   const partNumber = String(part.partNumber || "").trim();
   const description = String(part.description || "").trim();
-  const supplier = String(part.supplier || "").trim();
+  const supplier = supplierNames.canonicalSupplierName(part.supplier);
   const note = String(part.note || part.notes || "").trim();
   const status = isPartLineStatus(part.status) ? String(part.status).trim() : "draft";
   const sourceRaw = String(part.source || "").trim().toLowerCase();
