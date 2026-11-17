@@ -478,6 +478,17 @@ function writeBilling(docs) {
   bumpBillingHighWater(docs);
 }
 
+function issueStoredDraftInvoices() {
+  const docs = readBilling();
+  let changed = false;
+  for (const doc of docs) {
+    if (!issueDraftInvoice(doc)) continue;
+    doc.updatedAt = nowIso();
+    changed = true;
+  }
+  if (changed) writeBilling(docs);
+}
+
 function readSavedCustomers() {
   const rows = readJsonArray(CUSTOMERS_FILE, "customers");
   if (ensureUniqueCustomerNumbers(rows)) {
@@ -4165,6 +4176,33 @@ function derivePaymentStatus(amountPaid, totalIncl) {
   return "deposit";
 }
 
+/** Paid in full, even when the customer did not want the invoice emailed. */
+function invoiceIsFullyPaid(doc) {
+  if (!doc || doc.kind !== "invoice" || doc.status === "void") return false;
+  const payment = normalizeInvoicePayment(doc, {}, catalog.computeDocTotals(doc));
+  return payment.paymentStatus === "paid";
+}
+
+function issueDraftInvoice(doc) {
+  if (!doc || doc.kind !== "invoice" || doc.status !== "draft") return false;
+  const paid = invoiceIsFullyPaid(doc);
+  doc.status = "sent";
+  doc.noCustomerInvoice = !doc.lastEmailedAt;
+  if (!doc.sentAt) doc.sentAt = doc.paidAt || doc.issuedAt || doc.createdAt || nowIso();
+  stampInvoiceIssueDate(doc);
+  const historyType = paid ? "paid_no_email" : "unpaid_invoice";
+  if (!historyHasType(doc, historyType)) {
+    appendHistory(doc, {
+      type: historyType,
+      summary: paid
+        ? "Paid in full. Customer did not need an emailed invoice."
+        : "Invoice kept for unfinished work. Balance unpaid.",
+      amount: catalog.computeDocTotals(doc).totalIncl,
+    });
+  }
+  return true;
+}
+
 function billingAnchorDate(doc) {
   if (doc?.kind === "invoice") {
     const issued = isoDateOnly(doc.issuedAt);
@@ -4179,10 +4217,11 @@ function daysSinceIso(iso) {
   return (Date.now() - t) / (24 * 60 * 60 * 1000);
 }
 
-/** Invoice sent/issued 7+ days ago with balance still due. */
+/** Emailed invoice, 7+ days old, with a balance still due. Unfinished work stays Unpaid. */
 function isInvoiceOverdue(doc, payment) {
   if (!doc || doc.kind !== "invoice") return false;
   if (doc.status === "void" || doc.status === "draft") return false;
+  if (doc.noCustomerInvoice && !doc.lastEmailedAt) return false;
   if (!payment || payment.paymentStatus === "paid" || !(payment.balanceDue > 0)) {
     return false;
   }
@@ -6710,23 +6749,20 @@ app.get("/api/admin/dashboard", requireOwnerAdmin, (req, res) => {
       }
       if (doc.kind === "invoice") {
         const payment = normalizeInvoicePayment(doc, {}, totals);
-        const isDraft = doc.status === "draft";
-        if (!isDraft) {
-          if (isInvoiceOverdue(doc, payment)) {
-            invoicesOverdueCount += 1;
-            invoicesOverdueTotal = catalog.round2(
-              invoicesOverdueTotal + payment.balanceDue
-            );
-          }
-          if (
-            (payment.paymentStatus === "unpaid" || payment.paymentStatus === "deposit") &&
-            payment.balanceDue > 0
-          ) {
-            invoicesUnpaidCount += 1;
-            invoicesUnpaidTotal = catalog.round2(
-              invoicesUnpaidTotal + payment.balanceDue
-            );
-          }
+        if (isInvoiceOverdue(doc, payment)) {
+          invoicesOverdueCount += 1;
+          invoicesOverdueTotal = catalog.round2(
+            invoicesOverdueTotal + payment.balanceDue
+          );
+        }
+        if (
+          (payment.paymentStatus === "unpaid" || payment.paymentStatus === "deposit") &&
+          payment.balanceDue > 0
+        ) {
+          invoicesUnpaidCount += 1;
+          invoicesUnpaidTotal = catalog.round2(
+            invoicesUnpaidTotal + payment.balanceDue
+          );
         }
 
         const anchor = String(doc.issuedAt || doc.sentAt || doc.createdAt || "");
@@ -6734,7 +6770,7 @@ app.get("/api/admin/dashboard", requireOwnerAdmin, (req, res) => {
         const docYear = Number(docMonthKey.slice(0, 4));
         if (Number.isInteger(docYear)) financialYears.add(docYear);
         const invoiceBucket = monthBuckets.get(docMonthKey);
-        if (invoiceBucket && !isDraft) {
+        if (invoiceBucket) {
           invoiceBucket.invoiced = catalog.round2(
             invoiceBucket.invoiced + totals.totalIncl
           );
@@ -6744,8 +6780,7 @@ app.get("/api/admin/dashboard", requireOwnerAdmin, (req, res) => {
             );
           }
         }
-        if (!isDraft) {
-          for (const row of payment.payments) {
+        for (const row of payment.payments) {
             const paidMonth = String(row.paidAt || "").slice(0, 7);
             const paidYear = Number(paidMonth.slice(0, 4));
             if (Number.isInteger(paidYear)) financialYears.add(paidYear);
@@ -6762,7 +6797,6 @@ app.get("/api/admin/dashboard", requireOwnerAdmin, (req, res) => {
               );
             }
           }
-        }
       }
     }
 
@@ -7846,6 +7880,7 @@ app.put("/api/billing/:id", requireAdmin, requireCurrentBillingIfTech, (req, res
     next.amountPaid = payment.amountPaid;
     next.paidAt = payment.paidAt;
     next.paymentNote = payment.paymentNote;
+    issueDraftInvoice(next);
   }
 
   if (!Array.isArray(next.history)) next.history = Array.isArray(current.history) ? [...current.history] : [];
@@ -11543,6 +11578,11 @@ try {
   mergeWingMazzini225();
 } catch (err) {
   console.error("Could not unify supplier names:", err);
+}
+try {
+  issueStoredDraftInvoices();
+} catch (err) {
+  console.error("Could not issue draft invoices:", err);
 }
 try {
   runStockImportOnce(aaBatteries.IMPORT_ID, aaBatteries.applyToStock);
