@@ -6729,16 +6729,16 @@ app.get("/api/admin/dashboard", requireOwnerAdmin, (req, res) => {
           }
         }
 
-        const anchor = String(doc.sentAt || doc.createdAt || doc.updatedAt || "");
+        const anchor = String(doc.issuedAt || doc.sentAt || doc.createdAt || "");
         const docMonthKey = anchor.slice(0, 7);
         const docYear = Number(docMonthKey.slice(0, 4));
         if (Number.isInteger(docYear)) financialYears.add(docYear);
         const invoiceBucket = monthBuckets.get(docMonthKey);
-        if (invoiceBucket) {
+        if (invoiceBucket && !isDraft) {
           invoiceBucket.invoiced = catalog.round2(
             invoiceBucket.invoiced + totals.totalIncl
           );
-          if (!isDraft && payment.balanceDue > 0) {
+          if (payment.balanceDue > 0) {
             invoiceBucket.outstanding = catalog.round2(
               invoiceBucket.outstanding + payment.balanceDue
             );
