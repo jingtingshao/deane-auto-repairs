@@ -40,6 +40,7 @@ const topstarBrakePads = require("./data/topstar-brake-pads");
 const supplierProfiles = require("./data/supplier-profiles");
 const supplierNames = require("./data/supplier-names");
 const appointmentsLib = require("./data/appointments");
+const bookingSms = require("./data/booking-sms");
 const bookingRequestsLib = require("./data/booking-requests");
 const { buildBillingPdf, safeFilename } = require("./data/billing-pdf");
 const {
@@ -8787,13 +8788,19 @@ app.get("/api/appointments/meta", requireAdmin, (_req, res) => {
   });
 });
 
-function formatSmsClock(time) {
-  const t = appointmentsLib.normalizeTime(time);
-  if (!t) return "";
-  const [hRaw, m] = t.split(":").map(Number);
-  const suffix = hRaw >= 12 ? "pm" : "am";
-  const h12 = hRaw % 12 || 12;
-  return m ? `${h12}:${String(m).padStart(2, "0")}${suffix}` : `${h12}${suffix}`;
+function billingTotalForAppointment(appt) {
+  const jobId = String(appt?.jobId || "").trim();
+  if (!jobId) return 0;
+  const job = readJobs().find((j) => j.id === jobId);
+  const docs = readBilling();
+  const doc =
+    (job?.invoiceId && docs.find((d) => d.id === job.invoiceId)) ||
+    (job?.quoteId && docs.find((d) => d.id === job.quoteId)) ||
+    docs.find((d) => d.jobId === jobId && d.status !== "void") ||
+    null;
+  if (!doc) return 0;
+  const total = catalog.computeDocTotals(doc).totalIncl;
+  return total > 0 ? total : 0;
 }
 
 function appointmentBookingSmsEligible(row, tomorrow = plusDays(todayIso(), 1)) {
@@ -8857,15 +8864,12 @@ async function sendBookingConfirmSms(appointmentId) {
     throw err;
   }
 
-  const name =
-    namesFromCustomer({ customerName: appt.customerName }).firstName ||
-    String(appt.customerName || "there").trim() ||
-    "there";
   const plate = String(appt.registration || "").trim().toUpperCase() || "your vehicle";
-  const when = formatSmsClock(appt.startTime) || appt.startTime || "your booked time";
-  const body =
-    `Hi ${name}, your vehicle ${plate} is booked in tomorrow at ${when}. ` +
-    `Reply YES to confirm or NO to reschedule. Deane Auto ${business.phoneTel}`;
+  const priceIncl = bookingSms.resolveBookingSmsPriceIncl(
+    appt,
+    billingTotalForAppointment(appt)
+  );
+  const body = bookingSms.buildBookingConfirmSmsBody(appt, { priceIncl });
 
   const sent = await websms.sendSms({
     to,
@@ -9036,6 +9040,9 @@ app.post("/api/appointments", requireAdmin, (req, res) => {
       }
     }
     attachPartyCustomerId(row);
+    if (!(Number(row.quotedPriceIncl) > 0)) {
+      row.quotedPriceIncl = catalog.advertisedPriceFromWorkSummary(row.workSummary) || 0;
+    }
     const rows = readAppointments();
     rows.push(row);
     writeAppointments(rows);
@@ -9072,6 +9079,9 @@ app.put("/api/appointments/:id", requireAdmin, (req, res) => {
       merged.jobNumber = "";
     }
     attachPartyCustomerId(merged);
+    if (!(Number(merged.quotedPriceIncl) > 0)) {
+      merged.quotedPriceIncl = catalog.advertisedPriceFromWorkSummary(merged.workSummary) || 0;
+    }
     rows[index] = merged;
     writeAppointments(rows);
     res.json(merged);
