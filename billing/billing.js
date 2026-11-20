@@ -135,6 +135,22 @@ function render(doc) {
   }
 
   const totals = doc.totals || {};
+  const amountPaid = Math.round((Number(doc.amountPaid) || 0) * 100) / 100;
+  const referralCreditTotal =
+    Math.round((Number(doc.referralCreditTotal) || 0) * 100) / 100;
+  const balanceDue =
+    doc.balanceDue != null
+      ? Math.round((Number(doc.balanceDue) || 0) * 100) / 100
+      : Math.round(
+          Math.max(
+            0,
+            (Number(totals.totalIncl) || 0) - amountPaid - referralCreditTotal
+          ) * 100
+        ) / 100;
+  const paidInFull =
+    isInvoice &&
+    balanceDue <= 0.001 &&
+    (amountPaid > 0 || referralCreditTotal > 0 || Number(totals.totalIncl) <= 0);
   const canAccept = doc.kind === "quote" && doc.status === "sent";
   const accepted =
     doc.kind === "quote" && (doc.status === "accepted" || doc.status === "invoiced");
@@ -269,6 +285,30 @@ function render(doc) {
               <td colspan="3">Total incl. GST</td>
               <td class="num">${money(totals.totalIncl)}</td>
             </tr>
+            ${
+              isInvoice && amountPaid > 0
+                ? `<tr>
+              <td colspan="3">Amount paid</td>
+              <td class="num">−${money(amountPaid)}</td>
+            </tr>`
+                : ""
+            }
+            ${
+              isInvoice && referralCreditTotal > 0
+                ? `<tr>
+              <td colspan="3">Referral credits</td>
+              <td class="num">−${money(referralCreditTotal)}</td>
+            </tr>`
+                : ""
+            }
+            ${
+              isInvoice
+                ? `<tr class="grand">
+              <td colspan="3">${paidInFull ? "Nothing to pay" : "Balance due"}</td>
+              <td class="num">${money(balanceDue)}</td>
+            </tr>`
+                : ""
+            }
           </tfoot>
         </table>
       </div>
@@ -277,7 +317,11 @@ function render(doc) {
     <div class="invoice-foot">
     <div class="pay-pin">
       <div class="pay">
-        <h2>How to pay</h2>
+        ${
+          paidInFull
+            ? `<h2>Payment</h2>
+        <p><strong>Nothing to pay</strong> — payment received. Thank you.</p>`
+            : `<h2>How to pay</h2>
         <p>Bank account name: <strong>${escapeHtml(shop.bankAccountName || "Dreamworld Investments Limited")}</strong></p>
         <p>Bank account number: <strong>${escapeHtml(shop.bankAccount || "02-0216-0104554-002")}</strong></p>
         <h3>Payment terms</h3>
@@ -293,7 +337,8 @@ function render(doc) {
           )
             .map((line) => `<li>${escapeHtml(line)}</li>`)
             .join("")}
-        </ul>
+        </ul>`
+        }
       </div>
     </div>
     ${

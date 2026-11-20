@@ -46,19 +46,45 @@ function referralCreditTotal(doc) {
   );
 }
 
-function isInvoicePaidForReferral(doc, totals) {
-  if (!doc || doc.kind !== "invoice" || doc.status === "void") return false;
-  const totalIncl =
+/** Cash/EFTPOS paid + referral credits applied vs invoice total (customer-facing). */
+function invoicePaymentSummary(doc, totals) {
+  const totalIncl = money(
     Number(totals?.totalIncl) ||
-    catalog.computeDocTotals(doc).totalIncl;
-  const amountPaid = money(
-    (Array.isArray(doc.payments) ? doc.payments : []).reduce(
+      (doc ? catalog.computeDocTotals(doc).totalIncl : 0)
+  );
+  let amountPaid = money(
+    (Array.isArray(doc?.payments) ? doc.payments : []).reduce(
       (sum, row) => sum + (Number(row.amount) || 0),
       0
     )
   );
-  const covered = money(amountPaid + referralCreditTotal(doc));
-  return totalIncl > 0 && covered + 0.001 >= totalIncl;
+  if (amountPaid <= 0) {
+    amountPaid = money(doc?.amountPaid);
+  }
+  const creditTotal = referralCreditTotal(doc);
+  const covered = money(amountPaid + creditTotal);
+  const balanceDue = money(Math.max(0, totalIncl - covered));
+  const paidInFull =
+    doc?.kind === "invoice" &&
+    doc.status !== "void" &&
+    balanceDue <= 0.001 &&
+    (covered > 0 || totalIncl <= 0);
+  return {
+    amountPaid,
+    referralCreditTotal: creditTotal,
+    covered,
+    balanceDue,
+    paidInFull,
+  };
+}
+
+function isInvoicePaidForReferral(doc, totals) {
+  if (!doc || doc.kind !== "invoice" || doc.status === "void") return false;
+  const summary = invoicePaymentSummary(doc, totals);
+  const totalIncl =
+    Number(totals?.totalIncl) ||
+    catalog.computeDocTotals(doc).totalIncl;
+  return totalIncl > 0 && summary.paidInFull;
 }
 
 function isQualifyingPaidInvoice(doc) {
@@ -630,6 +656,7 @@ module.exports = {
   addMonthsIsoDate,
   referralCreditTotal,
   normalizeAppliedRows,
+  invoicePaymentSummary,
   isInvoicePaidForReferral,
   isQualifyingPaidInvoice,
   customerHasPriorPaidWork,
