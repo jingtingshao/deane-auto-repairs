@@ -26,7 +26,6 @@
   let jobOptions = [];
   let customerDirectory = [];
   let tomorrowSmsCount = 0;
-  let lastAutoPrice = 0;
 
   const partyFind = document.getElementById("cal-party-find");
   const partySuggest = document.getElementById("cal-party-suggest");
@@ -630,45 +629,6 @@
     await refreshTomorrowSmsCount();
   }
 
-  function advertisedPriceFromWorkSummary(text) {
-    const t = String(text || "")
-      .toLowerCase()
-      .replace(/[_/]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!t) return 0;
-    const hasWof = /\bwof\b/.test(t);
-    const hasService = /\bservice\b/.test(t);
-    const premium = /\b(premium|european|diesel|4wd)\b/.test(t);
-    const standard = /\bstandard\b/.test(t);
-    const basic = /\bbasic\b/.test(t);
-    const ppi = /\bppi\b|\bpre-?purchase\b/.test(t);
-    if (ppi) return 199;
-    if (premium && hasWof) return 378;
-    if (standard && hasWof) return 278;
-    if (premium) return 299;
-    if (standard) return 199;
-    if (basic) return 99;
-    if (hasWof && !hasService) {
-      const extraWork = /\b(repair|tyre|tire|brake|battery|oil|clutch|diagnostic)\b/.test(t);
-      if (!extraWork) return 79;
-    }
-    return 0;
-  }
-
-  function maybeFillQuotedPrice() {
-    const priceEl = form?.elements?.namedItem?.("quotedPriceIncl");
-    const workEl = form?.elements?.namedItem?.("workSummary");
-    if (!priceEl || !workEl) return;
-    const inferred = advertisedPriceFromWorkSummary(workEl.value);
-    const currentVal = Number(priceEl.value);
-    const empty = !String(priceEl.value || "").trim();
-    if (inferred && (empty || currentVal === lastAutoPrice)) {
-      priceEl.value = String(inferred);
-      lastAutoPrice = inferred;
-    }
-  }
-
   function fillForm(row) {
     fillStatusSelect(row.status || "booked");
     fillDurationSelect(row.durationMinutes || 120);
@@ -689,18 +649,6 @@
     set("registration", String(row.registration || "").toUpperCase());
     set("vehicle", Admin.capitalizeVehicleDescription(row.vehicle || ""));
     set("workSummary", Admin.sentenceCase(row.workSummary || ""));
-    const storedPrice = Number(row.quotedPriceIncl) || 0;
-    const inferredPrice = advertisedPriceFromWorkSummary(row.workSummary);
-    if (storedPrice > 0) {
-      set("quotedPriceIncl", String(storedPrice));
-      lastAutoPrice = storedPrice === inferredPrice ? inferredPrice : 0;
-    } else if (inferredPrice) {
-      set("quotedPriceIncl", String(inferredPrice));
-      lastAutoPrice = inferredPrice;
-    } else {
-      set("quotedPriceIncl", "");
-      lastAutoPrice = 0;
-    }
     set("notes", Admin.sentenceCase(row.notes || ""));
     if (customerIdInput) customerIdInput.value = row.customerId || "";
     if (partyFind) partyFind.value = row.registration || row.customerName || "";
@@ -739,7 +687,6 @@
       registration: value("registration").toUpperCase(),
       vehicle: Admin.capitalizeVehicleDescription(value("vehicle")),
       workSummary: Admin.sentenceCase(value("workSummary")),
-      quotedPriceIncl: Number(value("quotedPriceIncl")) || 0,
       notes: Admin.sentenceCase(value("notes")),
       jobId: value("jobId"),
       source: current?.source || "manual",
@@ -795,7 +742,6 @@
       registration: partial.registration || "",
       vehicle: partial.vehicle || "",
       workSummary: partial.workSummary || "",
-      quotedPriceIncl: Number(partial.quotedPriceIncl) || 0,
       notes: partial.notes || "",
       jobId: partial.jobId || "",
       jobNumber: partial.jobNumber || "",
@@ -1048,7 +994,6 @@
     else if (name === "vehicle") Admin.applyLiveTransform(el, Admin.capitalizeVehicleDescription);
     else if (name === "workSummary" || name === "notes") {
       Admin.applyLiveTransform(el, Admin.sentenceCaseLive);
-      if (name === "workSummary") maybeFillQuotedPrice();
     } else if (name === "registration") {
       Admin.applyLiveTransform(el, (value) => String(value || "").toUpperCase());
     }

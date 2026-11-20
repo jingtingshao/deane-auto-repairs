@@ -123,7 +123,6 @@ function normalizeAppointment(row = {}, idFallback = "") {
       .toUpperCase(),
     vehicle: namesLib.capitalizeVehicleDescription(String(row.vehicle || "").trim()),
     workSummary: catalog.capitalizeLineDescription(row.workSummary),
-    quotedPriceIncl: catalog.round2(Math.max(0, Number(row.quotedPriceIncl) || 0)),
     notes: catalog.capitalizeLineDescription(row.notes),
     jobId: String(row.jobId || "").trim(),
     jobNumber: String(row.jobNumber || "").trim(),

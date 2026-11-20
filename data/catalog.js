@@ -62,38 +62,6 @@ const PRICE = {
   labourHour: exclFromIncl(ADVERTISED_INCL.labourHour),
 };
 
-/**
- * Best-effort GST-inclusive package price from appointment work text.
- * Returns 0 when the job is not a clear website package (e.g. "Service + WOF").
- */
-function advertisedPriceFromWorkSummary(text) {
-  const t = String(text || "")
-    .toLowerCase()
-    .replace(/[_/]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!t) return 0;
-
-  const hasWof = /\bwof\b/.test(t);
-  const hasService = /\bservice\b/.test(t);
-  const premium = /\b(premium|european|diesel|4wd)\b/.test(t);
-  const standard = /\bstandard\b/.test(t);
-  const basic = /\bbasic\b/.test(t);
-  const ppi = /\bppi\b|\bpre-?purchase\b/.test(t);
-
-  if (ppi) return ADVERTISED_INCL.standard;
-  if (premium && hasWof) return round2(ADVERTISED_INCL.premium + ADVERTISED_INCL.wof);
-  if (standard && hasWof) return round2(ADVERTISED_INCL.standard + ADVERTISED_INCL.wof);
-  if (premium) return ADVERTISED_INCL.premium;
-  if (standard) return ADVERTISED_INCL.standard;
-  if (basic) return ADVERTISED_INCL.basic;
-  if (hasWof && !hasService) {
-    const extraWork = /\b(repair|tyre|tire|brake|battery|oil|clutch|diagnostic)\b/.test(t);
-    if (!extraWork) return ADVERTISED_INCL.wof;
-  }
-  return 0;
-}
-
 function advertisedInclFromExcl(excl) {
   const n = Number(excl);
   if (!Number.isFinite(n) || n <= 0) return null;
@@ -536,7 +504,6 @@ module.exports = {
   round2,
   gstFromIncl,
   exclFromIncl,
-  advertisedPriceFromWorkSummary,
   advertisedInclFromExcl,
   wholeDollarInclFromExcl,
   stockLinePrice,

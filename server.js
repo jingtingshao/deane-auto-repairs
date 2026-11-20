@@ -8788,21 +8788,6 @@ app.get("/api/appointments/meta", requireAdmin, (_req, res) => {
   });
 });
 
-function billingTotalForAppointment(appt) {
-  const jobId = String(appt?.jobId || "").trim();
-  if (!jobId) return 0;
-  const job = readJobs().find((j) => j.id === jobId);
-  const docs = readBilling();
-  const doc =
-    (job?.invoiceId && docs.find((d) => d.id === job.invoiceId)) ||
-    (job?.quoteId && docs.find((d) => d.id === job.quoteId)) ||
-    docs.find((d) => d.jobId === jobId && d.status !== "void") ||
-    null;
-  if (!doc) return 0;
-  const total = catalog.computeDocTotals(doc).totalIncl;
-  return total > 0 ? total : 0;
-}
-
 function appointmentBookingSmsEligible(row, tomorrow = plusDays(todayIso(), 1)) {
   if (!row) return false;
   if (appointmentsLib.normalizeDate(row.date) !== tomorrow) return false;
@@ -8865,11 +8850,7 @@ async function sendBookingConfirmSms(appointmentId) {
   }
 
   const plate = String(appt.registration || "").trim().toUpperCase() || "your vehicle";
-  const priceIncl = bookingSms.resolveBookingSmsPriceIncl(
-    appt,
-    billingTotalForAppointment(appt)
-  );
-  const body = bookingSms.buildBookingConfirmSmsBody(appt, { priceIncl });
+  const body = bookingSms.buildBookingConfirmSmsBody(appt);
 
   const sent = await websms.sendSms({
     to,
@@ -9040,9 +9021,6 @@ app.post("/api/appointments", requireAdmin, (req, res) => {
       }
     }
     attachPartyCustomerId(row);
-    if (!(Number(row.quotedPriceIncl) > 0)) {
-      row.quotedPriceIncl = catalog.advertisedPriceFromWorkSummary(row.workSummary) || 0;
-    }
     const rows = readAppointments();
     rows.push(row);
     writeAppointments(rows);
@@ -9079,9 +9057,6 @@ app.put("/api/appointments/:id", requireAdmin, (req, res) => {
       merged.jobNumber = "";
     }
     attachPartyCustomerId(merged);
-    if (!(Number(merged.quotedPriceIncl) > 0)) {
-      merged.quotedPriceIncl = catalog.advertisedPriceFromWorkSummary(merged.workSummary) || 0;
-    }
     rows[index] = merged;
     writeAppointments(rows);
     res.json(merged);
