@@ -3226,3 +3226,42 @@ label.check input {
     justify-content: flex-start;
   }
 }
+
+.reorder-card {
+  margin: 0 0 1rem;
+  padding: 1rem 1rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.reorder-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.reorder-card h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.45rem;
+  letter-spacing: 0.02em;
+}
+
+.reorder-card header p {
+  margin: 0.2rem 0 0;
+  color: var(--muted, #5b6777);
+  font-size: 0.92rem;
+}
+
+.reorder-card .primary:disabled {
+  opacity: 0.45;
+}
+
+@media (max-width: 640px) {
+  .reorder-card header {
+    flex-direction: column;
+  }
+}

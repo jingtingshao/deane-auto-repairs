@@ -222,7 +222,7 @@ function setOverline(text) {
 
 function setSection(name) {
   if (name === "billing") name = "quotes";
-  if (isTechnician() && (name === "dashboard" || name === "referrals" || name === "sms_inbox" || name === "supplier_invoices" || name === "suppliers" || name === "stock" || name === "tyre_prices" || name === "cash_expenses")) {
+  if (isTechnician() && (name === "dashboard" || name === "referrals" || name === "sms_inbox" || name === "supplier_invoices" || name === "suppliers" || name === "reorder" || name === "stock" || name === "tyre_prices" || name === "cash_expenses")) {
     name = "calendar";
   }
   const dashboardSection = document.getElementById("dashboard-section");
@@ -236,6 +236,7 @@ function setSection(name) {
   const supplierInvoicesSection = document.getElementById("supplier-invoices-section");
   const suppliersSection = document.getElementById("suppliers-section");
   const partsGuideSection = document.getElementById("parts-guide-section");
+  const reorderSection = document.getElementById("reorder-section");
   const stockSection = document.getElementById("stock-section");
   const tyrePricesSection = document.getElementById("tyre-prices-section");
   const cashExpensesSection = document.getElementById("cash-expenses-section");
@@ -253,6 +254,7 @@ function setSection(name) {
   if (supplierInvoicesSection) supplierInvoicesSection.hidden = name !== "supplier_invoices";
   if (suppliersSection) suppliersSection.hidden = name !== "suppliers";
   if (partsGuideSection) partsGuideSection.hidden = name !== "parts_guide";
+  if (reorderSection) reorderSection.hidden = name !== "reorder";
   if (stockSection) stockSection.hidden = name !== "stock";
   if (tyrePricesSection) tyrePricesSection.hidden = name !== "tyre_prices";
   if (cashExpensesSection) cashExpensesSection.hidden = name !== "cash_expenses";
@@ -261,6 +263,7 @@ function setSection(name) {
       name === "supplier_invoices" ||
       name === "suppliers" ||
       name === "parts_guide" ||
+      name === "reorder" ||
       name === "stock" ||
       name === "tyre_prices" ||
       name === "calendar" ||
@@ -287,6 +290,7 @@ function setSection(name) {
     supplier_invoices: "nav-supplier-invoices",
     suppliers: "nav-suppliers",
     parts_guide: "nav-parts-guide",
+    reorder: "nav-reorder",
     stock: "nav-stock",
     tyre_prices: "nav-tyre-prices",
     cash_expenses: "nav-cash-expenses",
@@ -328,6 +332,11 @@ function setSection(name) {
     setOverline("PARTS GUIDE");
     viewTitle.textContent = "Where to buy parts";
     window.DeanePartsGuide?.show?.();
+  }
+  if (name === "reorder") {
+    setOverline("TO ORDER");
+    viewTitle.textContent = "What to order";
+    window.DeaneReorder?.show?.();
   }
   if (name === "stock") {
     setOverline("STOCK");
@@ -852,6 +861,10 @@ document.getElementById("nav-suppliers")?.addEventListener("click", () => {
 
 document.getElementById("nav-parts-guide")?.addEventListener("click", () => {
   setSection("parts_guide");
+});
+
+document.getElementById("nav-reorder")?.addEventListener("click", () => {
+  setSection("reorder");
 });
 
 document.getElementById("nav-stock")?.addEventListener("click", () => {

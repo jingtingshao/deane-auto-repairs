@@ -18,6 +18,7 @@ data/sms-inbound.json
 data/sms-log.json
 data/referrals.json
 data/cash-expenses.json
+data/reorder-resets.json
 data/backup-status.json
 data/tyre-price-rows.json
 data/tyre-price-settings.json

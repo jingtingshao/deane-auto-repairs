@@ -68,6 +68,7 @@ const {
 } = require("./data/nz-time");
 const referralsLib = require("./data/referrals");
 const cashExpensesLib = require("./data/cash-expenses");
+const reorderLib = require("./data/reorder");
 const driveBackup = require("./data/drive-backup");
 const websms = require("./data/websms");
 const tyrePricesLib = require("./data/tyre-prices");
@@ -256,6 +257,7 @@ const SMS_INBOUND_FILE = path.join(DATA_DIR, "sms-inbound.json");
 const SMS_LOG_FILE = path.join(DATA_DIR, "sms-log.json");
 const REFERRALS_FILE = path.join(DATA_DIR, "referrals.json");
 const CASH_EXPENSES_FILE = path.join(DATA_DIR, "cash-expenses.json");
+const REORDER_RESETS_FILE = path.join(DATA_DIR, "reorder-resets.json");
 const TRUSTED_DEVICES_FILE = path.join(DATA_DIR, "trusted-devices.json");
 const TYRE_PRICE_ROWS_FILE = path.join(DATA_DIR, "tyre-price-rows.json");
 const TYRE_PRICE_SETTINGS_FILE = path.join(DATA_DIR, "tyre-price-settings.json");
@@ -396,6 +398,7 @@ for (const file of [
   SMS_LOG_FILE,
   REFERRALS_FILE,
   CASH_EXPENSES_FILE,
+  REORDER_RESETS_FILE,
   TRUSTED_DEVICES_FILE,
 ]) {
   if (!fs.existsSync(file)) writeJsonArray(file, []);
@@ -10702,6 +10705,40 @@ function stockedCandidateIds() {
   }
   return ids;
 }
+
+function reorderPayload() {
+  return reorderLib.buildReorderList({
+    items: readInventoryItems(),
+    movements: readInventoryMovements(),
+    resets: readJsonArray(REORDER_RESETS_FILE, "reorder resets"),
+  });
+}
+
+app.get("/api/reorder", requireOwnerAdmin, (_req, res) => {
+  try {
+    res.json(reorderPayload());
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Could not load the order list." });
+  }
+});
+
+app.post("/api/reorder/clear", requireOwnerAdmin, (req, res) => {
+  try {
+    const rawSupplier = String(req.body?.supplier || "").trim();
+    if (!rawSupplier) return res.status(400).json({ error: "Choose a supplier." });
+    const supplier = reorderLib.supplierLabel(rawSupplier);
+    const rows = readJsonArray(REORDER_RESETS_FILE, "reorder resets");
+    rows.push({
+      id: randomUUID(),
+      supplier,
+      at: nowIso(),
+    });
+    writeJsonArray(REORDER_RESETS_FILE, rows.slice(-400));
+    res.json(reorderPayload());
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || "Could not clear the order list." });
+  }
+});
 
 app.get("/api/inventory/meta", requireOwnerAdmin, (_req, res) => {
   res.json({
