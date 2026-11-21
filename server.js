@@ -8051,30 +8051,15 @@ app.post("/api/billing/:id/email", requireAdmin, requireCurrentBillingIfTech, as
     `;
   } else {
     const review = reviewPayloadForInvoice(doc);
-    subject = `Tax Invoice ${doc.number} for ${rego || vehicle} — ${business.name}`;
-    text =
-      `Hi ${name},\n\n` +
-      `Here is your tax invoice for ${vehicleBit}: ${doc.number}.\n` +
-      `Total incl. GST: $${money}\n\n` +
-      `View / print your invoice:\n${url}\n\n` +
-      (review
-        ? `${review.message}\nLeave a Google review:\n${review.url}\n\n`
-        : "") +
-      `A PDF copy is attached for your records.\n\n` +
-      `${business.paymentText()}\n\n` +
-      `${business.name}\n${business.street}, ${business.suburb}, ${business.city}\n${business.phoneDisplay}\n${business.email}\n`;
-    html = `
-      <p>Hi ${escapeHtml(name)},</p>
-      <p>Here is your tax invoice for <strong>${escapeHtml(vehicleBit)}</strong> — ${escapeHtml(doc.number)}.</p>
-      <p>Total incl. GST: <strong>$${escapeHtml(money)}</strong></p>
-      <p><a href="${escapeAttr(url)}">View / print your invoice</a></p>
-      ${
-        review
-          ? `<p style="margin:0.75rem 0 0.4rem;font-size:13px;line-height:1.4;">${escapeHtml(review.message)}</p>
-      <p><a href="${escapeAttr(review.url)}" style="display:inline-block;background:#1565c0;color:#fff;padding:7px 11px;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px;">Leave a Google review</a></p>`
-          : ""
-      }
-      <p>A PDF copy is attached for your records.</p>
+    const payment = normalizeInvoicePayment(doc, {}, totals);
+    const paidInFull = payment.paymentStatus === "paid";
+    const dueMoney = payment.balanceDue.toFixed(2);
+    const paidBit = paidInFull
+      ? `Nothing to pay — payment received. Thank you.\n`
+      : `Balance due: $${dueMoney}\n\n${business.paymentText()}\n`;
+    const payHtml = paidInFull
+      ? `<p><strong>Nothing to pay</strong> — payment received. Thank you.</p>`
+      : `<p>Balance due: <strong>$${escapeHtml(dueMoney)}</strong></p>
       <p><strong>How to pay</strong><br/>
       Bank account name: <strong>${escapeHtml(business.bankAccountName)}</strong><br/>
       Bank account number: <strong>${escapeHtml(business.bankAccount)}</strong></p>
@@ -8083,7 +8068,32 @@ app.post("/api/billing/:id/email", requireAdmin, requireCurrentBillingIfTech, as
         ${(business.paymentTerms || [])
           .map((line) => `<li>${escapeHtml(line)}</li>`)
           .join("")}
-      </ul>
+      </ul>`;
+    subject = `Tax Invoice ${doc.number} for ${rego || vehicle} — ${business.name}`;
+    text =
+      `Hi ${name},\n\n` +
+      `Here is your tax invoice for ${vehicleBit}: ${doc.number}.\n` +
+      `Total incl. GST: $${money}\n` +
+      paidBit +
+      `\nView / print your invoice:\n${url}\n\n` +
+      (review
+        ? `${review.message}\nLeave a Google review:\n${review.url}\n\n`
+        : "") +
+      `A PDF copy is attached for your records.\n\n` +
+      `${business.name}\n${business.street}, ${business.suburb}, ${business.city}\n${business.phoneDisplay}\n${business.email}\n`;
+    html = `
+      <p>Hi ${escapeHtml(name)},</p>
+      <p>Here is your tax invoice for <strong>${escapeHtml(vehicleBit)}</strong> — ${escapeHtml(doc.number)}.</p>
+      <p>Total incl. GST: <strong>$${escapeHtml(money)}</strong></p>
+      ${payHtml}
+      <p><a href="${escapeAttr(url)}">View / print your invoice</a></p>
+      ${
+        review
+          ? `<p style="margin:0.75rem 0 0.4rem;font-size:13px;line-height:1.4;">${escapeHtml(review.message)}</p>
+      <p><a href="${escapeAttr(review.url)}" style="display:inline-block;background:#1565c0;color:#fff;padding:7px 11px;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px;">Leave a Google review</a></p>`
+          : ""
+      }
+      <p>A PDF copy is attached for your records.</p>
       ${emailContactHtml()}
     `;
   }
