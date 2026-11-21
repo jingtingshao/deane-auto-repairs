@@ -6737,6 +6737,9 @@ app.get("/api/admin/dashboard", requireOwnerAdmin, (req, res) => {
         invoiced: 0,
         received: 0,
         outstanding: 0,
+        invoices: [],
+        payments: [],
+        undatedPayments: [],
       });
     }
 
@@ -6780,9 +6783,33 @@ app.get("/api/admin/dashboard", requireOwnerAdmin, (req, res) => {
               invoiceBucket.outstanding + payment.balanceDue
             );
           }
+          invoiceBucket.invoices.push({
+            id: doc.id,
+            number: doc.number || "",
+            customerName: doc.customerName || "",
+            registration: String(doc.registration || "").trim().toUpperCase(),
+            totalIncl: totals.totalIncl,
+            balanceDue: payment.balanceDue,
+            issuedOn: anchor.slice(0, 10),
+          });
         }
         for (const row of payment.payments) {
-            const paidMonth = String(row.paidAt || "").slice(0, 7);
+            const paidOn = String(row.paidAt || "").trim();
+            const paidMonth = paidOn.slice(0, 7);
+            const entry = {
+              id: row.id,
+              invoiceId: doc.id,
+              number: doc.number || "",
+              customerName: doc.customerName || "",
+              registration: String(doc.registration || "").trim().toUpperCase(),
+              amount: row.amount,
+              paidOn: paidOn.slice(0, 10),
+              note: String(row.note || "").trim().slice(0, 80),
+            };
+            if (!/^\d{4}-\d{2}$/.test(paidMonth)) {
+              if (invoiceBucket) invoiceBucket.undatedPayments.push(entry);
+              continue;
+            }
             const paidYear = Number(paidMonth.slice(0, 4));
             if (Number.isInteger(paidYear)) financialYears.add(paidYear);
             if (paidMonth === thisMonthKey) {
@@ -6796,6 +6823,7 @@ app.get("/api/admin/dashboard", requireOwnerAdmin, (req, res) => {
               paymentBucket.received = catalog.round2(
                 paymentBucket.received + row.amount
               );
+              paymentBucket.payments.push(entry);
             }
           }
       }
@@ -6823,6 +6851,21 @@ app.get("/api/admin/dashboard", requireOwnerAdmin, (req, res) => {
     }
 
     const financialMonthly = [...monthBuckets.values()];
+    for (const row of financialMonthly) {
+      row.invoices.sort(
+        (a, b) =>
+          String(a.issuedOn).localeCompare(String(b.issuedOn)) ||
+          String(a.number).localeCompare(String(b.number), "en", { numeric: true })
+      );
+      row.payments.sort(
+        (a, b) =>
+          String(a.paidOn).localeCompare(String(b.paidOn)) ||
+          String(a.number).localeCompare(String(b.number), "en", { numeric: true })
+      );
+      row.undatedPayments.sort((a, b) =>
+        String(a.number).localeCompare(String(b.number), "en", { numeric: true })
+      );
+    }
     const activityMonthLabel = monthLongLabel(activityMonthKey);
     const reports = readReports();
     const customers = readSavedCustomers();
