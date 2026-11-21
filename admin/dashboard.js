@@ -8,12 +8,6 @@
     }).format(Number(n) || 0);
   }
 
-  function moneyShort(n) {
-    const v = Number(n) || 0;
-    if (v >= 1000) return `$${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k`;
-    return `$${Math.round(v)}`;
-  }
-
   let selectedBoardId = "";
 
   function setNavCount(id, count) {
@@ -367,7 +361,7 @@
                   return `<div class="financial-combo-column" title="${Admin.escapeAttr(
                     `${row.label}: invoiced ${money(value)}`
                   )}">
-                    <span>${Admin.escapeHtml(moneyShort(value))}</span>
+                    <span>${Admin.escapeHtml(money(value))}</span>
                     <div class="financial-invoice-bar" style="height:${height}px"></div>
                   </div>`;
                 })
@@ -385,22 +379,110 @@
             ${shown
               .map(
                 (row) =>
-                  `<span title="${Admin.escapeAttr(money(row.received))}">${Admin.escapeHtml(
-                    moneyShort(row.received)
-                  )}</span>`
+                  `<span>${Admin.escapeHtml(money(row.received))}</span>`
               )
               .join("")}
           </div>
         </div>
       </div>
-      <p class="muted small">Red bars are all invoices, GST-inclusive, including unpaid work still in the workshop. Those show as unpaid. Voided invoices are excluded. The blue line is payments received in each month.</p>
+      <p class="muted small">Red bars are invoices issued that month, GST-inclusive, including work still unpaid. Voided invoices are left out. The blue line is payments whose date falls in that month. A payment with no date is not included. Figures are the exact dollars.</p>
+      ${monthBreakdownHtml(focusFinancialMonth(history))}
     `;
+  }
+
+  function focusFinancialMonth(history) {
+    const rows = Array.isArray(history?.monthly) ? history.monthly : [];
+    const key = Admin.todayIso().slice(0, 7);
+    const current = rows.find((row) => row.key === key);
+    if (current) return current;
+    const active = [...rows]
+      .reverse()
+      .find((row) => Number(row.invoiced) > 0 || Number(row.received) > 0);
+    return active || null;
+  }
+
+  function monthBreakdownHtml(row) {
+    if (!row) return "";
+    const invoices = Array.isArray(row.invoices) ? row.invoices : [];
+    const payments = Array.isArray(row.payments) ? row.payments : [];
+    const undated = Array.isArray(row.undatedPayments) ? row.undatedPayments : [];
+    const title = `${row.label || ""} ${row.year || ""}`.trim();
+    const invoiceRows = invoices.length
+      ? invoices
+          .map(
+            (doc) => `<tr data-open-billing="${Admin.escapeAttr(doc.id)}" data-billing-kind="invoice">
+              <td class="number-cell">${Admin.escapeHtml(doc.number || "—")}</td>
+              <td>${Admin.escapeHtml(formatListDate(doc.issuedOn))}</td>
+              <td>${Admin.escapeHtml(doc.customerName || "—")}</td>
+              <td>${Admin.escapeHtml(doc.registration || "—")}</td>
+              <td class="money-cell">${money(doc.totalIncl)}</td>
+              <td class="money-cell">${money(doc.balanceDue)}</td>
+            </tr>`
+          )
+          .join("")
+      : `<tr><td colspan="6" class="empty-table-cell">No invoices issued in ${Admin.escapeHtml(title)}.</td></tr>`;
+    const paymentRows = payments.length
+      ? payments
+          .map(
+            (doc) => `<tr data-open-billing="${Admin.escapeAttr(doc.invoiceId)}" data-billing-kind="invoice">
+              <td>${Admin.escapeHtml(formatListDate(doc.paidOn))}</td>
+              <td class="number-cell">${Admin.escapeHtml(doc.number || "—")}</td>
+              <td>${Admin.escapeHtml(doc.customerName || "—")}</td>
+              <td>${Admin.escapeHtml(doc.registration || "—")}</td>
+              <td class="money-cell">${money(doc.amount)}</td>
+              <td>${Admin.escapeHtml(doc.note || "")}</td>
+            </tr>`
+          )
+          .join("")
+      : `<tr><td colspan="6" class="empty-table-cell">No payments dated in ${Admin.escapeHtml(title)}.</td></tr>`;
+    const undatedRows = undated.length
+      ? `<h4>Payments saved with no date</h4>
+      <p class="muted small">These amounts reduce the balance, but they are not in Received, because there is no month to put them in.</p>
+      <div class="dashboard-table-wrap"><table class="dashboard-money-table">
+        <thead><tr><th>Invoice</th><th>Customer</th><th>Plate</th><th>Amount</th><th>Note</th></tr></thead>
+        <tbody>${undated
+          .map(
+            (doc) => `<tr data-open-billing="${Admin.escapeAttr(doc.invoiceId)}" data-billing-kind="invoice">
+              <td class="number-cell">${Admin.escapeHtml(doc.number || "—")}</td>
+              <td>${Admin.escapeHtml(doc.customerName || "—")}</td>
+              <td>${Admin.escapeHtml(doc.registration || "—")}</td>
+              <td class="money-cell">${money(doc.amount)}</td>
+              <td>${Admin.escapeHtml(doc.note || "")}</td>
+            </tr>`
+          )
+          .join("")}</tbody>
+      </table></div>`
+      : "";
+    return `<div class="financial-month-breakdown">
+      <h3>${Admin.escapeHtml(title)} — how this month is added up</h3>
+      <div class="dash-month-stats dash-financial-totals">
+        <div><strong>${money(row.invoiced)}</strong><span>Invoiced · red bar</span></div>
+        <div><strong>${money(row.received)}</strong><span>Received · blue line</span></div>
+        <div><strong>${money(row.outstanding)}</strong><span>Still unpaid on these invoices</span></div>
+      </div>
+      <h4>Invoices issued this month</h4>
+      <div class="dashboard-table-wrap"><table class="dashboard-money-table">
+        <thead><tr><th>Invoice</th><th>Issued</th><th>Customer</th><th>Plate</th><th>Invoice total</th><th>Still unpaid</th></tr></thead>
+        <tbody>${invoiceRows}</tbody>
+      </table></div>
+      <h4>Payments dated this month</h4>
+      <div class="dashboard-table-wrap"><table class="dashboard-money-table">
+        <thead><tr><th>Paid</th><th>Invoice</th><th>Customer</th><th>Plate</th><th>Amount</th><th>Note</th></tr></thead>
+        <tbody>${paymentRows}</tbody>
+      </table></div>
+      ${undatedRows}
+    </div>`;
   }
 
   function renderFinancialWindow(history) {
     const root = document.getElementById("financial-chart-root");
     if (!root) return;
     root.innerHTML = renderFinancialChart(history);
+    root.querySelectorAll("[data-open-billing]").forEach((rowEl) => {
+      rowEl.addEventListener("click", () => {
+        openBillingDoc(rowEl.dataset.openBilling, rowEl.dataset.billingKind);
+      });
+    });
     root.querySelector("#financial-window-prev")?.addEventListener("click", () => {
       financialWindowStart -= 1;
       renderFinancialWindow(history);
@@ -534,9 +616,9 @@
             </label>
           </div>
           <div class="dash-month-stats dash-financial-totals">
-            <div><strong>${moneyShort(financial.totals?.invoiced)}</strong><span>Invoiced this year</span></div>
-            <div><strong>${moneyShort(financial.totals?.received)}</strong><span>Received this year</span></div>
-            <div><strong>${moneyShort(financial.totals?.outstanding)}</strong><span>Still outstanding</span></div>
+            <div><strong>${money(financial.totals?.invoiced)}</strong><span>Invoiced this year</span></div>
+            <div><strong>${money(financial.totals?.received)}</strong><span>Received this year</span></div>
+            <div><strong>${money(financial.totals?.outstanding)}</strong><span>Still outstanding</span></div>
           </div>
           <div id="financial-chart-root"></div>
         </section>

@@ -2488,8 +2488,9 @@ label.check input {
   background: rgba(255, 255, 255, 0.92);
   color: #c62828;
   font-family: var(--display);
-  font-size: 0.9rem;
+  font-size: 0.78rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .financial-invoice-bar {
@@ -2545,8 +2546,42 @@ label.check input {
 .financial-combo-received span {
   color: #1565c0;
   font-family: var(--display);
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.financial-month-breakdown {
+  margin-top: 1.25rem;
+}
+
+.financial-month-breakdown h3,
+.financial-month-breakdown h4 {
+  margin: 0.9rem 0 0.45rem;
+  font-family: var(--display);
+  letter-spacing: 0.02em;
+}
+
+.financial-month-breakdown h3 {
+  font-size: 1.15rem;
+}
+
+.financial-month-breakdown h4 {
+  font-size: 0.95rem;
+  color: var(--muted, #5b6777);
+}
+
+.financial-month-breakdown .dashboard-money-table tr {
+  cursor: pointer;
+}
+
+.financial-month-breakdown td.empty-table-cell {
+  color: var(--muted, #5b6777);
+  cursor: default;
+}
+
+.dash-financial-totals strong {
+  font-size: 1.35rem;
 }
 
 .financial-dot {
