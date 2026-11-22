@@ -38,10 +38,14 @@
     "wing tyres": "wing tyre",
     "wing of the car": "wing tyre",
     "value tyre": "value tyres",
+    "my 2016": "my2016",
   };
   const SUPPLIER_TITLE = {
-    "wing tyre": "Wing Tyre",
-    "value tyres": "Value Tyres",
+    wingtyre: "Wing Tyre",
+    valuetyres: "Value Tyres",
+    my2016: "My2016",
+    repcomtroskill: "REPCO MT ROSKILL",
+    repcoonehunga: "REPCO ONEHUNGA",
   };
 
   function supplierBaseKey(value) {
@@ -69,8 +73,14 @@
   }
 
   function supplierGroupKey(value) {
-    const key = supplierBaseKey(value);
-    return SAME_SUPPLIER[key] || key;
+    const text = String(value || "");
+    const folded = /repco/i.test(text) && /onehunga/i.test(text)
+      ? "REPCO ONEHUNGA"
+      : /repco/i.test(text) && /ros?kill/i.test(text)
+        ? "REPCO MT ROSKILL"
+        : text;
+    const key = supplierBaseKey(folded);
+    return (SAME_SUPPLIER[key] || key).replace(/\s+/g, "");
   }
 
   function supplierTitle(key, fallback) {

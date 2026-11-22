@@ -4,6 +4,7 @@
  */
 
 const inventoryLib = require("./inventory");
+const supplierNames = require("./supplier-names");
 
 const IMPORT_ID = "my2016-cabin-filters-2026-11";
 const SUPPLIER = "My2016";
@@ -65,7 +66,7 @@ function applyToStock(items, movements, now, newId) {
       (item) =>
         item.category === "cabin_filter" &&
         samePart(item, line.partNumber) &&
-        String(item.supplier || "").trim().toLowerCase() === SUPPLIER.toLowerCase()
+        supplierNames.supplierMatchKey(item.supplier) === supplierNames.supplierMatchKey(SUPPLIER)
     );
     if (existing) {
       Object.assign(existing, { ...line, qtyOnHand: existing.qtyOnHand, updatedAt: now });
@@ -179,7 +180,7 @@ function applyAirToStock(items, movements, now, newId) {
       (item) =>
         item.category === "air_filter" &&
         samePart(item, line.partNumber) &&
-        String(item.supplier || "").trim().toLowerCase() === SUPPLIER.toLowerCase()
+        supplierNames.supplierMatchKey(item.supplier) === supplierNames.supplierMatchKey(SUPPLIER)
     );
     if (existing) {
       Object.assign(existing, { ...line, qtyOnHand: existing.qtyOnHand, updatedAt: now });

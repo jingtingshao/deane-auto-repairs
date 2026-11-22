@@ -699,7 +699,7 @@ function mergeWingMazzini225() {
   }
 }
 
-/** Write Wing Tyre / Value Tyres onto existing stock, invoices, and job parts. */
+/** Write one spelling of each supplier onto existing stock, invoices, and job parts. */
 function unifyStoredSupplierNames() {
   const invoices = readSupplierInvoices();
   if (patchSupplierField(invoices, "supplier")) writeSupplierInvoices(invoices);
@@ -1978,6 +1978,19 @@ function parseTopstarRows(lines, { allowNoHeader = false } = {}) {
   return items;
 }
 
+function pickSupplierLine(lines, fromSupplier) {
+  const branded = (lines || []).filter((line) =>
+    /repco|bnt|supercheap|napa|partsmaster|autoparts|top\s*star|my\s*2016|my2016|maka|value\s*tyre|tyremax|wing/i.test(
+      line
+    )
+  );
+  const caps = (lines || []).filter(
+    (line) => /^[A-Z][A-Z\s&.'-]{2,}$/.test(line) && !/invoice|bill to|date/i.test(line)
+  );
+  const ordered = [fromSupplier, ...branded, ...caps].map((line) => String(line || "").trim()).filter(Boolean);
+  return ordered.find((line) => !supplierNames.isPlaceholderSupplierName(line)) || "";
+}
+
 function statementSupplierName(text) {
   const match = String(text || "").match(/from\s*:\s*([^\n\r|]{2,80})/i);
   if (!match) return "";
@@ -2044,18 +2057,9 @@ function parseSupplierInvoiceText(rawText, options = {}) {
   const topstar = /top\s*star/i.test(text) || /top\s*star/i.test(String(options.supplierHint || ""));
   const profile = topstar ? null : supplierProfiles.detectSupplierProfile(text, options.supplierHint);
   const fromSupplier = statementSupplierName(text);
-  const supplierLine = topstar
-    ? "Topstar New Zealand"
-    : lines.find((line) => /repco|bnt|supercheap|napa|partsmaster|autoparts/i.test(line)) ||
-      fromSupplier ||
-      lines.find((line) => /^[A-Z][A-Z\s&.'-]{2,}$/.test(line) && !/invoice|bill to|date/i.test(line)) ||
-      "";
+  const supplierLine = topstar ? "Topstar New Zealand" : pickSupplierLine(lines, fromSupplier);
   const supplier = supplierNames.canonicalSupplierName(
-    topstar
-      ? "Topstar New Zealand"
-      : profile
-        ? profile.name
-        : supplierLine.replace(/\s+sample.*$/i, "").trim()
+    topstar ? "Topstar New Zealand" : profile ? profile.name : supplierLine.replace(/\s+sample.*$/i, "").trim()
   );
 
   const invoiceNoLine = lines.findIndex((line) => /^invoice\s*number$/i.test(line));

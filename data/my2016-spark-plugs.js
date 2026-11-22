@@ -5,6 +5,7 @@
  */
 
 const inventoryLib = require("./inventory");
+const supplierNames = require("./supplier-names");
 
 const IMPORT_ID = "my2016-spark-plugs-2026-11";
 const SUPPLIER = "My2016";
@@ -66,7 +67,7 @@ function applyToStock(items, movements, now, newId) {
       (item) =>
         item.category === "spark_plug" &&
         samePart(item, line.partNumber) &&
-        String(item.supplier || "").trim().toLowerCase() === SUPPLIER.toLowerCase()
+        supplierNames.supplierMatchKey(item.supplier) === supplierNames.supplierMatchKey(SUPPLIER)
     );
     if (existing) {
       Object.assign(existing, { ...line, qtyOnHand: existing.qtyOnHand, updatedAt: now });

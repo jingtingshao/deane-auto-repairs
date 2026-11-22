@@ -290,7 +290,7 @@ const MAZZINI_225_PART = "225/65R17";
 /** The two Wing Tyre lines for this size are the same Ecosaver, split by a duplicated invoice name. */
 function isWingMazzini225(item) {
   if (item?.category !== "tyre") return false;
-  if (supplierNames.supplierMatchKey(item.supplier) !== "wing tyre") return false;
+  if (supplierNames.supplierMatchKey(item.supplier) !== supplierNames.supplierMatchKey("Wing Tyre")) return false;
   const hay = `${item.name || ""} ${item.partNumber || ""}`.toLowerCase().replace(/\s+/g, "");
   return hay.includes("225/65r17") && hay.includes("mazzini");
 }
