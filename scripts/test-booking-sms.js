@@ -16,7 +16,11 @@ const body = bookingSms.buildBookingConfirmSmsBody({
 });
 assert.strictEqual(
   body,
-  "Hi John, your vehicle ABC123 is booked in tomorrow at 9:30am. We are at 63 Hayr Road, Mt Roskill (next to BP station). Reply YES to confirm or NO to reschedule. Deane Auto 08006259827"
+  "Hi John,\n" +
+    "Your vehicle ABC123 is booked in tomorrow at 9:30am.\n" +
+    "We are at 63 Hayr Road, Mt Roskill (next to BP station).\n" +
+    "Reply YES to confirm or NO to reschedule.\n" +
+    "Deane Auto 08006259827"
 );
 assert.ok(!/Price \$/.test(body), "booking SMS should not include a price");
 

@@ -23,9 +23,11 @@ function buildBookingConfirmSmsBody(appt = {}) {
   const when = formatSmsClock(appt.startTime) || appt.startTime || "your booked time";
   const address = business.smsAddress || `${business.street}, ${business.suburb} (next to BP station)`;
   return (
-    `Hi ${name}, your vehicle ${plate} is booked in tomorrow at ${when}. ` +
-    `We are at ${address}. ` +
-    `Reply YES to confirm or NO to reschedule. Deane Auto ${business.phoneTel}`
+    `Hi ${name},\n` +
+    `Your vehicle ${plate} is booked in tomorrow at ${when}.\n` +
+    `We are at ${address}.\n` +
+    `Reply YES to confirm or NO to reschedule.\n` +
+    `Deane Auto ${business.phoneTel}`
   );
 }
 
