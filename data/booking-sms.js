@@ -21,7 +21,7 @@ function buildBookingConfirmSmsBody(appt = {}) {
   const name = firstNameForSms(appt.customerName);
   const plate = String(appt.registration || "").trim().toUpperCase() || "your vehicle";
   const when = formatSmsClock(appt.startTime) || appt.startTime || "your booked time";
-  const address = business.smsAddress || `${business.street}, ${business.suburb} (next to BP station)`;
+  const address = business.smsAddress || `${business.street}, ${business.suburb} (Next to BP Petrol Station)`;
   return (
     `Hi ${name},\n` +
     `Your vehicle ${plate} is booked in tomorrow at ${when}.\n` +

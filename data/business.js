@@ -6,7 +6,7 @@ module.exports = {
   suburb: "Mt Roskill",
   city: "Auckland",
   // Short line for SMS (booking confirmations).
-  smsAddress: "63 Hayr Road, Mt Roskill (next to BP station)",
+  smsAddress: "63 Hayr Road, Mt Roskill (Next to BP Petrol Station)",
   phoneDisplay: "0800 625 9827",
   phoneTel: "08006259827",
   email: "admin@deaneauto.co.nz",
