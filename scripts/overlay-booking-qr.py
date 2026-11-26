@@ -21,14 +21,36 @@ POSTERS = [
 WINDOWS_FONTS = Path("C:/Windows/Fonts")
 
 
+LINUX_FONTS = (
+    Path("/usr/share/fonts/truetype/dejavu"),
+    Path("/usr/share/fonts/truetype/liberation"),
+    Path("/usr/share/fonts/truetype/noto"),
+)
+
+
 def font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     names = (
-        ["arialbd.ttf", "segoeuib.ttf", "calibrib.ttf"]
+        [
+            "arialbd.ttf",
+            "segoeuib.ttf",
+            "calibrib.ttf",
+            "DejaVuSans-Bold.ttf",
+            "LiberationSans-Bold.ttf",
+            "NotoSans-Bold.ttf",
+        ]
         if bold
-        else ["arial.ttf", "segoeui.ttf", "calibri.ttf"]
+        else [
+            "arial.ttf",
+            "segoeui.ttf",
+            "calibri.ttf",
+            "DejaVuSans.ttf",
+            "LiberationSans-Regular.ttf",
+            "NotoSans-Regular.ttf",
+        ]
     )
     for name in names:
-        for candidate in (name, WINDOWS_FONTS / name):
+        candidates = [name, WINDOWS_FONTS / name, *(folder / name for folder in LINUX_FONTS)]
+        for candidate in candidates:
             try:
                 return ImageFont.truetype(str(candidate), size)
             except OSError:
@@ -702,6 +724,27 @@ def wof_poster(qr_path: Path) -> None:
     print(f"poster {out.name} ({poster.width}x{poster.height})")
 
 
+AIR_FILTER_CN = "deane-air-filter-50-poster-cn.png"
+AIR_FILTER_CN_OUT = "deane-air-filter-50-poster-cn-qr.png"
+# Same card box as the other navy CN posters (725×1024 coords × TYRE_SCALE).
+AIR_FILTER_CN_QR_BOX = (1070, 1630, 1394, 1972)
+
+
+def air_filter_poster_cn(qr_path: Path) -> None:
+    """Paste the booking QR card onto the air-filter navy poster."""
+    src = ADS_DIR / AIR_FILTER_CN
+    if not src.exists():
+        print(f"skip {AIR_FILTER_CN_OUT} (missing {AIR_FILTER_CN})")
+        return
+    poster = Image.open(src).convert("RGB")
+    bx0, by0, bx1, by1 = AIR_FILTER_CN_QR_BOX
+    card = make_box_card(qr_path, bx1 - bx0, by1 - by0, TYRE_SCALE)
+    poster.paste(card, (bx0, by0))
+    out = ADS_DIR / AIR_FILTER_CN_OUT
+    poster.save(out, "PNG")
+    print(f"poster {out.name} ({poster.width}x{poster.height})")
+
+
 def main() -> None:
     QR_DIR.mkdir(parents=True, exist_ok=True)
     general = QR_DIR / "book.png"
@@ -725,6 +768,7 @@ def main() -> None:
         QR_DIR / "book-service.png", "FULL", "$199", FULL_SERVICE_CN_OUT, match_width=False, note=FULL_SERVICE_NOTE
     )
     brake_poster_cn(QR_DIR / "book-brakes.png")
+    air_filter_poster_cn(QR_DIR / "book-air-filter.png")
 
 
 if __name__ == "__main__":
