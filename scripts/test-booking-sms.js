@@ -18,9 +18,9 @@ assert.strictEqual(
   body,
   "Hi John,\n" +
     "Your vehicle ABC123 is booked in tomorrow at 9:30am.\n" +
+    "Deane Auto Repairs 08006259827\n" +
     "We are at 63 Hayr Road, Mt Roskill (Next to BP Petrol Station).\n" +
-    "Reply YES to confirm or NO to reschedule.\n" +
-    "Deane Auto Repairs 08006259827"
+    "Reply YES to confirm or NO to reschedule.\n"
 );
 assert.ok(!/Price \$/.test(body), "booking SMS should not include a price");
 

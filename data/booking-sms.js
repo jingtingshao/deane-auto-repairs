@@ -25,9 +25,9 @@ function buildBookingConfirmSmsBody(appt = {}) {
   return (
     `Hi ${name},\n` +
     `Your vehicle ${plate} is booked in tomorrow at ${when}.\n` +
+    `Deane Auto Repairs ${business.phoneTel}\n` +
     `We are at ${address}.\n` +
-    `Reply YES to confirm or NO to reschedule.\n` +
-    `Deane Auto Repairs ${business.phoneTel}`
+    `Reply YES to confirm or NO to reschedule.\n`
   );
 }
 
