@@ -18,6 +18,7 @@ const TARGETS = [
   { file: "book-service.png", path: "/book?help=service" },
   { file: "book-brakes.png", path: "/book?help=brakes" },
   { file: "book-tyres.png", path: "/book?help=tyres" },
+  { file: "book-air-filter.png", path: "/book?help=Repairs%20%2F%20other" },
   // Ads / stickers: open the online tyre price finder (not the booking form).
   { file: "tyre-prices.png", path: "/tyres/" },
 ];
