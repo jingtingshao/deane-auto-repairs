@@ -170,36 +170,105 @@
     return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
   }
 
+  const NAME_NOISE = new Set([
+    "a", "an", "the", "and", "new", "engine", "oil", "litre", "liter", "ltr",
+    "drum", "bottle", "genuine", "premium", "battery", "bat", "calcium", "each",
+  ]);
+
+  function productTokens(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/(\d+)\s*w\s*-?\s*(\d+)/g, "$1w$2")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter((token) => token && !NAME_NOISE.has(token));
+  }
+
+  function namesClose(a, b) {
+    const left = nameKey(a);
+    const right = nameKey(b);
+    if (!left || !right) return false;
+    if (left === right) return true;
+    const lt = productTokens(a);
+    const rt = productTokens(b);
+    if (!lt.length || !rt.length) return false;
+    const key = (tokens) => tokens.slice().sort().join(" ");
+    if (key(lt) === key(rt)) return true;
+    const [small, big] = lt.length <= rt.length ? [lt, rt] : [rt, lt];
+    if (small.every((token) => token.length <= 2)) return false;
+    const bigSet = new Set(big);
+    if (!small.every((token) => bigSet.has(token))) return false;
+    return small.some((token) => /\d/.test(token) || token.length >= 4);
+  }
+
+  function leadingPartCode(value) {
+    const match = String(value || "").trim().match(/^([A-Za-z]?\d{3,6}[A-Za-z]?)\b/);
+    return match ? partKey(match[1]) : "";
+  }
+
+  function supplierKey(value) {
+    return nameKey(value)
+      .replace(/\b(ltd|limited|pty|inc|company|co|nz|services|service)\b/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function sameSupplier(a, b) {
+    const left = supplierKey(a);
+    const right = supplierKey(b);
+    return !left || !right || left === right;
+  }
+
+  function partKeyFor(input) {
+    const explicit = partKey(input?.partNumber);
+    if (explicit) return explicit;
+    for (const code of [leadingPartCode(input?.name), leadingPartCode(input?.rawLineText)]) {
+      if (code && items.some((row) => partKey(row.partNumber) === code)) return code;
+    }
+    return "";
+  }
+
+  let receiveRawLine = "";
+  let receiveAmbiguous = false;
+
   function findStockMatch(input) {
+    receiveAmbiguous = false;
     const category = String(input?.category || "");
-    const key = partKey(input?.partNumber);
+    const key = partKeyFor(input);
     const name = nameKey(input?.name);
     if (key) {
-      const hits = items.filter((row) => {
-        if (row.category !== category || partKey(row.partNumber) !== key) return false;
-        if (category === "tyre" && name && nameKey(row.name) !== name) return false;
-        return true;
-      });
+      let hits = items.filter((row) => partKey(row.partNumber) === key);
+      if (hits.some((row) => row.category === "tyre") && name) {
+        const closeTyres = hits.filter((row) => row.category === "tyre" && namesClose(row.name, input?.name));
+        const rest = hits.filter((row) => row.category !== "tyre");
+        hits = rest.concat(closeTyres);
+      }
+      if (category) {
+        const sameCat = hits.filter((row) => row.category === category);
+        if (sameCat.length) hits = sameCat;
+        else if (hits.length !== 1) hits = [];
+      }
+      const supplied = hits.filter((row) => sameSupplier(row.supplier, input?.supplier));
+      if (supplied.length) hits = supplied;
+      else if (supplierKey(input?.supplier)) hits = [];
       if (hits.length === 1) return hits[0];
       if (hits.length > 1) {
-        const supplier = nameKey(input?.supplier);
-        return (
-          hits.find((row) => nameKey(row.supplier) === supplier && nameKey(row.name) === name) ||
-          hits.find((row) => nameKey(row.supplier) === supplier) ||
-          hits[0]
-        );
+        const consignment = hits.find((row) => /consignment/i.test(row.notes || ""));
+        return consignment || hits[0];
       }
     }
-    const supplier = nameKey(input?.supplier);
-    if (!name || !category) return null;
-    return (
-      items.find(
-        (row) =>
-          row.category === category &&
-          nameKey(row.name) === name &&
-          nameKey(row.supplier) === supplier
-      ) || null
-    );
+    if (!name) return null;
+    let named = items.filter((row) => namesClose(row.name, input?.name) && sameSupplier(row.supplier, input?.supplier));
+    if (category) {
+      const sameCat = named.filter((row) => row.category === category);
+      if (sameCat.length) named = sameCat;
+    }
+    if (named.length > 1) {
+      receiveAmbiguous = true;
+      return null;
+    }
+    return named[0] || null;
   }
 
   function guessCategory(text) {
@@ -208,6 +277,7 @@
       if (hay.includes(needle)) return id;
     }
     if (/\b\d{3}\s*\/\s*\d{2}\s*r\s*\d{2}\b/i.test(hay) || /\b\d{3}\s*r\s*\d{2}\s*c?\b/i.test(hay)) return "tyre";
+    if (/\bbat\b/.test(hay)) return "battery";
     return "";
   }
 
@@ -800,6 +870,7 @@
       name: receiveForm.elements.name.value,
       partNumber: receiveForm.elements.partNumber.value,
       supplier: receiveForm.elements.supplier.value,
+      rawLineText: receiveRawLine,
     };
   }
 
@@ -837,6 +908,18 @@
     receiveForm.elements.costPrice.classList.toggle("is-cost-changed", changed);
     if (receiveLineAlready) {
       summary.textContent = "This invoice line is already in stock. Adding it again will not increase the quantity.";
+      return;
+    }
+    if (receiveAmbiguous) {
+      summary.textContent = "This name matches more than one stock line. Enter the part number of the existing line so the quantity is not saved as a new item.";
+      return;
+    }
+    if (match && nameKey(match.name) !== nameKey(receiveForm.elements.name.value)) {
+      const invoiceName = String(receiveForm.elements.name.value || "").trim();
+      const costNote = changed
+        ? ` Cost changes from ${money(match.costPrice)} to ${money(receiveShelfCost())}.`
+        : "";
+      summary.textContent = `Same part already in stock: ${match.name}. Quantity is added to that line. The invoice calls it “${invoiceName}”.${costNote}`;
       return;
     }
     if (changed) {
@@ -881,6 +964,7 @@
     }
     receiveSellTouched = false;
     receiveKeptSell = false;
+    receiveRawLine = String(prefill.rawLineText || "");
     const name = String(prefill.name || "").trim();
     const guessed = prefill.category || guessCategory(`${name} ${prefill.partNumber || ""}`);
     fillCategorySelect(receiveForm.elements.category, guessed);
@@ -895,6 +979,15 @@
     receiveForm.elements.stewardshipCandidateId.value = prefill.stewardshipCandidateId || "";
     receiveForm.elements.supplierInvoiceId.value = prefill.supplierInvoiceId || "";
     receiveForm.elements.invoiceNo.value = prefill.invoiceNo || "";
+    const matched = findStockMatch(receiveMatchInput());
+    if (matched) {
+      if (!partKey(receiveForm.elements.partNumber.value) && matched.partNumber) {
+        receiveForm.elements.partNumber.value = matched.partNumber;
+      }
+      if (receiveForm.elements.category.value !== matched.category) {
+        fillCategorySelect(receiveForm.elements.category, matched.category);
+      }
+    }
     applySavedSell();
     receiveSummary(prefill);
     receiveDialog.hidden = false;
@@ -1078,6 +1171,7 @@
       stewardshipCandidateId: receiveForm.elements.stewardshipCandidateId.value,
       supplierInvoiceId: receiveForm.elements.supplierInvoiceId.value,
       invoiceNo: receiveForm.elements.invoiceNo.value,
+      rawLineText: receiveRawLine,
       note: receiveForm.elements.invoiceNo.value
         ? `Invoice ${receiveForm.elements.invoiceNo.value}`
         : "Received",
@@ -1109,9 +1203,11 @@
       flash(
         result.already
           ? "That invoice line is already in stock."
-          : fee > 0
-            ? `${result.item?.name || "Tyre"} added to stock. Tyre ${money(tyrePrice)} + stewardship ${money(fee)} = ${money(result.item?.costPrice)} cost.`
-            : `${result.item?.name || "Part"} added to stock at ${money(result.item?.sellPrice)}${result.item?.unit === "litre" ? " per litre" : ""} ex GST.`
+          : result.created
+            ? fee > 0
+              ? `${result.item?.name || "Tyre"} added to stock. Tyre ${money(tyrePrice)} + stewardship ${money(fee)} = ${money(result.item?.costPrice)} cost.`
+              : `${result.item?.name || "Part"} added as a new stock line at ${money(result.item?.sellPrice)}${result.item?.unit === "litre" ? " per litre" : ""} ex GST.`
+            : `${result.item?.name || "That part"} is already in stock. Quantity was added to that line.`
       );
     } catch (err) {
       alert(err.message);

@@ -127,6 +127,13 @@ function applyToStock(items, movements, now, newId) {
   return { added, updated };
 }
 
+function lineForPart(part) {
+  const key = String(part || "").replace(/\s+/g, "").toUpperCase();
+  if (!key) return null;
+  const row = BATTERIES.find((item) => String(item[0]).replace(/\s+/g, "").toUpperCase() === key);
+  return row ? stockLine(row) : null;
+}
+
 module.exports = {
   IMPORT_ID,
   BATTERIES,
@@ -134,5 +141,6 @@ module.exports = {
   FITTING_INCL,
   fittedInclGst,
   stockLine,
+  lineForPart,
   applyToStock,
 };

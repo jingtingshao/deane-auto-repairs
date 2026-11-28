@@ -699,6 +699,59 @@ function mergeWingMazzini225() {
   }
 }
 
+/** Fold stock lines that share a supplier part number, including a short invoice name for the same code. */
+function mergeDuplicatePartLines() {
+  const items = readJsonArray(INVENTORY_FILE, "inventory");
+  const jobs = readJsonArray(JOBS_FILE, "jobs");
+  const docs = readJsonArray(BILLING_FILE, "billing");
+  const referenced = new Set();
+  for (const job of jobs) {
+    for (const part of job.parts || []) {
+      if (part.stockItemId) referenced.add(part.stockItemId);
+    }
+  }
+  for (const doc of docs) {
+    for (const line of doc.lines || []) {
+      if (line.stockItemId) referenced.add(line.stockItemId);
+    }
+  }
+  const plans = inventoryLib.planSamePartMerge(items, referenced);
+  if (!plans.length) return;
+  const dropIds = new Set();
+  for (const plan of plans) {
+    const keeper = items.find((item) => item.id === plan.keeperId);
+    if (!keeper) continue;
+    keeper.qtyOnHand = plan.qty;
+    keeper.updatedAt = nowIso();
+    for (const id of plan.dropIds) dropIds.add(id);
+  }
+  if (!dropIds.size) return;
+  writeJsonArray(
+    INVENTORY_FILE,
+    items.filter((item) => !dropIds.has(item.id))
+  );
+  const movements = readJsonArray(INVENTORY_MOVEMENTS_FILE, "inventory movements");
+  let movementsChanged = false;
+  for (const plan of plans) {
+    if (retargetStockId(movements, "itemId", new Set(plan.dropIds), plan.keeperId)) movementsChanged = true;
+  }
+  if (movementsChanged) writeJsonArray(INVENTORY_MOVEMENTS_FILE, movements);
+  let jobsChanged = false;
+  for (const job of jobs) {
+    for (const plan of plans) {
+      if (retargetStockId(job.parts, "stockItemId", new Set(plan.dropIds), plan.keeperId)) jobsChanged = true;
+    }
+  }
+  if (jobsChanged) writeJobs(jobs);
+  let billingChanged = false;
+  for (const doc of docs) {
+    for (const plan of plans) {
+      if (retargetStockId(doc.lines, "stockItemId", new Set(plan.dropIds), plan.keeperId)) billingChanged = true;
+    }
+  }
+  if (billingChanged) writeJsonArray(BILLING_FILE, docs);
+}
+
 /** Write one spelling of each supplier onto existing stock, invoices, and job parts. */
 function unifyStoredSupplierNames() {
   const invoices = readSupplierInvoices();
@@ -11612,6 +11665,7 @@ try {
 try {
   unifyStoredSupplierNames();
   mergeWingMazzini225();
+  mergeDuplicatePartLines();
 } catch (err) {
   console.error("Could not unify supplier names:", err);
 }

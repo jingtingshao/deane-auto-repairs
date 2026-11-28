@@ -5,6 +5,8 @@
  * Topstar and Repco are read by the general parser in server.js.
  */
 
+const aaBatteries = require("./aa-batteries");
+
 const MONTHS = "jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec";
 
 function round2(value) {
@@ -63,6 +65,45 @@ function valueTyresTotals(text, lines) {
   return { subtotal, tax: 0, total: 0 };
 }
 
+/** AA Battery Service tax invoice: item number, short description, qty, unit, amount.
+ * The printed description is often just "BAT Calcium" for every battery.
+ * The item number is the consignment part, including digits-only codes such as 3224.
+ */
+function aaBatteryLines(lines) {
+  const items = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = String(lines[index] || "").replace(/\s+/g, " ").trim();
+    const match = line.match(
+      /^([A-Za-z]?\d{3,6}[A-Za-z]?)\s+(.+?)\s+(\d{1,3})\s+\$?\s*(\d+\.\d{2})\s+\$?\s*(\d+\.\d{2})\s*$/
+    );
+    if (!match) continue;
+    const part = match[1].toUpperCase();
+    const qty = Number(match[3]) || 0;
+    const amount = Number(match[5]) || 0;
+    if (!(qty > 0) || !(amount > 0)) continue;
+    const written = match[2].replace(/\s+/g, " ").trim();
+    const known = aaBatteries.lineForPart(part);
+    items.push({
+      lineNo: index + 1,
+      rawLineText: line,
+      descriptionCandidate: known ? known.name : `Battery ${part} ${written}`.replace(/\s+/g, " ").trim(),
+      partNumberCandidate: part,
+      qtyCandidate: qty,
+      costPriceCandidate: round2(amount / qty),
+      confidence: known ? 0.98 : 0.9,
+    });
+  }
+  return items;
+}
+
+function aaBatteryTotals(text) {
+  return {
+    subtotal: moneyFrom(text, /total\s*\(\s*exc\.?\s*gst\s*\)\s*\$?\s*([\d,]+\.\d{2})/i),
+    tax: moneyFrom(text, /\bgst\s*\$\s*([\d,]+\.\d{2})/i),
+    total: moneyFrom(text, /total\s*\(\s*inc\.?\s*gst\s*\)[\s\S]{0,80}?\$\s*([\d,]+\.\d{2})/i),
+  };
+}
+
 /** Maka tax invoice books are numbered 01xxxxx in red; OCR often turns the leading 0 into a symbol. */
 function makaInvoiceNo(text) {
   const clean = String(text || "").match(/\b(01\d{5})\b/);
@@ -96,6 +137,15 @@ const PROFILES = [
     numbers: ["140-349-119", "03-1322-0346287-00"],
     invoiceNo: makaInvoiceNo,
     handwrittenLines: true,
+  },
+  {
+    name: "AA Battery Service",
+    names: [/aa\s*battery/i, /aabatteries\.co\.nz/i, /\bAABS-\d+/i],
+    numbers: ["93-874-161", "06-0101-0855892-00"],
+    invoiceNo: (text) => (String(text).match(/\b(AABS-\d+)\b/i) || [])[1] || "",
+    invoiceDate: (text) => (String(text).match(/\b(\d{1,2}\/\d{1,2}\/\d{4})\b/) || [])[1] || "",
+    totals: aaBatteryTotals,
+    lines: aaBatteryLines,
   },
 ];
 

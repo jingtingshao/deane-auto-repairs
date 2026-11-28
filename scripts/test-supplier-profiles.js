@@ -43,6 +43,13 @@ assert.strictEqual(detectSupplierProfile(makaOcr)?.name, "Maka Auto Parts");
 assert.strictEqual(makaInvoiceNo(makaOcr), "0100155");
 assert.strictEqual(detectSupplierProfile("GST: 140 349 119")?.name, "Maka Auto Parts");
 
+const aaText = [
+  "AA Battery Services Ltd",
+  "GST: 93 874 161",
+  "24/11/2026 11:10 AM AABS-002756260",
+  "3224 BAT Calcium 1 $135.59 $135.59",
+].join("\n");
+assert.strictEqual(detectSupplierProfile(aaText)?.name, "AA Battery Service");
 assert.strictEqual(detectSupplierProfile("REPCO NEW ZEALAND LIMITED\nTax Invoice No: 123"), null);
 assert.strictEqual(detectSupplierProfile("anything", "Value Tyres Limited")?.name, "Value Tyres");
 

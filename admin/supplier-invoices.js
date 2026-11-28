@@ -1495,6 +1495,7 @@ function renderCandidates() {
           await window.DeaneInventory.openReceive({
             name: rowEl.querySelector('[data-field="description"]')?.value || row.descriptionCandidate || "",
             partNumber: rowEl.querySelector('[data-field="partNumber"]')?.value || row.partNumberCandidate || "",
+            rawLineText: row.rawLineText || "",
             qty,
             tyrePrice: fee > 0 ? tyrePrice : undefined,
             stewardshipFee: fee > 0 ? fee : undefined,
