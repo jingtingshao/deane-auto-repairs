@@ -1,16 +1,32 @@
 /** Fixed-price packages aligned to the public website.
- * Advertised package prices ($49 / $99 / $199 / $299 / $125) are GST-inclusive.
+ * Advertised package prices ($79 / $99 / $199 / $299 / $125) are GST-inclusive.
  * Line unitPriceIncl fields are stored excl. GST.
  * GST on advertised packages uses IRD 3/23 of the inclusive amount so totals
- * match the website ($49, $99, $125, $199, $299, $248, $348).
+ * match the website ($79, $99, $125, $199, $299, $278, $378).
+ * Invoice WOF can run a temporary special without changing the website price.
  */
 
 const GST_RATE = 0.15;
 const GST_FRACTION = 3 / 23;
 const QUOTE_VALID_DAYS = 7;
 
+/** Regular website / after-special invoice price. */
+const WOF_REGULAR_INCL = 79;
+/** Current invoice special — same end as the website WOF SPECIAL popup. */
+const WOF_SPECIAL_INCL = 49;
+const WOF_SPECIAL_UNTIL = "2027-01-01T00:00:00+13:00";
+
+function wofSpecialActive(now = Date.now()) {
+  return now < new Date(WOF_SPECIAL_UNTIL).getTime();
+}
+
+/** Incl. GST WOF used on new invoices / quotes. Website stays on WOF_REGULAR_INCL. */
+function invoiceWofIncl(now = Date.now()) {
+  return wofSpecialActive(now) ? WOF_SPECIAL_INCL : WOF_REGULAR_INCL;
+}
+
 const ADVERTISED_INCL = {
-  wof: 49,
+  wof: WOF_REGULAR_INCL,
   basic: 99,
   standard: 199,
   premium: 299,
@@ -19,8 +35,8 @@ const ADVERTISED_INCL = {
   labourHour: 125,
 };
 
-/** Older advertised totals still recognised so past invoices keep exact GST figures. */
-const LEGACY_ADVERTISED_INCL = [79, 278, 279, 378];
+/** Older / special totals still recognised so past invoices keep exact GST figures. */
+const LEGACY_ADVERTISED_INCL = [49, 248, 278, 279, 348, 378];
 
 const ADVERTISED_INCL_LIST = [...new Set([...Object.values(ADVERTISED_INCL), ...LEGACY_ADVERTISED_INCL])];
 
@@ -52,8 +68,14 @@ function exclFromIncl(incl) {
   return fromCents(inclCents - gstFromInclCents(inclCents));
 }
 
+function invoiceWofExcl(now = Date.now()) {
+  return exclFromIncl(invoiceWofIncl(now));
+}
+
 const PRICE = {
-  wof: exclFromIncl(ADVERTISED_INCL.wof),
+  get wof() {
+    return invoiceWofExcl();
+  },
   basic: exclFromIncl(ADVERTISED_INCL.basic),
   standard: exclFromIncl(ADVERTISED_INCL.standard),
   premium: exclFromIncl(ADVERTISED_INCL.premium),
@@ -240,125 +262,135 @@ function cloneLines(lines) {
   }));
 }
 
-const PRESETS = [
-  {
-    id: "wof",
-    kind: "invoice",
-    label: "WOF $49",
-    title: "WOF inspection",
-    lines: [{ description: "WOF inspection", qty: 1, unitPriceIncl: PRICE.wof }],
-  },
-  {
-    id: "basic",
-    kind: "invoice",
-    label: "Basic $99",
-    title: "Basic Service",
-    lines: [
-      { description: "Basic Service (petrol)", qty: 1, unitPriceIncl: PRICE.basic },
-    ],
-  },
-  {
-    id: "standard",
-    kind: "invoice",
-    label: "Standard $199",
-    title: "Standard Service",
-    lines: [
-      { description: "Standard Service (petrol)", qty: 1, unitPriceIncl: PRICE.standard },
-    ],
-  },
-  {
-    id: "premium",
-    kind: "invoice",
-    label: "Premium / European $299",
-    title: "Premium / European Service",
-    lines: [
-      { description: "Premium / European Service", qty: 1, unitPriceIncl: PRICE.premium },
-    ],
-  },
-  {
-    id: "diesel",
-    kind: "invoice",
-    label: "Diesel / 4WD $299",
-    title: "Diesel / 4WD Service",
-    lines: [
-      { description: "Diesel / 4WD Service", qty: 1, unitPriceIncl: PRICE.diesel },
-    ],
-  },
-  {
-    id: "european",
-    kind: "invoice",
-    label: "European $299",
-    title: "European Service",
-    lines: [
-      { description: "European Service", qty: 1, unitPriceIncl: PRICE.european },
-    ],
-  },
-  {
-    id: "ppi",
-    kind: "invoice",
-    label: "PPI $199",
-    title: "Pre-purchase inspection",
-    lines: [
-      { description: "Pre-purchase inspection", qty: 1, unitPriceIncl: PRICE.standard },
-    ],
-  },
-  {
-    id: "standard_wof",
-    kind: "invoice",
-    label: "Standard + WOF $248",
-    title: "Standard Service + WOF",
-    lines: [
-      { description: "Standard Service (petrol)", qty: 1, unitPriceIncl: PRICE.standard },
-      { description: "WOF inspection", qty: 1, unitPriceIncl: PRICE.wof },
-    ],
-  },
-  {
-    id: "premium_wof",
-    kind: "invoice",
-    label: "Premium / European + WOF $348",
-    title: "Premium / European Service + WOF",
-    lines: [
-      { description: "Premium / European Service", qty: 1, unitPriceIncl: PRICE.premium },
-      { description: "WOF inspection", qty: 1, unitPriceIncl: PRICE.wof },
-    ],
-  },
-  {
-    id: "diesel_wof",
-    kind: "invoice",
-    label: "Diesel / 4WD + WOF $348",
-    title: "Diesel / 4WD Service + WOF",
-    lines: [
-      { description: "Diesel / 4WD Service", qty: 1, unitPriceIncl: PRICE.diesel },
-      { description: "WOF inspection", qty: 1, unitPriceIncl: PRICE.wof },
-    ],
-  },
-  {
-    id: "european_wof",
-    kind: "invoice",
-    label: "European + WOF $348",
-    title: "European Service + WOF",
-    lines: [
-      { description: "European Service", qty: 1, unitPriceIncl: PRICE.european },
-      { description: "WOF inspection", qty: 1, unitPriceIncl: PRICE.wof },
-    ],
-  },
-  {
-    id: "custom",
-    kind: "quote",
-    label: "Custom repair quote",
-    title: "Repair quote",
-    lines: [{ description: "", qty: 1, unitPriceIncl: 0 }],
-  },
-  {
-    id: "custom_invoice",
-    kind: "invoice",
-    label: "Other repair (blank)",
-    title: "Tax invoice",
-    lines: [{ description: "", qty: 1, unitPriceIncl: 0 }],
-  },
-];
+function buildPresets(now = Date.now()) {
+  const wofIncl = invoiceWofIncl(now);
+  const wofExcl = invoiceWofExcl(now);
+  const wofLabel = wofSpecialActive(now) ? `WOF $${wofIncl} special` : `WOF $${wofIncl}`;
+  const withWof = (serviceIncl) => serviceIncl + wofIncl;
+  return [
+    {
+      id: "wof",
+      kind: "invoice",
+      label: wofLabel,
+      title: "WOF inspection",
+      lines: [{ description: "WOF inspection", qty: 1, unitPriceIncl: wofExcl }],
+    },
+    {
+      id: "basic",
+      kind: "invoice",
+      label: "Basic $99",
+      title: "Basic Service",
+      lines: [
+        { description: "Basic Service (petrol)", qty: 1, unitPriceIncl: PRICE.basic },
+      ],
+    },
+    {
+      id: "standard",
+      kind: "invoice",
+      label: "Standard $199",
+      title: "Standard Service",
+      lines: [
+        { description: "Standard Service (petrol)", qty: 1, unitPriceIncl: PRICE.standard },
+      ],
+    },
+    {
+      id: "premium",
+      kind: "invoice",
+      label: "Premium / European $299",
+      title: "Premium / European Service",
+      lines: [
+        { description: "Premium / European Service", qty: 1, unitPriceIncl: PRICE.premium },
+      ],
+    },
+    {
+      id: "diesel",
+      kind: "invoice",
+      label: "Diesel / 4WD $299",
+      title: "Diesel / 4WD Service",
+      lines: [
+        { description: "Diesel / 4WD Service", qty: 1, unitPriceIncl: PRICE.diesel },
+      ],
+    },
+    {
+      id: "european",
+      kind: "invoice",
+      label: "European $299",
+      title: "European Service",
+      lines: [
+        { description: "European Service", qty: 1, unitPriceIncl: PRICE.european },
+      ],
+    },
+    {
+      id: "ppi",
+      kind: "invoice",
+      label: "PPI $199",
+      title: "Pre-purchase inspection",
+      lines: [
+        { description: "Pre-purchase inspection", qty: 1, unitPriceIncl: PRICE.standard },
+      ],
+    },
+    {
+      id: "standard_wof",
+      kind: "invoice",
+      label: `Standard + WOF $${withWof(ADVERTISED_INCL.standard)}`,
+      title: "Standard Service + WOF",
+      lines: [
+        { description: "Standard Service (petrol)", qty: 1, unitPriceIncl: PRICE.standard },
+        { description: "WOF inspection", qty: 1, unitPriceIncl: wofExcl },
+      ],
+    },
+    {
+      id: "premium_wof",
+      kind: "invoice",
+      label: `Premium / European + WOF $${withWof(ADVERTISED_INCL.premium)}`,
+      title: "Premium / European Service + WOF",
+      lines: [
+        { description: "Premium / European Service", qty: 1, unitPriceIncl: PRICE.premium },
+        { description: "WOF inspection", qty: 1, unitPriceIncl: wofExcl },
+      ],
+    },
+    {
+      id: "diesel_wof",
+      kind: "invoice",
+      label: `Diesel / 4WD + WOF $${withWof(ADVERTISED_INCL.diesel)}`,
+      title: "Diesel / 4WD Service + WOF",
+      lines: [
+        { description: "Diesel / 4WD Service", qty: 1, unitPriceIncl: PRICE.diesel },
+        { description: "WOF inspection", qty: 1, unitPriceIncl: wofExcl },
+      ],
+    },
+    {
+      id: "european_wof",
+      kind: "invoice",
+      label: `European + WOF $${withWof(ADVERTISED_INCL.european)}`,
+      title: "European Service + WOF",
+      lines: [
+        { description: "European Service", qty: 1, unitPriceIncl: PRICE.european },
+        { description: "WOF inspection", qty: 1, unitPriceIncl: wofExcl },
+      ],
+    },
+    {
+      id: "custom",
+      kind: "quote",
+      label: "Custom repair quote",
+      title: "Repair quote",
+      lines: [{ description: "", qty: 1, unitPriceIncl: 0 }],
+    },
+    {
+      id: "custom_invoice",
+      kind: "invoice",
+      label: "Other repair (blank)",
+      title: "Tax invoice",
+      lines: [{ description: "", qty: 1, unitPriceIncl: 0 }],
+    },
+  ];
+}
 
-const QUICK_ADDS = [
+function buildQuickAdds(now = Date.now()) {
+  const wofIncl = invoiceWofIncl(now);
+  const wofExcl = invoiceWofExcl(now);
+  const wofQuick = wofSpecialActive(now) ? `+ WOF $${wofIncl} special` : `+ WOF $${wofIncl}`;
+  return [
   {
     id: "blank",
     label: "+ Other repair (blank)",
@@ -367,10 +399,12 @@ const QUICK_ADDS = [
     unitPriceIncl: 0,
   },
   {
-    label: "+ WOF $49",
+    id: "wof",
+    label: wofQuick,
     description: "WOF inspection",
     qty: 1,
-    unitPriceIncl: PRICE.wof,
+    unitPriceIncl: wofExcl,
+    gstInclUnit: wofIncl,
   },
   {
     label: "+ Basic $99",
@@ -429,10 +463,11 @@ const QUICK_ADDS = [
     qty: 1,
     unitPriceIncl: 5,
   },
-];
+  ];
+}
 
 function presetById(id) {
-  return PRESETS.find((p) => p.id === id) || null;
+  return buildPresets().find((p) => p.id === id) || null;
 }
 
 function lineLooksLikeWof(description) {
@@ -516,10 +551,22 @@ module.exports = {
   GST_RATE,
   GST_FRACTION,
   QUOTE_VALID_DAYS,
+  WOF_REGULAR_INCL,
+  WOF_SPECIAL_INCL,
+  WOF_SPECIAL_UNTIL,
+  wofSpecialActive,
+  invoiceWofIncl,
+  invoiceWofExcl,
   ADVERTISED_INCL,
   PRICE,
-  PRESETS,
-  QUICK_ADDS,
+  get PRESETS() {
+    return buildPresets();
+  },
+  get QUICK_ADDS() {
+    return buildQuickAdds();
+  },
+  buildPresets,
+  buildQuickAdds,
   toCents,
   fromCents,
   round2,

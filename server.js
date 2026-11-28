@@ -7806,15 +7806,22 @@ app.delete("/api/reports/:id", requireAdmin, (req, res) => {
 });
 
 app.get("/api/billing/catalog", requireAdmin, (_req, res) => {
+  const presets = catalog.buildPresets();
   res.json({
-    presets: catalog.PRESETS.map((p) => ({
+    presets: presets.map((p) => ({
       id: p.id,
       kind: p.kind,
       label: p.label,
       title: p.title,
       lines: catalog.cloneLines(p.lines),
     })),
-    quickAdds: catalog.QUICK_ADDS,
+    quickAdds: catalog.buildQuickAdds(),
+    wof: {
+      regularIncl: catalog.WOF_REGULAR_INCL,
+      invoiceIncl: catalog.invoiceWofIncl(),
+      specialActive: catalog.wofSpecialActive(),
+      specialUntil: catalog.WOF_SPECIAL_UNTIL,
+    },
     gstNumber: business.gstNumber || "",
   });
 });

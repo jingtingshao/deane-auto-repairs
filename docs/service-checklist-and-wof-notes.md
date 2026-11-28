@@ -8,7 +8,7 @@ Matches `index.html` `#prices` comparison table and `data/checklist.js`.
 | Premium Service | $299 | `premium` |
 | Diesel / 4WD Service | $299 | `premium` checklist (+ diesel job type) |
 | European Service | $299 | `premium` checklist (+ european job type) |
-| WOF | $49 | job type `wof` (official result panel) |
+| WOF | $79 | job type `wof` (official result panel) |
 
 Legacy values `full` / `full_service` still load as **Premium**.
 

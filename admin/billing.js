@@ -1394,7 +1394,7 @@ function updateConsumableQuickLabel() {
 function advertisedInclFromExcl(excl) {
   const n = Number(excl);
   if (!Number.isFinite(n) || n <= 0) return null;
-  for (const incl of [49, 79, 99, 199, 248, 278, 279, 299, 348, 378, 125]) {
+  for (const incl of [49, 79, 99, 125, 199, 248, 278, 279, 299, 348, 378]) {
     const exact = incl / 1.15;
     if (Math.abs(n - exact) < 0.0005 || round2(n) === round2(exact)) return incl;
   }
