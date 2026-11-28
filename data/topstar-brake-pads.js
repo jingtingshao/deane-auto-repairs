@@ -1,12 +1,13 @@
 /** Topstar brake pads consignment (Jap + Euro), lists dated 15/10/2026.
  * Buy: Jap $25 incl GST → ex GST below; Euro from $30+ (tiers $30/$35/$40/$45 not mapped per part).
  * Qty is sets on the consignment sheets. Parts on both lists are one SKU (fitment merged, qty max).
- * Retail is cost ex GST × 3 (200% markup).
+ * Retail is one price per range, GST included: Japanese $149, European $189. Stock stores that ex GST.
+ * A part that fits both ranges keeps the Japanese price; charge $189 when it goes on a European car.
  */
 
 const inventoryLib = require("./inventory");
 
-const IMPORT_ID = "topstar-brake-pads-2026-10";
+const IMPORT_ID = "topstar-brake-pads-flat-jap-149-euro-189-2026-11";
 const SUPPLIER = "Topstar New Zealand";
 const BRAND = "Topstar";
 const JAP_BUY_EX = inventoryLib.roundMoney(25 / (1 + inventoryLib.GST_RATE)); // $25 incl
@@ -262,19 +263,28 @@ function rangeLabel(range) {
   return "Jap";
 }
 
+function retailNote(range) {
+  if (range === "both") {
+    return "Consignment · set · Jap $149 or Euro $189 incl GST. Sell price is the Japanese price.";
+  }
+  if (range === "euro") return "Consignment · set · European $189 incl GST";
+  return "Consignment · set · Japanese $149 incl GST";
+}
+
 function stockLine([part, application, qty, range]) {
   const buy = buyFor(range);
+  const fitment = `${rangeLabel(range)} · ${application}`;
   return {
     category: "brake_pad",
     name: `${part} Topstar brake pads`,
     partNumber: part,
     brand: BRAND,
     supplier: SUPPLIER,
-    fitment: `${rangeLabel(range)} · ${application}`,
+    fitment,
     costPrice: buy,
-    sellPrice: inventoryLib.suggestPrice(buy, "brake_pad").sell,
+    sellPrice: inventoryLib.suggestPrice(buy, "brake_pad", fitment).sell,
     qtyOnHand: qty,
-    notes: "Consignment · set",
+    notes: retailNote(range),
   };
 }
 

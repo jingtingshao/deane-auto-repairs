@@ -11040,7 +11040,7 @@ app.get("/api/inventory/meta", requireOwnerAdmin, (_req, res) => {
 });
 
 app.get("/api/inventory/suggest", requireOwnerAdmin, (req, res) => {
-  res.json(inventoryLib.suggestPrice(req.query.cost, req.query.category));
+  res.json(inventoryLib.suggestPrice(req.query.cost, req.query.category, req.query.fitment));
 });
 
 app.get("/api/inventory/suppliers", requireOwnerAdmin, (_req, res) => {
@@ -11938,6 +11938,11 @@ try {
   runStockImportOnce("brake-pad-markup-200-2026-11", (items) => inventoryLib.repriceBrakePads(items));
 } catch (err) {
   console.error("Could not reprice stock brake pads:", err);
+}
+try {
+  runStockImportOnce("brake-pad-flat-jap-149-euro-189-2026-11", (items) => inventoryLib.repriceBrakePads(items));
+} catch (err) {
+  console.error("Could not set flat brake pad prices:", err);
 }
 try {
   runStockImportOnce("wiper-markup-200-2026-11", (items) => inventoryLib.repriceWipers(items));

@@ -41,9 +41,10 @@ const FIXED_MARKUP = {
   oil_filter: 150,
   air_filter: 150,
   cabin_filter: 150,
-  brake_pad: 200,
   wiper_blade: 200,
 };
+/** Customer price for one axle (a pair), GST included. Stock stores the ex GST amount. */
+const BRAKE_PAD_INCL = { jap: 149, euro: 189 };
 
 const GST_RATE = 0.15;
 const tyreStewardship = require("./tyre-stewardship");
@@ -142,14 +143,53 @@ function fixedMarkupPercent(category) {
 }
 
 function fixedMarkupBand(category) {
-  if (category === BRAKE_PAD_CATEGORY) return "Brake pads";
   if (category === WIPER_CATEGORY) return "Wiper blades";
   if (isFilterCategory(category)) return "Filters";
   return "Fixed";
 }
 
-function suggestPrice(cost, category) {
+/** Jap, Euro, or both, from a fitment note such as "Euro · BMW" or "Jap/Euro". */
+function brakePadRange(text) {
+  const hay = String(text || "");
+  const euro = /\beuro(?:pean)?\b/i.test(hay);
+  const jap = /\bjap(?:anese)?\b/i.test(hay);
+  if (euro && jap) return "both";
+  if (euro) return "euro";
+  if (jap) return "jap";
+  return "";
+}
+
+/** Flat retail for a brake-pad set. A part that fits both ranges uses the Japanese price. */
+function brakePadRetail(range) {
+  const euro = range === "euro";
+  const incl = euro ? BRAKE_PAD_INCL.euro : BRAKE_PAD_INCL.jap;
+  return {
+    range: euro ? "euro" : "jap",
+    incl,
+    sell: roundMoney(incl / (1 + GST_RATE)),
+    band: euro ? "European brake pads" : "Japanese brake pads",
+  };
+}
+
+function suggestPrice(cost, category, fitment) {
   const c = roundMoney(Math.max(0, Number(cost) || 0));
+  if (category === BRAKE_PAD_CATEGORY) {
+    const pad = brakePadRetail(brakePadRange(fitment));
+    const markup = c > 0 ? Math.round((pad.sell / c - 1) * 1000) / 10 : 0;
+    return {
+      cost: c,
+      band: pad.band,
+      markupMin: markup,
+      markupMax: markup,
+      sellMin: pad.sell,
+      sellMax: pad.sell,
+      sell: pad.sell,
+      sellMinIncl: pad.incl,
+      sellMaxIncl: pad.incl,
+      sellIncl: pad.incl,
+      flatIncl: pad.incl,
+    };
+  }
   const fixed = fixedMarkupPercent(category);
   if (fixed != null) {
     const sell = c > 0 ? roundMoney(c * (1 + fixed / 100)) : 0;
@@ -201,9 +241,19 @@ function repriceFilters(items) {
   return repriceCategory(items, isFilterCategory);
 }
 
-/** Set every brake pad to cost × 3. Other stock is left alone. */
+/** Japanese brake pads $149 incl GST, European $189. Parts with no Jap/Euro fitment are left alone. */
 function repriceBrakePads(items) {
-  return repriceCategory(items, (category) => category === BRAKE_PAD_CATEGORY);
+  const updated = [];
+  for (const item of items || []) {
+    if (item?.category !== BRAKE_PAD_CATEGORY) continue;
+    const range = brakePadRange(item.fitment);
+    if (!range) continue;
+    const sell = brakePadRetail(range).sell;
+    if (sell === item.sellPrice) continue;
+    item.sellPrice = sell;
+    updated.push(item.partNumber || item.name);
+  }
+  return { added: [], updated };
 }
 
 /** Set every wiper blade to cost × 3. Other stock is left alone. */
@@ -234,7 +284,7 @@ function normalizeItem(raw) {
     sellRaw == null || sellRaw === ""
       ? category?.id === "tyre"
         ? tyreSellPrice({ ...split, costPrice })
-        : suggestPrice(costPrice, category?.id).sell
+        : suggestPrice(costPrice, category?.id, raw?.fitment).sell
       : roundMoney(Math.max(0, Number(sellRaw) || 0));
   return {
     id: cleanText(raw?.id, 80),
@@ -258,7 +308,7 @@ function normalizeItem(raw) {
 
 function presentItem(item) {
   const category = categoryById(item.category);
-  let price = suggestPrice(item.costPrice, item.category);
+  let price = suggestPrice(item.costPrice, item.category, item.fitment);
   if (item.category === "tyre") {
     const sell = tyreSellPrice(item);
     const incl = roundMoney(sell * (1 + GST_RATE));
@@ -868,6 +918,9 @@ module.exports = {
   roundMoney,
   categoryById,
   isFilterCategory,
+  BRAKE_PAD_INCL,
+  brakePadRange,
+  brakePadRetail,
   suggestPrice,
   repriceFilters,
   repriceBrakePads,

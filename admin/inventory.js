@@ -14,9 +14,9 @@
     oil_filter: 150,
     air_filter: 150,
     cabin_filter: 150,
-    brake_pad: 200,
     wiper_blade: 200,
   };
+  const BRAKE_PAD_INCL = { jap: 149, euro: 189 };
 
   const GUESS_RULES = [
     ["adblue", "adblue"],
@@ -103,13 +103,50 @@
     return `${text}%`;
   }
 
-  function suggestPrice(cost, category) {
+  function brakePadRange(text) {
+    const hay = String(text || "");
+    const euro = /\beuro(?:pean)?\b/i.test(hay);
+    const jap = /\bjap(?:anese)?\b/i.test(hay);
+    if (euro && jap) return "both";
+    if (euro) return "euro";
+    if (jap) return "jap";
+    return "";
+  }
+
+  function brakePadRetail(range) {
+    const euro = range === "euro";
+    const inclGst = euro ? BRAKE_PAD_INCL.euro : BRAKE_PAD_INCL.jap;
+    return {
+      incl: inclGst,
+      sell: Math.round((inclGst / 1.15) * 100) / 100,
+      band: euro ? "European brake pads" : "Japanese brake pads",
+    };
+  }
+
+  function suggestPrice(cost, category, fitment) {
     const c = Math.round(Math.max(0, Number(cost) || 0) * 100) / 100;
     const incl = (amount) => Math.round((amount * 1.15 + Number.EPSILON) * 100) / 100;
+    if (category === "brake_pad") {
+      const pad = brakePadRetail(brakePadRange(fitment));
+      const markup = c > 0 ? Math.round((pad.sell / c - 1) * 1000) / 10 : 0;
+      return {
+        cost: c,
+        band: pad.band,
+        markupMin: markup,
+        markupMax: markup,
+        sellMin: pad.sell,
+        sellMax: pad.sell,
+        sell: pad.sell,
+        sellMinIncl: pad.incl,
+        sellMaxIncl: pad.incl,
+        sellIncl: pad.incl,
+        flatIncl: pad.incl,
+      };
+    }
     const fixed = FIXED_MARKUP[category];
     if (Number.isFinite(fixed)) {
       const sell = c > 0 ? Math.round(c * (1 + fixed / 100) * 100) / 100 : 0;
-      const band = category === "brake_pad" ? "Brake pads" : category === "wiper_blade" ? "Wiper blades" : "Filters";
+      const band = category === "wiper_blade" ? "Wiper blades" : "Filters";
       return {
         cost: c,
         band,
@@ -368,12 +405,16 @@
     }
   }
 
-  function guideText(cost, sell, unitKind, category) {
-    const guide = suggestPrice(cost, category);
+  function guideText(cost, sell, unitKind, category, fitment) {
+    const guide = suggestPrice(cost, category, fitment);
     const chosen = Number(sell);
     const sellPrice = Number.isFinite(chosen) ? Math.round(chosen * 100) / 100 : guide.sell;
     const incl = inclPrice(sellPrice);
     const per = unitKind === "litre" ? " per litre" : "";
+    if (guide.flatIncl) {
+      const which = guide.band.startsWith("European") ? "European $189" : "Japanese $149";
+      return `Japanese cars $149 incl GST. European cars $189 incl GST, per axle. This line is ${which} (${money(guide.sell)} ex GST). This sell price is ${money(sellPrice)}${per} ex GST, ${money(incl)} incl.`;
+    }
     if (!(guide.cost > 0)) {
       return unitKind === "litre"
         ? "Enter the drum cost and how many litres are in it. The sell price is per litre."
@@ -440,7 +481,7 @@
 
   function editorSuggestedSell() {
     if (form?.elements?.category?.value === "tyre") return editorTyre()?.sell || 0;
-    return suggestPrice(form.elements.costPrice.value, form.elements.category.value).sell;
+    return suggestPrice(form.elements.costPrice.value, form.elements.category.value, form.elements.fitment.value).sell;
   }
 
   function receiveTyre() {
@@ -452,7 +493,7 @@
 
   function receiveSuggestedSell() {
     if (receiveForm?.elements?.category?.value === "tyre") return receiveTyre()?.sell || 0;
-    return suggestPrice(receiveShelfCost(), receiveForm.elements.category.value).sell;
+    return suggestPrice(receiveShelfCost(), receiveForm.elements.category.value, receiveForm.elements.fitment.value).sell;
   }
 
   function renderGuide() {
@@ -464,7 +505,13 @@
       splitNote +
       (form.elements.category.value === "tyre"
         ? tyreGuideText(editorTyre(), form.elements.sellPrice.value)
-        : guideText(form.elements.costPrice.value, form.elements.sellPrice.value, currentUnit(), form.elements.category.value));
+        : guideText(
+            form.elements.costPrice.value,
+            form.elements.sellPrice.value,
+            currentUnit(),
+            form.elements.category.value,
+            form.elements.fitment.value
+          ));
     const unit = currentUnit();
     const qtyLabel = form.querySelector("[data-qty-label]");
     const costLabel = form.querySelector("[data-cost-label]");
@@ -489,7 +536,13 @@
     let text =
       receiveForm.elements.category.value === "tyre"
         ? tyreGuideText(receiveTyre(), receiveForm.elements.sellPrice.value)
-        : guideText(shelfCost, receiveForm.elements.sellPrice.value, unit, receiveForm.elements.category.value);
+        : guideText(
+            shelfCost,
+            receiveForm.elements.sellPrice.value,
+            unit,
+            receiveForm.elements.category.value,
+            receiveForm.elements.fitment.value
+          );
     if (unit === "litre") {
       const litres = Number(receiveForm.elements.qty.value) || 0;
       const drum = Number(receiveForm.elements.costPrice.value) || 0;
@@ -802,14 +855,14 @@
     results.innerHTML = rows
       .slice(0, 8)
       .map((item, index) => {
-        const price = item.price || suggestPrice(item.costPrice, item.category);
+        const price = item.price || suggestPrice(item.costPrice, item.category, item.fitment);
         const unit = item.unit === "litre" ? " / L" : "";
         const meta = [item.partNumber, item.fitment, item.supplier, formatQty(item.qtyOnHand, item.unit) + " on hand"]
           .filter(Boolean)
           .join(" · ");
         return `<button type="button" class="stock-result" data-pick="${index}">
           <span><strong>${Admin.escapeHtml(item.name)}</strong><span class="muted small">${Admin.escapeHtml(meta)}</span></span>
-          <span class="stock-sell"><strong>${money(item.sellPrice)}${unit}</strong><span class="muted small">${price.markupMin === price.markupMax ? `${price.markupMin}% markup` : `suggested ${money(price.sellMin)}–${money(price.sellMax)} ex GST`}</span></span>
+          <span class="stock-sell"><strong>${money(item.sellPrice)}${unit}</strong><span class="muted small">${price.flatIncl ? `${money(inclPrice(item.sellPrice))} incl` : price.markupMin === price.markupMax ? `${price.markupMin}% markup` : `suggested ${money(price.sellMin)}–${money(price.sellMax)} ex GST`}</span></span>
         </button>`;
       })
       .join("");
@@ -1011,6 +1064,13 @@
     if (!sellTouched) form.elements.sellPrice.value = sell ? sell.toFixed(2) : "";
     renderGuide();
   });
+  form?.elements?.fitment?.addEventListener("input", () => {
+    if (form.elements.category.value === "brake_pad" && !sellTouched) {
+      const sell = editorSuggestedSell();
+      form.elements.sellPrice.value = sell ? sell.toFixed(2) : "";
+    }
+    renderGuide();
+  });
   ["tyrePrice", "stewardshipFee"].forEach((field) => {
     form?.elements?.[field]?.addEventListener("input", () => {
       syncEditorSplit();
@@ -1119,6 +1179,7 @@
     });
   }
 
+  receiveForm?.elements?.fitment?.addEventListener("input", refreshReceivePrice);
   receiveForm?.elements?.qty?.addEventListener("input", refreshReceivePrice);
   receiveForm?.elements?.costPrice?.addEventListener("input", refreshReceivePrice);
   ["tyrePrice", "stewardshipFee"].forEach((field) => {
