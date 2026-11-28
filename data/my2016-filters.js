@@ -1,15 +1,18 @@
 /** My2016 consignment filters.
- * Sheet prices are ex GST. Opening qty is 1 of each sort.
- * Retail is cost ex GST × 2.5 (150% markup), same as other filters.
+ * Sheet buy prices are ex GST. Opening qty is 1 of each sort.
+ * Retail is a flat sell (ex GST): air $50, cabin $55 — not the usual filter markup.
  */
 
 const inventoryLib = require("./inventory");
 const supplierNames = require("./supplier-names");
 
 const IMPORT_ID = "my2016-cabin-filters-2026-11";
+const FLAT_SELL_IMPORT_ID = "my2016-filter-flat-sell-2026-11";
 const SUPPLIER = "My2016";
 const QTY = 1;
 const BUY_EX = 14.8;
+const CABIN_SELL = 55;
+const AIR_SELL = 50;
 
 const PARTS = [
   "C102",
@@ -46,7 +49,7 @@ function stockLine(part) {
     supplier: SUPPLIER,
     fitment: "Cabin filter",
     costPrice: BUY_EX,
-    sellPrice: inventoryLib.suggestPrice(BUY_EX, "cabin_filter").sell,
+    sellPrice: CABIN_SELL,
     qtyOnHand: QTY,
     notes: "Consignment",
   };
@@ -164,7 +167,7 @@ function airStockLine([part, buy]) {
     supplier: SUPPLIER,
     fitment: "Air filter",
     costPrice: buy,
-    sellPrice: inventoryLib.suggestPrice(buy, "air_filter").sell,
+    sellPrice: AIR_SELL,
     qtyOnHand: QTY,
     notes: "Consignment",
   };
@@ -209,13 +212,37 @@ function applyAirToStock(items, movements, now, newId) {
   return { added, updated };
 }
 
+function isMy2016(item) {
+  return String(item?.supplier || "").trim().toLowerCase() === SUPPLIER.toLowerCase();
+}
+
+/** Flat retail for My2016 filters already in stock (runs after the general filter markup pass). */
+function applyFlatSellPrices(items, _movements, now) {
+  const updated = [];
+  for (const item of items || []) {
+    if (!isMy2016(item)) continue;
+    let sell = null;
+    if (item.category === "air_filter") sell = AIR_SELL;
+    else if (item.category === "cabin_filter") sell = CABIN_SELL;
+    if (sell == null || item.sellPrice === sell) continue;
+    item.sellPrice = sell;
+    item.updatedAt = now;
+    updated.push(item.partNumber || item.name);
+  }
+  return { added: [], updated };
+}
+
 module.exports = {
   IMPORT_ID,
+  FLAT_SELL_IMPORT_ID,
   PARTS,
   QTY,
+  CABIN_SELL,
+  AIR_SELL,
   stockLine,
   applyToStock,
   AIR_IMPORT_ID,
   AIR_PARTS,
   applyAirToStock,
+  applyFlatSellPrices,
 };

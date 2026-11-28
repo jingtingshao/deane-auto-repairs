@@ -11717,6 +11717,11 @@ try {
   console.error("Could not reprice stock filters:", err);
 }
 try {
+  runStockImportOnce(my2016Filters.FLAT_SELL_IMPORT_ID, my2016Filters.applyFlatSellPrices);
+} catch (err) {
+  console.error("Could not set My2016 filter flat sell prices:", err);
+}
+try {
   runStockImportOnce("brake-pad-markup-150-2026-11", (items) => inventoryLib.repriceBrakePads(items));
 } catch (err) {
   console.error("Could not reprice stock brake pads:", err);
