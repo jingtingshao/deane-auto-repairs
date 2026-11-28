@@ -293,6 +293,28 @@ function sameSupplier(a, b) {
   return !left || !right || left === right;
 }
 
+/** Invoice supplier "AA" is the same company as "AA Battery Service". */
+function batterySuppliersCompatible(a, b) {
+  if (sameSupplier(a, b)) return true;
+  const keys = [supplierNames.supplierMatchKey(a), supplierNames.supplierMatchKey(b)].sort();
+  return keys[0] === "aa" && keys[1].startsWith("aabattery");
+}
+
+function batteryGroupSupplier(supplier) {
+  const key = supplierNames.supplierMatchKey(supplier);
+  if (key === "aa" || key.startsWith("aabattery")) return "aabattery";
+  return key;
+}
+
+function keepRicherSupplier(current, incoming) {
+  if (!incoming) return current || "";
+  if (!current) return incoming;
+  const cur = supplierNames.supplierMatchKey(current);
+  const inc = supplierNames.supplierMatchKey(incoming);
+  if (inc === "aa" && cur.startsWith("aabattery")) return current;
+  return incoming;
+}
+
 function batteryPartKey(input, items) {
   const codes = [
     partKey(input?.partNumber),
@@ -434,7 +456,7 @@ function planSamePartMerge(items, referencedIds) {
     if (!item || item.category !== "battery") continue;
     const key = partKey(item.partNumber);
     if (key.length < 3) continue;
-    const bucket = `${supplierNames.supplierMatchKey(item.supplier)}::${key}`;
+    const bucket = `${batteryGroupSupplier(item.supplier)}::${key}`;
     if (!groups.has(bucket)) groups.set(bucket, []);
     groups.get(bucket).push(item);
   }
@@ -472,7 +494,7 @@ function planSamePartMerge(items, referencedIds) {
         row !== item &&
         !dropping.has(row.id) &&
         partKey(row.partNumber) === code &&
-        sameSupplier(row.supplier, item.supplier) &&
+        batterySuppliersCompatible(row.supplier, item.supplier) &&
         row.category === "battery"
     );
     if (peers.length !== 1) continue;
@@ -564,7 +586,7 @@ function applyReceive(items, movements, input, now) {
   item.name = item.name || draft.name;
   item.partNumber = draft.partNumber || item.partNumber;
   item.brand = draft.brand || item.brand;
-  item.supplier = draft.supplier || item.supplier;
+  item.supplier = created ? draft.supplier || item.supplier : keepRicherSupplier(item.supplier, draft.supplier);
   if (draft.fitment) item.fitment = draft.fitment;
   item.tyrePrice = draft.tyrePrice;
   item.stewardshipFee = draft.stewardshipFee;

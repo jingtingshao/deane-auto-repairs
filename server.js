@@ -716,7 +716,6 @@ function mergeDuplicatePartLines() {
     }
   }
   const plans = inventoryLib.planSamePartMerge(items, referenced);
-  if (!plans.length) return;
   const dropIds = new Set();
   for (const plan of plans) {
     const keeper = items.find((item) => item.id === plan.keeperId);
@@ -725,7 +724,15 @@ function mergeDuplicatePartLines() {
     keeper.updatedAt = nowIso();
     for (const id of plan.dropIds) dropIds.add(id);
   }
-  if (!dropIds.size) return;
+  let supplierFixed = false;
+  for (const item of items) {
+    if (dropIds.has(item.id) || item.category !== "battery") continue;
+    if (supplierNames.supplierMatchKey(item.supplier) !== "aa") continue;
+    item.supplier = "AA Battery Service";
+    item.updatedAt = nowIso();
+    supplierFixed = true;
+  }
+  if (!dropIds.size && !supplierFixed) return;
   writeJsonArray(
     INVENTORY_FILE,
     items.filter((item) => !dropIds.has(item.id))

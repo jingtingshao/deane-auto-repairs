@@ -146,6 +146,54 @@ assert.strictEqual(plans.length, 1);
 assert.strictEqual(plans[0].keeperId, "bat-3224");
 assert.deepStrictEqual(plans[0].dropIds.sort(), ["bat-named", "bat-new"]);
 assert.strictEqual(plans[0].qty, 2);
+
+const shortInvoice = {
+  id: "bat-short",
+  category: "battery",
+  name: "3224 BAT Calcium 1",
+  partNumber: "",
+  supplier: "AA",
+  qtyOnHand: 1,
+  notes: "",
+  createdAt: "2026-11-28T00:00:00.000Z",
+};
+const short5344 = {
+  id: "bat-5344-short",
+  category: "battery",
+  name: "5344 BAT Calcium DIN LN1 530 53 90 C 1",
+  partNumber: "",
+  supplier: "AA",
+  qtyOnHand: 1,
+  notes: "",
+};
+const catalog5344 = {
+  id: "bat-5344",
+  category: "battery",
+  name: "AA 5344 Premium Calcium battery",
+  partNumber: "5344",
+  supplier: "AA Battery Service",
+  qtyOnHand: 0,
+  notes: "Consignment · AA RRP $352 incl",
+};
+const liveSplit = inventory.planSamePartMerge([battery, shortInvoice, catalog5344, short5344], []);
+const live3224 = liveSplit.find((plan) => plan.keeperId === "bat-3224");
+const live5344 = liveSplit.find((plan) => plan.keeperId === "bat-5344");
+assert.ok(live3224);
+assert.deepStrictEqual(live3224.dropIds, ["bat-short"]);
+assert.strictEqual(live3224.qty, 1);
+assert.ok(live5344);
+assert.deepStrictEqual(live5344.dropIds, ["bat-5344-short"]);
+assert.strictEqual(live5344.qty, 1);
+assert.strictEqual(
+  inventory.findMatch([battery], {
+    category: "battery",
+    name: "3224 BAT Calcium 1",
+    partNumber: "",
+    supplier: "AA",
+  }).id,
+  "bat-3224"
+);
+
 const oilCopy = { ...oil, id: "oil-copy", name: "5W30", partNumber: "5W30" };
 const oilOriginal = { ...oil, partNumber: "5W30" };
 assert.deepStrictEqual(inventory.planSamePartMerge([oilOriginal, oilCopy], []), []);
