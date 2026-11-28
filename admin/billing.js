@@ -1073,6 +1073,71 @@ function lineLooksLikeConsumable(description) {
   return /\bconsumables?\b/i.test(String(description || "").trim());
 }
 
+function lineLooksLikeTyreSize(description) {
+  const text = String(description || "").trim();
+  if (!text || /stewardship/i.test(text)) return false;
+  return (
+    /\b\d{3}\s*\/\s*\d{2}\s*(?:[Rr]\s*\/?\s*|-)?\s*\d{2}[Cc]?\b/.test(text) ||
+    /\b\d{3}\s*[Rr]\s*\d{2}[Cc]?\b/.test(text)
+  );
+}
+
+function isStewardshipFeeLine(line) {
+  return /^tyre stewardship fee$/i.test(String(line?.description || "").trim());
+}
+
+function tyreStewardshipFeeDraft(qty = 1) {
+  const feeIncl = round2(TYRE_STEWARDSHIP_EXCL * 1.15);
+  return newLine({
+    description: "Tyre stewardship fee",
+    qty: Number(qty) > 0 ? Number(qty) : 1,
+    unitPriceIncl: exclFromIncl(feeIncl),
+    gstInclUnit: feeIncl,
+  });
+}
+
+function findTyreLineForFeeShortcut() {
+  const focus = document.activeElement?.closest?.("tr[data-index]");
+  const focusIndex = focus ? Number(focus.dataset.index) : -1;
+  if (focusIndex >= 0) {
+    const focused = lineRows[focusIndex];
+    if (focused && lineLooksLikeTyreSize(focused.description) && !pairedFeeLine(focused)) {
+      return focused;
+    }
+  }
+  for (let i = lineRows.length - 1; i >= 0; i -= 1) {
+    const line = lineRows[i];
+    if (lineLooksLikeTyreSize(line.description) && !pairedFeeLine(line)) return line;
+  }
+  return null;
+}
+
+/** Insert the $6.65 stewardship line after a tyre line and keep their qtys linked. */
+function attachTyreStewardshipFee(tyreLine, { focusField = "" } = {}) {
+  if (!tyreLine || !canEditLines(currentBill)) return null;
+  if (isStewardshipFeeLine(tyreLine) || pairedFeeLine(tyreLine)) return pairedFeeLine(tyreLine);
+  if (!lineLooksLikeTyreSize(tyreLine.description) && !tyreLine.stockItemId) return null;
+  const feeLine = tyreStewardshipFeeDraft(tyreLine.qty);
+  tyreFeeLineIds.set(tyreLine.id, feeLine.id);
+  const index = lineRows.indexOf(tyreLine);
+  if (index < 0) {
+    lineRows.push(tyreLine);
+    lineRows.push(feeLine);
+  } else {
+    lineRows.splice(index + 1, 0, feeLine);
+  }
+  renderLines();
+  renderTotals();
+  scheduleBillAutosave();
+  if (focusField) {
+    const tyreIndex = lineRows.indexOf(tyreLine);
+    billingLinesEl
+      ?.querySelector(`tr[data-index="${tyreIndex}"] [data-field="${focusField}"]`)
+      ?.focus();
+  }
+  return feeLine;
+}
+
 function repairExclForConsumable(lines) {
   let total = 0;
   for (const line of lines || []) {
@@ -1163,6 +1228,13 @@ function renderQuickAdds() {
             })
           );
         }
+      } else if (item.id === "tyre_stewardship") {
+        const tyre = findTyreLineForFeeShortcut();
+        if (tyre) {
+          attachTyreStewardshipFee(tyre);
+          return;
+        }
+        lineRows.push(tyreStewardshipFeeDraft(1));
       } else if (lineIsHeadline(item.description)) {
         const blankFirst =
           lineRows.length === 1 && !String(lineRows[0].description || "").trim() && !(Number(lineRows[0].unitPriceIncl) > 0);
@@ -1195,6 +1267,8 @@ function renderLines() {
   billingLinesEl.innerHTML = lineRows
     .map((line, index) => {
       const totalIncl = lineAmounts(line).totalIncl;
+      const needsFee =
+        !locked && lineLooksLikeTyreSize(line.description) && !pairedFeeLine(line);
       return `<tr data-index="${index}">
         <td><input data-field="description" value="${Admin.escapeAttr(line.description)}" ${locked ? "readonly" : ""} /></td>
         <td><input class="qty" data-field="qty" type="number" min="0" step="0.25" value="${Admin.escapeAttr(String(line.qty))}" ${locked ? "readonly" : ""} /></td>
@@ -1204,7 +1278,7 @@ function renderLines() {
         <td class="line-row-actions">${
           locked
             ? ""
-            : `<button type="button" class="ghost line-move" data-move="-1" title="Move up" aria-label="Move line up" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" class="ghost line-move" data-move="1" title="Move down" aria-label="Move line down" ${index === lineRows.length - 1 ? "disabled" : ""}>↓</button><button type="button" class="ghost" data-remove="${index}">×</button>`
+            : `${needsFee ? `<button type="button" class="ghost" data-add-tyre-fee="${index}" title="Add tyre stewardship $6.65">+ Fee</button>` : ""}<button type="button" class="ghost line-move" data-move="-1" title="Move up" aria-label="Move line up" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" class="ghost line-move" data-move="1" title="Move down" aria-label="Move line down" ${index === lineRows.length - 1 ? "disabled" : ""}>↓</button><button type="button" class="ghost" data-remove="${index}">×</button>`
         }</td>
       </tr>`;
     })
@@ -1254,11 +1328,27 @@ function renderLines() {
       updateConsumableQuickLabel();
       scheduleBillAutosave();
     });
-    input.addEventListener("blur", () => {
-      if (input.dataset.field !== "gstInclUnit") return;
-      const line = lineRows[Number(input.closest("tr")?.dataset.index)];
-      const incl = round2(Number(line?.gstInclUnit) || 0);
-      input.value = incl > 0 ? incl.toFixed(2) : "";
+    input.addEventListener("blur", (event) => {
+      if (input.dataset.field === "gstInclUnit") {
+        const line = lineRows[Number(input.closest("tr")?.dataset.index)];
+        const incl = round2(Number(line?.gstInclUnit) || 0);
+        input.value = incl > 0 ? incl.toFixed(2) : "";
+        return;
+      }
+      if (input.dataset.field !== "description" || locked) return;
+      const index = Number(input.closest("tr")?.dataset.index);
+      const line = lineRows[index];
+      if (!line || !lineLooksLikeTyreSize(line.description) || pairedFeeLine(line)) return;
+      const nextField = event.relatedTarget?.dataset?.field || "qty";
+      const stayOnTyre = ["description", "qty", "unitPriceIncl", "gstInclUnit"].includes(nextField);
+      attachTyreStewardshipFee(line, { focusField: stayOnTyre ? nextField : "qty" });
+    });
+  });
+  billingLinesEl.querySelectorAll("[data-add-tyre-fee]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const line = lineRows[Number(btn.dataset.addTyreFee)];
+      if (!line) return;
+      attachTyreStewardshipFee(line);
     });
   });
   billingLinesEl.querySelectorAll("[data-remove]").forEach((btn) => {
@@ -1304,7 +1394,7 @@ function updateConsumableQuickLabel() {
 function advertisedInclFromExcl(excl) {
   const n = Number(excl);
   if (!Number.isFinite(n) || n <= 0) return null;
-  for (const incl of [79, 99, 199, 279, 299, 125]) {
+  for (const incl of [49, 79, 99, 199, 248, 278, 279, 299, 348, 378, 125]) {
     const exact = incl / 1.15;
     if (Math.abs(n - exact) < 0.0005 || round2(n) === round2(exact)) return incl;
   }
@@ -2258,7 +2348,7 @@ function pairedFeeLine(tyreLine) {
   }
   const index = lineRows.indexOf(tyreLine);
   const next = lineRows[index + 1];
-  if (next && /^tyre stewardship fee$/i.test(String(next.description || "").trim())) return next;
+  if (next && isStewardshipFeeLine(next)) return next;
   return null;
 }
 

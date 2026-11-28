@@ -1,8 +1,8 @@
 /** Fixed-price packages aligned to the public website.
- * Advertised package prices ($79 / $99 / $199 / $299 / $125) are GST-inclusive.
+ * Advertised package prices ($49 / $99 / $199 / $299 / $125) are GST-inclusive.
  * Line unitPriceIncl fields are stored excl. GST.
  * GST on advertised packages uses IRD 3/23 of the inclusive amount so totals
- * match the website ($79, $99, $125, $199, $299, $278, $378).
+ * match the website ($49, $99, $125, $199, $299, $248, $348).
  */
 
 const GST_RATE = 0.15;
@@ -10,7 +10,7 @@ const GST_FRACTION = 3 / 23;
 const QUOTE_VALID_DAYS = 7;
 
 const ADVERTISED_INCL = {
-  wof: 79,
+  wof: 49,
   basic: 99,
   standard: 199,
   premium: 299,
@@ -19,8 +19,8 @@ const ADVERTISED_INCL = {
   labourHour: 125,
 };
 
-/** 279 = Premium price before 26 Oct 2026; still recognised so older invoices keep exact totals. */
-const LEGACY_ADVERTISED_INCL = [279];
+/** Older advertised totals still recognised so past invoices keep exact GST figures. */
+const LEGACY_ADVERTISED_INCL = [79, 278, 279, 378];
 
 const ADVERTISED_INCL_LIST = [...new Set([...Object.values(ADVERTISED_INCL), ...LEGACY_ADVERTISED_INCL])];
 
@@ -244,7 +244,7 @@ const PRESETS = [
   {
     id: "wof",
     kind: "invoice",
-    label: "WOF $79",
+    label: "WOF $49",
     title: "WOF inspection",
     lines: [{ description: "WOF inspection", qty: 1, unitPriceIncl: PRICE.wof }],
   },
@@ -305,7 +305,7 @@ const PRESETS = [
   {
     id: "standard_wof",
     kind: "invoice",
-    label: "Standard + WOF $278",
+    label: "Standard + WOF $248",
     title: "Standard Service + WOF",
     lines: [
       { description: "Standard Service (petrol)", qty: 1, unitPriceIncl: PRICE.standard },
@@ -315,7 +315,7 @@ const PRESETS = [
   {
     id: "premium_wof",
     kind: "invoice",
-    label: "Premium / European + WOF $378",
+    label: "Premium / European + WOF $348",
     title: "Premium / European Service + WOF",
     lines: [
       { description: "Premium / European Service", qty: 1, unitPriceIncl: PRICE.premium },
@@ -325,7 +325,7 @@ const PRESETS = [
   {
     id: "diesel_wof",
     kind: "invoice",
-    label: "Diesel / 4WD + WOF $378",
+    label: "Diesel / 4WD + WOF $348",
     title: "Diesel / 4WD Service + WOF",
     lines: [
       { description: "Diesel / 4WD Service", qty: 1, unitPriceIncl: PRICE.diesel },
@@ -335,7 +335,7 @@ const PRESETS = [
   {
     id: "european_wof",
     kind: "invoice",
-    label: "European + WOF $378",
+    label: "European + WOF $348",
     title: "European Service + WOF",
     lines: [
       { description: "European Service", qty: 1, unitPriceIncl: PRICE.european },
@@ -367,7 +367,7 @@ const QUICK_ADDS = [
     unitPriceIncl: 0,
   },
   {
-    label: "+ WOF $79",
+    label: "+ WOF $49",
     description: "WOF inspection",
     qty: 1,
     unitPriceIncl: PRICE.wof,
@@ -415,6 +415,7 @@ const QUICK_ADDS = [
     unitPriceIncl: PRICE.labourHour,
   },
   {
+    id: "tyre_stewardship",
     label: "+ Tyre stewardship $6.65",
     description: "Tyre stewardship fee",
     qty: 1,
@@ -453,6 +454,26 @@ function lineLooksLikePackageService(description) {
 
 function lineLooksLikeConsumable(description) {
   return /\bconsumables?\b/i.test(String(description || "").trim());
+}
+
+/** Customer invoice lines like 205/60R16 or 185R14C — not the stewardship fee itself. */
+function lineLooksLikeTyreSize(description) {
+  const text = String(description || "").trim();
+  if (!text || /stewardship/i.test(text)) return false;
+  return (
+    /\b\d{3}\s*\/\s*\d{2}\s*(?:[Rr]\s*\/?\s*|-)?\s*\d{2}[Cc]?\b/.test(text) ||
+    /\b\d{3}\s*[Rr]\s*\d{2}[Cc]?\b/.test(text)
+  );
+}
+
+function tyreStewardshipFeeLine(qty = 1) {
+  const feeIncl = round2(TYRE_STEWARDSHIP_EXCL * (1 + GST_RATE));
+  return {
+    description: "Tyre stewardship fee",
+    qty: Number(qty) > 0 ? Number(qty) : 1,
+    unitPriceIncl: exclFromIncl(feeIncl),
+    gstInclUnit: feeIncl,
+  };
 }
 
 function lineExcludedFromConsumableBase(description) {
@@ -522,6 +543,8 @@ module.exports = {
   lineLooksLikeService,
   lineLooksLikePackageService,
   lineLooksLikeConsumable,
+  lineLooksLikeTyreSize,
+  tyreStewardshipFeeLine,
   lineExcludedFromConsumableBase,
   consumableDefaultExcl,
   repairExclForConsumable,

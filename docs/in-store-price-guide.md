@@ -16,7 +16,7 @@ This list matches the internal service price list (FINAL). Premium, Diesel / 4WD
 
 | Package | Price | Time | Report checklist |
 |---------|-------|------|------------------|
-| WOF inspection | $79 | — | WOF items on the job |
+| WOF inspection | $49 | — | WOF items on the job |
 | WOF recheck (repairs done here) | Free | — | — |
 | Basic (petrol oil & filter) | $99 | — | Oil & filter change only — no safety checks, top-ups, service light reset or digital report |
 | Standard (petrol) | $199 | ~1 hour | Standard |
