@@ -170,38 +170,6 @@
     return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
   }
 
-  const NAME_NOISE = new Set([
-    "a", "an", "the", "and", "new", "engine", "oil", "litre", "liter", "ltr",
-    "drum", "bottle", "genuine", "premium", "battery", "bat", "calcium", "each",
-  ]);
-
-  function productTokens(value) {
-    return String(value || "")
-      .toLowerCase()
-      .replace(/(\d+)\s*w\s*-?\s*(\d+)/g, "$1w$2")
-      .replace(/[^a-z0-9]+/g, " ")
-      .trim()
-      .split(/\s+/)
-      .filter((token) => token && !NAME_NOISE.has(token));
-  }
-
-  function namesClose(a, b) {
-    const left = nameKey(a);
-    const right = nameKey(b);
-    if (!left || !right) return false;
-    if (left === right) return true;
-    const lt = productTokens(a);
-    const rt = productTokens(b);
-    if (!lt.length || !rt.length) return false;
-    const key = (tokens) => tokens.slice().sort().join(" ");
-    if (key(lt) === key(rt)) return true;
-    const [small, big] = lt.length <= rt.length ? [lt, rt] : [rt, lt];
-    if (small.every((token) => token.length <= 2)) return false;
-    const bigSet = new Set(big);
-    if (!small.every((token) => bigSet.has(token))) return false;
-    return small.some((token) => /\d/.test(token) || token.length >= 4);
-  }
-
   function leadingPartCode(value) {
     const match = String(value || "").trim().match(/^([A-Za-z]?\d{3,6}[A-Za-z]?)\b/);
     return match ? partKey(match[1]) : "";
@@ -220,55 +188,78 @@
     return !left || !right || left === right;
   }
 
-  function partKeyFor(input) {
-    const explicit = partKey(input?.partNumber);
-    if (explicit) return explicit;
-    for (const code of [leadingPartCode(input?.name), leadingPartCode(input?.rawLineText)]) {
-      if (code && items.some((row) => partKey(row.partNumber) === code)) return code;
+  function batteryPartKey(input) {
+    const codes = [partKey(input?.partNumber), leadingPartCode(input?.name), leadingPartCode(input?.rawLineText)].filter(Boolean);
+    for (const code of codes) {
+      if (items.some((row) => row.category === "battery" && partKey(row.partNumber) === code)) return code;
     }
-    return "";
+    return String(input?.category || "") === "battery" ? partKey(input?.partNumber) : "";
+  }
+
+  function looksLikeBattery(input) {
+    const blob = `${input?.name || ""} ${input?.partNumber || ""} ${input?.rawLineText || ""}`;
+    if (/\bbattery\b/i.test(blob) || /\bbat\b/i.test(blob)) return true;
+    return Boolean(batteryPartKey(input));
   }
 
   let receiveRawLine = "";
-  let receiveAmbiguous = false;
 
-  function findStockMatch(input) {
-    receiveAmbiguous = false;
+  function findExactStockMatch(input) {
     const category = String(input?.category || "");
-    const key = partKeyFor(input);
+    const key = partKey(input?.partNumber);
     const name = nameKey(input?.name);
     if (key) {
-      let hits = items.filter((row) => partKey(row.partNumber) === key);
-      if (hits.some((row) => row.category === "tyre") && name) {
-        const closeTyres = hits.filter((row) => row.category === "tyre" && namesClose(row.name, input?.name));
-        const rest = hits.filter((row) => row.category !== "tyre");
-        hits = rest.concat(closeTyres);
-      }
-      if (category) {
-        const sameCat = hits.filter((row) => row.category === category);
-        if (sameCat.length) hits = sameCat;
-        else if (hits.length !== 1) hits = [];
-      }
-      const supplied = hits.filter((row) => sameSupplier(row.supplier, input?.supplier));
-      if (supplied.length) hits = supplied;
-      else if (supplierKey(input?.supplier)) hits = [];
+      const hits = items.filter((row) => {
+        if (row.category !== category || partKey(row.partNumber) !== key) return false;
+        if (category === "tyre" && name && nameKey(row.name) !== name) return false;
+        return true;
+      });
       if (hits.length === 1) return hits[0];
       if (hits.length > 1) {
-        const consignment = hits.find((row) => /consignment/i.test(row.notes || ""));
-        return consignment || hits[0];
+        const supplier = nameKey(input?.supplier);
+        return (
+          hits.find((row) => nameKey(row.supplier) === supplier && nameKey(row.name) === name) ||
+          hits.find((row) => nameKey(row.supplier) === supplier) ||
+          hits[0]
+        );
+      }
+      return null;
+    }
+    const supplier = nameKey(input?.supplier);
+    if (!name || !category) return null;
+    return (
+      items.find(
+        (row) => row.category === category && nameKey(row.name) === name && nameKey(row.supplier) === supplier
+      ) || null
+    );
+  }
+
+  function findBatteryStockMatch(input) {
+    const key = batteryPartKey(input);
+    const name = nameKey(input?.name);
+    if (key) {
+      let hits = items.filter((row) => row.category === "battery" && partKey(row.partNumber) === key);
+      const supplied = hits.filter((row) => sameSupplier(row.supplier, input?.supplier));
+      if (supplied.length) hits = supplied;
+      if (hits.length === 1) return hits[0];
+      if (hits.length > 1) {
+        return hits.find((row) => /consignment/i.test(row.notes || "")) || hits[0];
       }
     }
     if (!name) return null;
-    let named = items.filter((row) => namesClose(row.name, input?.name) && sameSupplier(row.supplier, input?.supplier));
-    if (category) {
-      const sameCat = named.filter((row) => row.category === category);
-      if (sameCat.length) named = sameCat;
+    return (
+      items.find(
+        (row) => row.category === "battery" && nameKey(row.name) === name && sameSupplier(row.supplier, input?.supplier)
+      ) || null
+    );
+  }
+
+  function findStockMatch(input) {
+    const category = String(input?.category || "");
+    if (category === "battery" || (category !== "engine_oil" && looksLikeBattery(input))) {
+      return findBatteryStockMatch(input);
     }
-    if (named.length > 1) {
-      receiveAmbiguous = true;
-      return null;
-    }
-    return named[0] || null;
+    return findExactStockMatch(input);
   }
 
   function guessCategory(text) {
@@ -910,11 +901,7 @@
       summary.textContent = "This invoice line is already in stock. Adding it again will not increase the quantity.";
       return;
     }
-    if (receiveAmbiguous) {
-      summary.textContent = "This name matches more than one stock line. Enter the part number of the existing line so the quantity is not saved as a new item.";
-      return;
-    }
-    if (match && nameKey(match.name) !== nameKey(receiveForm.elements.name.value)) {
+    if (match && match.category === "battery" && nameKey(match.name) !== nameKey(receiveForm.elements.name.value)) {
       const invoiceName = String(receiveForm.elements.name.value || "").trim();
       const costNote = changed
         ? ` Cost changes from ${money(match.costPrice)} to ${money(receiveShelfCost())}.`

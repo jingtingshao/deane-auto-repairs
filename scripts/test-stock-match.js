@@ -53,33 +53,29 @@ const genericOnly = inventory.findMatch(items, {
 });
 assert.strictEqual(genericOnly, null);
 
-const wrongCategory = inventory.findMatch(items, {
+const oilLeftAlone = inventory.findMatch(items, {
   category: "engine_oil",
   name: "BAT Calcium",
   partNumber: "3224",
   supplier: "AA Battery Service",
 });
-assert.strictEqual(wrongCategory && wrongCategory.id, "bat-3224");
+assert.strictEqual(oilLeftAlone, null);
 
-const oilMatch = inventory.findMatch(items, {
+const oilSpelling = inventory.findMatch(items, {
   category: "engine_oil",
   name: "5W30",
   partNumber: "",
   supplier: "Penrite",
 });
-assert.strictEqual(oilMatch && oilMatch.id, "oil-5w30");
+assert.strictEqual(oilSpelling, null);
 
-const otherOil = {
-  ...oil,
-  id: "oil-penrite",
-  name: "Penrite HPR 5 5W-30",
-};
-const ambiguous = inventory.findMatch([oil, otherOil], {
+const sameOil = inventory.findMatch(items, {
   category: "engine_oil",
-  name: "5W-30",
+  name: "Engine oil 5W-30",
+  partNumber: "",
   supplier: "Penrite",
 });
-assert.strictEqual(ambiguous, null);
+assert.strictEqual(sameOil && sameOil.id, "oil-5w30");
 
 const tyreA = {
   id: "tyre-a",
@@ -150,6 +146,9 @@ assert.strictEqual(plans.length, 1);
 assert.strictEqual(plans[0].keeperId, "bat-3224");
 assert.deepStrictEqual(plans[0].dropIds.sort(), ["bat-named", "bat-new"]);
 assert.strictEqual(plans[0].qty, 2);
+const oilCopy = { ...oil, id: "oil-copy", name: "5W30", partNumber: "5W30" };
+const oilOriginal = { ...oil, partNumber: "5W30" };
+assert.deepStrictEqual(inventory.planSamePartMerge([oilOriginal, oilCopy], []), []);
 
 const aaText = [
   "AA Battery Services Ltd TEL: +64 (9) 636 7350",

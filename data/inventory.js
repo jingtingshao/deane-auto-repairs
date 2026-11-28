@@ -280,63 +280,6 @@ function nameKey(value) {
   return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-/** Words that show up on invoices but do not identify one product. */
-const NAME_NOISE = new Set([
-  "a",
-  "an",
-  "the",
-  "and",
-  "new",
-  "engine",
-  "oil",
-  "litre",
-  "liter",
-  "ltr",
-  "drum",
-  "bottle",
-  "genuine",
-  "premium",
-  "battery",
-  "bat",
-  "calcium",
-  "each",
-]);
-
-function foldProductName(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/(\d+)\s*w\s*-?\s*(\d+)/g, "$1w$2")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-function productTokens(value) {
-  return foldProductName(value)
-    .split(/\s+/)
-    .filter((token) => token && !NAME_NOISE.has(token));
-}
-
-function tokenKey(tokens) {
-  return tokens.slice().sort().join(" ");
-}
-
-/** Same product when the invoice drops a hyphen, a brand word, or "engine oil". */
-function namesClose(a, b) {
-  const left = nameKey(a);
-  const right = nameKey(b);
-  if (!left || !right) return false;
-  if (left === right) return true;
-  const lt = productTokens(a);
-  const rt = productTokens(b);
-  if (!lt.length || !rt.length) return false;
-  if (tokenKey(lt) === tokenKey(rt)) return true;
-  const [small, big] = lt.length <= rt.length ? [lt, rt] : [rt, lt];
-  if (small.every((token) => token.length <= 2)) return false;
-  const bigSet = new Set(big);
-  if (!small.every((token) => bigSet.has(token))) return false;
-  return small.some((token) => /\d/.test(token) || token.length >= 4);
-}
-
 function leadingPartCode(value) {
   const match = String(value || "")
     .trim()
@@ -350,24 +293,22 @@ function sameSupplier(a, b) {
   return !left || !right || left === right;
 }
 
-function partKeyFor(input, items) {
-  const explicit = partKey(input?.partNumber);
-  if (explicit) return explicit;
-  for (const code of [leadingPartCode(input?.name), leadingPartCode(input?.rawLineText)]) {
-    if (code && (items || []).some((row) => partKey(row.partNumber) === code)) return code;
+function batteryPartKey(input, items) {
+  const codes = [
+    partKey(input?.partNumber),
+    leadingPartCode(input?.name),
+    leadingPartCode(input?.rawLineText),
+  ].filter(Boolean);
+  for (const code of codes) {
+    if ((items || []).some((row) => row.category === "battery" && partKey(row.partNumber) === code)) return code;
   }
-  return "";
+  return String(input?.category || "") === "battery" ? partKey(input?.partNumber) : "";
 }
 
-function preferStockHit(hits, input) {
-  const supplier = supplierNames.supplierMatchKey(input?.supplier);
-  const pool = hits.filter((row) => sameSupplier(row.supplier, input?.supplier));
-  const rows = pool.length ? pool : hits;
-  return (
-    rows.find((row) => supplierNames.supplierMatchKey(row.supplier) === supplier && namesClose(row.name, input?.name)) ||
-    rows.find((row) => /consignment/i.test(row.notes || "")) ||
-    rows.slice().sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")))[0]
-  );
+function looksLikeBattery(input, items) {
+  const blob = `${input?.name || ""} ${input?.partNumber || ""} ${input?.rawLineText || ""}`;
+  if (/\bbattery\b/i.test(blob) || /\bbat\b/i.test(blob)) return true;
+  return Boolean(batteryPartKey(input, items));
 }
 
 /** Tyres reuse one part code across sizes, so a tyre also needs the same name to be the same stock line. */
@@ -409,53 +350,88 @@ function planMazzini225Merge(items, referencedIds) {
   };
 }
 
-/**
- * Find the stock line this receipt belongs on.
- * A part number wins over the invoice wording, so "BAT Calcium" for 3224
- * joins the consignment battery instead of opening a second line.
- * Oil names match across 5W-30 / 5W30 / "engine oil" when only one line fits.
- */
-function findMatch(items, input) {
+/** Exact name and category. Engine oil and every other category stay on this path. */
+function findMatchExact(items, input) {
   const list = items || [];
   const category = String(input?.category || "");
-  const key = partKeyFor(input, list);
+  const key = partKey(input?.partNumber);
   const name = nameKey(input?.name);
-
   if (key) {
-    let hits = list.filter((row) => partKey(row.partNumber) === key);
-    if (hits.some((row) => row.category === "tyre") && name) {
-      const closeTyres = hits.filter((row) => row.category === "tyre" && namesClose(row.name, input?.name));
-      const rest = hits.filter((row) => row.category !== "tyre");
-      hits = rest.concat(closeTyres);
-    }
-    if (category) {
-      const sameCat = hits.filter((row) => row.category === category);
-      if (sameCat.length) hits = sameCat;
-      else if (hits.length !== 1) hits = [];
-    }
-    const supplied = hits.filter((row) => sameSupplier(row.supplier, input?.supplier));
-    if (supplied.length) hits = supplied;
-    else if (supplierNames.supplierMatchKey(input?.supplier)) hits = [];
+    const hits = list.filter((row) => {
+      if (row.category !== category || partKey(row.partNumber) !== key) return false;
+      if (nameMustMatch(category) && name && nameKey(row.name) !== name) return false;
+      return true;
+    });
     if (hits.length === 1) return hits[0];
-    if (hits.length > 1) return preferStockHit(hits, input);
+    if (hits.length > 1) {
+      const supplier = nameKey(input?.supplier);
+      return (
+        hits.find((row) => nameKey(row.supplier) === supplier && nameKey(row.name) === name) ||
+        hits.find((row) => nameKey(row.supplier) === supplier) ||
+        hits[0]
+      );
+    }
+    return null;
   }
-
+  const supplier = nameKey(input?.supplier);
   if (!name) return null;
-  let named = list.filter((row) => namesClose(row.name, input?.name) && sameSupplier(row.supplier, input?.supplier));
-  if (category) {
-    const sameCat = named.filter((row) => row.category === category);
-    if (sameCat.length) named = sameCat;
-  }
-  if (named.length === 1) return named[0];
-  return null;
+  return (
+    list.find(
+      (row) =>
+        row.category === category &&
+        nameKey(row.name) === name &&
+        nameKey(row.supplier) === supplier
+    ) || null
+  );
 }
 
-/** Fold extra stock lines that share a supplier part number back into one line. */
+/**
+ * A battery part number wins over the short invoice wording.
+ * "BAT Calcium" for 3224 joins the consignment battery instead of a second line.
+ */
+function findBatteryMatch(items, input) {
+  const list = items || [];
+  const key = batteryPartKey(input, list);
+  const name = nameKey(input?.name);
+  const supplier = supplierNames.supplierMatchKey(input?.supplier);
+  if (key) {
+    let hits = list.filter((row) => row.category === "battery" && partKey(row.partNumber) === key);
+    const supplied = hits.filter((row) => sameSupplier(row.supplier, input?.supplier));
+    if (supplied.length) hits = supplied;
+    if (hits.length === 1) return hits[0];
+    if (hits.length > 1) {
+      return (
+        hits.find((row) => supplierNames.supplierMatchKey(row.supplier) === supplier && nameKey(row.name) === name) ||
+        hits.find((row) => /consignment/i.test(row.notes || "")) ||
+        hits[0]
+      );
+    }
+  }
+  if (!name) return null;
+  return (
+    list.find(
+      (row) =>
+        row.category === "battery" &&
+        nameKey(row.name) === name &&
+        sameSupplier(row.supplier, input?.supplier)
+    ) || null
+  );
+}
+
+function findMatch(items, input) {
+  const category = String(input?.category || "");
+  if (category === "battery" || (category !== "engine_oil" && looksLikeBattery(input, items))) {
+    return findBatteryMatch(items, input);
+  }
+  return findMatchExact(items, input);
+}
+
+/** Fold extra battery lines that share a supplier part number. Engine oil is left as stored. */
 function planSamePartMerge(items, referencedIds) {
   const referenced = referencedIds instanceof Set ? referencedIds : new Set(referencedIds || []);
   const groups = new Map();
   for (const item of items || []) {
-    if (!item || item.category === "tyre") continue;
+    if (!item || item.category !== "battery") continue;
     const key = partKey(item.partNumber);
     if (key.length < 3) continue;
     const bucket = `${supplierNames.supplierMatchKey(item.supplier)}::${key}`;
@@ -467,7 +443,7 @@ function planSamePartMerge(items, referencedIds) {
     if (hits.length < 2) continue;
     const categories = new Set(hits.map((item) => item.category));
     const consignment = hits.filter((item) => /consignment/i.test(item.notes || ""));
-    if (categories.size > 1 && consignment.length !== 1) continue;
+    if (categories.size > 1) continue;
     const keeper =
       (consignment.length === 1 ? consignment[0] : null) ||
       hits.find((item) => referenced.has(item.id)) ||
@@ -488,7 +464,7 @@ function planSamePartMerge(items, referencedIds) {
   }
   const dropping = new Set(plans.flatMap((plan) => plan.dropIds));
   for (const item of items || []) {
-    if (!item || dropping.has(item.id) || partKey(item.partNumber) || item.category === "tyre") continue;
+    if (!item || dropping.has(item.id) || partKey(item.partNumber) || item.category !== "battery") continue;
     const code = leadingPartCode(item.name);
     if (!code) continue;
     const peers = (items || []).filter(
@@ -497,7 +473,7 @@ function planSamePartMerge(items, referencedIds) {
         !dropping.has(row.id) &&
         partKey(row.partNumber) === code &&
         sameSupplier(row.supplier, item.supplier) &&
-        row.category !== "tyre"
+        row.category === "battery"
     );
     if (peers.length !== 1) continue;
     const keeper = peers[0];
@@ -881,7 +857,6 @@ module.exports = {
   planMazzini225Merge,
   planSamePartMerge,
   findMatch,
-  namesClose,
   presentItem,
   searchItems,
   applyReceive,
