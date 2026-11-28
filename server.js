@@ -1277,9 +1277,22 @@ function issueJobStock(job, previousParts) {
 
   for (const part of nextParts) {
     const prev = prevById.get(part.id);
-    const issued = Math.max(0, Number(prev?.stockIssuedQty) || 0);
+    let issued = Math.max(0, Number(prev?.stockIssuedQty) || 0);
+    const prevItemId = String(prev?.stockItemId || "").trim();
     const explicitId = String(part.stockItemId || prev?.stockItemId || "").trim();
     let item = resolveJobStockItem(items, { ...part, stockItemId: explicitId });
+    if (item && prevItemId && item.id !== prevItemId && issued > 0) {
+      const oldItem = items.find((row) => row.id === prevItemId);
+      if (oldItem) {
+        try {
+          adjust(oldItem, issued, `${note} part changed`);
+          issued = 0;
+          changed = true;
+        } catch {
+          item = oldItem;
+        }
+      }
+    }
     // A text-only line must not take the same item again when another line is already linked to it.
     if (item && !explicitId && linkedIds.has(item.id)) item = null;
     if (item && !explicitId && !issued && boughtForJob.has(part.id)) item = null;
@@ -1415,6 +1428,177 @@ function ensureJobFromAcceptedQuote(docs, quote, invoice) {
   return { job, created: true };
 }
 
+function roundStockQty(value) {
+  return Math.round((Number(value) || 0) * 1000) / 1000;
+}
+
+function partCodeKeys(value) {
+  const key = stockPartKey(value);
+  if (key.length < 3) return [];
+  const keys = [key];
+  const trimmed = key.replace(/[A-Z]$/, "");
+  if (trimmed !== key && /^\d{3,6}$/.test(trimmed)) keys.push(trimmed);
+  return keys;
+}
+
+function invoiceLineStockItem(items, line) {
+  const description = String(line?.description || "").trim();
+  if (!description || jobsLib.isNonPartInvoiceLine(description)) return null;
+  const explicit = String(line?.stockItemId || "").trim();
+  if (explicit) {
+    const linked = items.find((row) => row.id === explicit);
+    if (linked) return linked;
+  }
+  const tokens = new Set(
+    `${line?.partNumber || ""} ${description}`
+      .split(/[^A-Za-z0-9]+/)
+      .map((token) => stockPartKey(token))
+      .filter((token) => token.length >= 3)
+  );
+  if (tokens.size) {
+    const hits = items.filter((row) => partCodeKeys(row.partNumber).some((key) => tokens.has(key)));
+    if (hits.length === 1) return hits[0];
+  }
+  const name = stockNameKey(description);
+  if (name.length < 4) return null;
+  const named = items.filter((row) => stockNameKey(row.name) === name);
+  return named.length === 1 ? named[0] : null;
+}
+
+function invoiceStockUse(invoice, items) {
+  const wanted = {};
+  const descriptions = {};
+  for (const line of invoice?.lines || []) {
+    const description = String(line?.description || "").trim();
+    const item = invoiceLineStockItem(items, line);
+    if (!item) continue;
+    const qty = Math.max(0, Number(line.qty) || 0);
+    wanted[item.id] = roundStockQty((wanted[item.id] || 0) + qty);
+    if (!descriptions[item.id]) {
+      descriptions[item.id] = {
+        description: item.name || description,
+        partNumber: item.partNumber || "",
+        supplier: item.supplier || "",
+      };
+    }
+  }
+  return { wanted, descriptions };
+}
+
+function invoiceStillListsPart(invoice, part) {
+  const desc = stockNameKey(part?.description);
+  const code = stockPartKey(part?.partNumber);
+  const stockId = String(part?.stockItemId || "");
+  for (const line of invoice?.lines || []) {
+    const text = stockNameKey(line?.description);
+    const raw = stockPartKey(`${line?.partNumber || ""} ${line?.description || ""}`);
+    if (stockId && String(line?.stockItemId || "") === stockId) return true;
+    if (
+      desc &&
+      text &&
+      (text === desc ||
+        (text.length >= 8 && desc.startsWith(text)) ||
+        (desc.length >= 8 && text.startsWith(desc)))
+    ) {
+      return true;
+    }
+    if (code.length >= 4 && raw.includes(code)) return true;
+  }
+  return false;
+}
+
+function stockTakenForJob(movements, job) {
+  const jobId = String(job?.id || "");
+  const number = String(job?.number || "").toUpperCase();
+  const taken = {};
+  for (const row of movements || []) {
+    const noteNumber = (String(row?.note || "").match(/\bJob\s+(JC-\d{4}-\d+)/i) || [])[1] || "";
+    const matches =
+      (jobId && String(row?.jobId || "") === jobId) ||
+      (number && noteNumber.toUpperCase() === number);
+    if (!matches) continue;
+    const id = String(row?.itemId || "").trim();
+    if (!id) continue;
+    taken[id] = roundStockQty((taken[id] || 0) - (Number(row.qtyDelta) || 0));
+  }
+  return taken;
+}
+
+/** Invoice lines are what left the shelf. A corrected battery puts the old one back and takes the new one. */
+function alignJobStockWithInvoice(job, invoice) {
+  if (!job || !invoice || invoice.kind !== "invoice" || invoice.status === "void") return false;
+  const items = readInventoryItems();
+  const movements = readInventoryMovements();
+  const { wanted, descriptions } = invoiceStockUse(invoice, items);
+  const taken = stockTakenForJob(movements, job);
+  for (const [id, have] of Object.entries(taken)) {
+    if (wanted[id] != null || !(have > 0)) continue;
+    const part = (job.parts || []).find((row) => String(row?.stockItemId || "") === id);
+    if (part && invoiceStillListsPart(invoice, part)) wanted[id] = have;
+  }
+  for (const part of job.parts || []) {
+    const id = String(part?.stockItemId || "").trim();
+    if (id && (Number(part.stockIssuedQty) || 0) > 0 && taken[id] == null) taken[id] = 0;
+  }
+  const plan = jobsLib.planShelfAlignment(wanted, taken);
+  const issuedIds = new Set(
+    Object.keys(taken).filter((id) => (Number(taken[id]) || 0) > 0 || (job.parts || []).some(
+      (part) => part.stockItemId === id && (Number(part.stockIssuedQty) || 0) > 0
+    ))
+  );
+  if (!plan.length) {
+    const followed = jobsLib.partsFollowInvoiceStock(job.parts, wanted, issuedIds, descriptions);
+    if (!followed.changed) return false;
+    job.parts = jobsLib.normalizeParts(followed.parts, () => randomUUID());
+    job.status = jobsLib.normalizeJobStatus(job.status, job.parts);
+    return true;
+  }
+  const now = nowIso();
+  const note = `Job ${job.number || ""}`.trim();
+  let stockChanged = false;
+  const failed = new Set();
+  for (const step of plan) {
+    const item = items.find((row) => row.id === step.itemId);
+    if (!item) {
+      failed.add(step.itemId);
+      continue;
+    }
+    try {
+      const movement = inventoryLib.applyAdjust(
+        item,
+        {
+          movementId: randomUUID(),
+          qtyDelta: step.shelfDelta,
+          note: step.shelfDelta > 0 ? `${note} invoice corrected` : note,
+        },
+        now
+      );
+      if (!movement.id) movement.id = randomUUID();
+      movement.jobId = job.id;
+      movements.push(movement);
+      stockChanged = true;
+    } catch (err) {
+      failed.add(step.itemId);
+      console.error(`Could not align stock for ${item.partNumber || item.name}:`, err.message);
+    }
+  }
+  if (stockChanged) {
+    writeInventoryItems(items);
+    writeInventoryMovements(movements);
+  }
+  for (const step of plan) {
+    if (!failed.has(step.itemId)) continue;
+    if (step.shelfDelta < 0) delete wanted[step.itemId];
+    else wanted[step.itemId] = taken[step.itemId] || 0;
+  }
+  const followed = jobsLib.partsFollowInvoiceStock(job.parts, wanted, issuedIds, descriptions);
+  if (followed.changed) {
+    job.parts = jobsLib.normalizeParts(followed.parts, () => randomUUID());
+    job.status = jobsLib.normalizeJobStatus(job.status, job.parts);
+  }
+  return stockChanged || followed.changed;
+}
+
 /** After an invoice is saved: create the job card if needed, then add extra parts. */
 function syncJobFromInvoiceExtras(docs, invoice) {
   if (!invoice || invoice.kind !== "invoice" || invoice.status === "void") return null;
@@ -1425,18 +1609,39 @@ function syncJobFromInvoiceExtras(docs, invoice) {
   const ensured = ensureJobFromAcceptedQuote(docs, quote || invoice, invoice);
   if (!ensured?.job) return null;
   const extras = jobsLib.partsFromQuoteLines(invoice.lines || [], () => randomUUID());
-  if (!extras.length) return ensured;
   const jobs = readJobs();
   const index = jobs.findIndex((j) => j.id === ensured.job.id);
   if (index < 0) return ensured;
-  const merged = jobsLib.mergeNewParts(jobs[index], extras);
+  const merged = extras.length ? jobsLib.mergeNewParts(jobs[index], extras) : false;
+  const aligned = alignJobStockWithInvoice(jobs[index], invoice);
   const issued = issueJobStock(jobs[index]);
-  if (merged || issued) {
+  if (merged || aligned || issued) {
     jobs[index].updatedAt = nowIso();
     writeJobs(jobs);
     ensured.job = jobs[index];
   }
   return ensured;
+}
+
+/** Correct shelf stock for invoices already saved with a different part than the job card. */
+function alignStoredInvoiceStock() {
+  const docs = readBilling();
+  const jobs = readJobs();
+  let changed = false;
+  for (const invoice of docs) {
+    if (invoice?.kind !== "invoice" || invoice.status === "void" || !invoice.jobId) continue;
+    const job = jobs.find((row) => row.id === invoice.jobId);
+    if (!job) continue;
+    try {
+      if (alignJobStockWithInvoice(job, invoice)) {
+        job.updatedAt = nowIso();
+        changed = true;
+      }
+    } catch (err) {
+      console.error(`Could not align stock for invoice ${invoice.number || invoice.id}:`, err.message);
+    }
+  }
+  if (changed) writeJobs(jobs);
 }
 
 function unlinkJobFromBilling(jobId) {
@@ -11673,6 +11878,7 @@ try {
   unifyStoredSupplierNames();
   mergeWingMazzini225();
   mergeDuplicatePartLines();
+  alignStoredInvoiceStock();
 } catch (err) {
   console.error("Could not unify supplier names:", err);
 }

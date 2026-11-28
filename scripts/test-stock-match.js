@@ -233,4 +233,36 @@ assert.strictEqual(line3224.costPriceCandidate, 135.59);
 assert.strictEqual(lines[0].partNumberCandidate, "2134N");
 assert.strictEqual(lines[2].partNumberCandidate, "5344");
 
+const jobs = require("../data/jobs");
+const shelf = jobs.planShelfAlignment({ "bat-2134": 1 }, { "bat-2135": 1 });
+assert.deepStrictEqual(shelf, [
+  { itemId: "bat-2135", shelfDelta: 1 },
+  { itemId: "bat-2134", shelfDelta: -1 },
+]);
+const followed = jobs.partsFollowInvoiceStock(
+  [
+    {
+      id: "part-old",
+      description: "AA 2135N Premium Calcium battery",
+      partNumber: "2135N",
+      qty: 1,
+      stockItemId: "bat-2135",
+      stockIssuedQty: 1,
+    },
+    { id: "labour", description: "Labour", qty: 1, stockItemId: "", stockIssuedQty: 0 },
+  ],
+  { "bat-2134": 1 },
+  ["bat-2135"],
+  { "bat-2134": { description: "AA 2134N Premium Calcium battery", partNumber: "2134N", supplier: "AA Battery Service" } }
+);
+assert.strictEqual(followed.changed, true);
+assert.strictEqual(followed.parts.some((part) => part.stockItemId === "bat-2135"), false);
+const added = followed.parts.find((part) => part.stockItemId === "bat-2134");
+assert.ok(added);
+assert.strictEqual(added.qty, 1);
+assert.strictEqual(added.stockIssuedQty, 1);
+assert.strictEqual(followed.parts.some((part) => part.id === "labour"), true);
+const same = jobs.planShelfAlignment({ "bat-2134": 1 }, { "bat-2134": 1 });
+assert.deepStrictEqual(same, []);
+
 console.log("stock match ok");

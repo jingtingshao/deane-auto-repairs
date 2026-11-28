@@ -325,6 +325,76 @@ function suggestStatusFromParts(currentStatus, parts) {
   return "in_progress";
 }
 
+function roundStockQty(value) {
+  return Math.round((Number(value) || 0) * 1000) / 1000;
+}
+
+/** Shelf change so stock taken for a job matches the invoice. Positive puts stock back. */
+function planShelfAlignment(wanted, taken) {
+  const ids = new Set([...Object.keys(wanted || {}), ...Object.keys(taken || {})]);
+  const plan = [];
+  for (const id of ids) {
+    const want = roundStockQty(wanted?.[id]);
+    const have = roundStockQty(taken?.[id]);
+    const shelfDelta = roundStockQty(have - want);
+    if (shelfDelta !== 0) plan.push({ itemId: id, shelfDelta });
+  }
+  plan.sort((a, b) => b.shelfDelta - a.shelfDelta);
+  return plan;
+}
+
+/**
+ * Job card parts follow the invoice's stock lines.
+ * A battery that was issued, then removed from the invoice, comes off the job card.
+ */
+function partsFollowInvoiceStock(parts, wanted, issuedIds, descriptions) {
+  const issued = issuedIds instanceof Set ? issuedIds : new Set(issuedIds || []);
+  const next = [];
+  const seen = new Set();
+  let changed = false;
+  for (const part of parts || []) {
+    const id = String(part?.stockItemId || "").trim();
+    if (!id) {
+      next.push(part);
+      continue;
+    }
+    const want = roundStockQty(wanted?.[id]);
+    const wasIssued = (Number(part.stockIssuedQty) || 0) > 0 || issued.has(id);
+    if (!(want > 0)) {
+      if (wasIssued) {
+        changed = true;
+        continue;
+      }
+      next.push(part);
+      continue;
+    }
+    if (seen.has(id)) {
+      changed = true;
+      continue;
+    }
+    seen.add(id);
+    if (Number(part.qty) !== want || Number(part.stockIssuedQty) !== want) changed = true;
+    next.push({ ...part, qty: want, stockIssuedQty: want });
+  }
+  for (const id of Object.keys(wanted || {})) {
+    const want = roundStockQty(wanted[id]);
+    if (!(want > 0) || seen.has(id)) continue;
+    const meta = descriptions?.[id] || {};
+    next.push({
+      description: meta.description || "Part",
+      partNumber: meta.partNumber || "",
+      qty: want,
+      stockItemId: id,
+      stockIssuedQty: want,
+      supplier: meta.supplier || "",
+      source: "stock",
+      uom: "ea",
+    });
+    changed = true;
+  }
+  return { parts: next, changed };
+}
+
 module.exports = {
   JOB_STATUSES,
   JOB_STATUSES: JOB_STATUSES,
@@ -350,6 +420,8 @@ module.exports = {
   partsFromQuoteLines: partsFromQuoteLines,
   partsFromQuoteLines: partsFromQuoteLines,
   mergeNewParts,
+  planShelfAlignment,
+  partsFollowInvoiceStock,
   workRequestedFromQuote,
   workRequestedFromQuote: workRequestedFromQuote,
   stripPackageParts,
